@@ -168,7 +168,6 @@ namespace AngryAudioInstaller
         bool _uninstalled;
         bool _uninstalling;
 
-        float[] _starX, _starY, _starA, _starPhase;
         int _twinkleTick;
         ShootingStar _shootingStar;
         CelestialEvents _celestialEvents;
@@ -214,9 +213,7 @@ namespace AngryAudioInstaller
 
             try { Icon = ExtractEmbeddedIcon(); } catch { }
 
-            var rng = new Random(42);
-            // Stars now use DarkTheme.PaintCardStars for consistency with Options/Welcome
-            _starX = new float[0]; _starY = new float[0]; _starA = new float[0]; _starPhase = new float[0];
+            // Stars now use DarkTheme.PaintCardStars for consistency
 
             _shootingStar = new ShootingStar(() => { try { if (!IsDisposed) Invalidate(); } catch { } });
             _shootingStar.Start();
