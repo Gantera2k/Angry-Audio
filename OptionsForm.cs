@@ -110,7 +110,7 @@ namespace AngryAudio
             _twinkleTimer.Start();
             // Shooting star animation — occasional streaks across card backgrounds
             _stars = new StarBackground(() => { InvalidateCards(); });
-            FormClosing += (s, e) => { StopCapturePolling(); _captureTimer?.Dispose(); CleanupEnforcement(); _pollTimer?.Stop(); _pollTimer?.Dispose(); _twinkleTimer?.Stop(); _twinkleTimer?.Dispose(); _stars?.Dispose(); _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _updateShimmerTimer?.Stop(); _updateShimmerTimer?.Dispose(); _saveOrbitTimer?.Stop(); _saveOrbitTimer?.Dispose(); };
+            FormClosing += (s, e) => { StopCapturePolling(); _captureTimer?.Dispose(); CleanupEnforcement(); _pollTimer?.Stop(); _pollTimer?.Dispose(); _twinkleTimer?.Stop(); _twinkleTimer?.Dispose(); _hotkeyFlashTimer?.Stop(); _hotkeyFlashTimer?.Dispose(); _stars?.Dispose(); _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _updateShimmerTimer?.Stop(); _updateShimmerTimer?.Dispose(); _saveOrbitTimer?.Stop(); _saveOrbitTimer?.Dispose(); };
         }
 
         private Size _defaultSize;
@@ -366,6 +366,7 @@ namespace AngryAudio
 
         void SwitchPane(int idx) {
             _activePane = idx;
+            _settings.LastActivePane = idx; _settings.Save();
             for (int i = 0; i < 5; i++) {
                 bool a = i == idx;
                 _navLabels[i].ForeColor = a ? ACC : TXT3;
@@ -382,6 +383,9 @@ namespace AngryAudio
             _panes = new Panel[5];
             for (int i = 0; i < 5; i++) { _panes[i] = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = true, Visible = false, BackColor = BG }; _contentPanel.Controls.Add(_panes[i]); }
             BuildPttPane(_panes[0]); BuildAfkPane(_panes[1]); BuildVolLockPane(_panes[2]); BuildAppsPane(_panes[3]); BuildGeneralPane(_panes[4]);
+            // Restore last active pane
+            int lastPane = _settings.LastActivePane;
+            if (lastPane >= 0 && lastPane < 5) SwitchPane(lastPane); else SwitchPane(0);
         }
 
         // Title info for card painting
@@ -1642,8 +1646,10 @@ namespace AngryAudio
         static int Clamp(int v,int min,int max){return v<min?min:v>max?max:v;}
         public void OnRunWizard(){DialogResult=DialogResult.Retry;Close();}
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData) {
-            // Space suppression (prevent scroll) — key capture now handled by WndProc
+            // Space suppression (prevent scroll) — key capture now handled by polling
+            if (_capturingKey || _capturingKey2 || _capturingKey3) return base.ProcessCmdKey(ref msg, keyData);
             if (keyData == Keys.Space) return true;
+            if (keyData == Keys.Escape) { Close(); return true; }
             return base.ProcessCmdKey(ref msg, keyData);
         }
         // WS_EX_COMPOSITED: forces all child controls to paint in a single composited pass.

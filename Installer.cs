@@ -215,8 +215,9 @@ namespace AngryAudioInstaller
             // Stars now use DarkTheme.PaintCardStars for consistency
             _stars = new StarBackground(() => { try { if (!IsDisposed) Invalidate(); } catch { } });
 
-            _paintTimer = new Timer { Interval = 16 };
-            _paintTimer.Tick += (s, e) => { _twinkleTick++; _stars.Tick(); Invalidate(); };
+            _paintTimer = new Timer { Interval = 33 }; // 30fps — smooth enough, halves CPU
+            int _twinkleCounter = 0;
+            _paintTimer.Tick += (s, e) => { _twinkleCounter++; if (_twinkleCounter % 5 == 0) { _twinkleTick++; _stars.Tick(); } Invalidate(); };
             _paintTimer.Start();
 
             Paint += OnPaint;

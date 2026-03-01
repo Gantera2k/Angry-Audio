@@ -856,6 +856,8 @@ namespace AngryAudio
         protected override void OnFormClosing(FormClosingEventArgs e) {
             _pulseTimer?.Stop(); _pulseTimer?.Dispose();
             _pollTimer?.Stop(); _pollTimer?.Dispose();
+            _captureTimer?.Stop(); _captureTimer?.Dispose();
+            _flashTimer?.Stop(); _flashTimer?.Dispose();
             _micFlashTimer?.Stop(); _micFlashTimer?.Dispose();
             _spkFlashTimer?.Stop(); _spkFlashTimer?.Dispose();
             _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose();

@@ -48,6 +48,7 @@ namespace AngryAudio
         public Dictionary<string, int> AppVolumeRules { get; set; }
         public bool AppVolumeEnforceEnabled { get; set; }
         public int AppVolumeEnforceIntervalSec { get; set; }
+        public int LastActivePane { get; set; }
 
         private static readonly string AppDataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

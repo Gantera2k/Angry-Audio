@@ -905,28 +905,32 @@ namespace AngryAudio
             _contextMenu.Opening += (s, e) => { if (_trayIcon != null) _trayIcon.Text = ""; };
             _contextMenu.Closed += (s, e) => UpdateTrayState();
 
-            var optionsItem = new ToolStripMenuItem("Options...");
+            var optionsItem = new ToolStripMenuItem("\u2699  Options...");
             optionsItem.Click += (s, e) => ShowOptions();
             _contextMenu.Items.Add(optionsItem);
 
-            _pauseMenuItem = new ToolStripMenuItem("Pause Angry Audio");
+            _pauseMenuItem = new ToolStripMenuItem("\u23F8  Pause Angry Audio");
             _pauseMenuItem.Click += (s, e) => TogglePause();
             UpdatePauseMenuItem();
             _contextMenu.Items.Add(_pauseMenuItem);
 
             _contextMenu.Items.Add(new ToolStripSeparator());
 
-            var viewLogItem = new ToolStripMenuItem("View Log");
+            var viewLogItem = new ToolStripMenuItem("\ud83d\udcdd  View Log");
             viewLogItem.Click += (s, e) => ViewLog();
             _contextMenu.Items.Add(viewLogItem);
 
-            var resetWizardItem = new ToolStripMenuItem("Run Setup Wizard");
+            var resetWizardItem = new ToolStripMenuItem("\u2728  Run Setup Wizard");
             resetWizardItem.Click += (s, e) => RunSetupWizard();
             _contextMenu.Items.Add(resetWizardItem);
 
+            var checkUpdateItem = new ToolStripMenuItem("\ud83d\udd04  Check for Updates");
+            checkUpdateItem.Click += (s, e) => { ShowOptions(); if (_openOptionsForm != null) _openOptionsForm.NavigateToPane(4); };
+            _contextMenu.Items.Add(checkUpdateItem);
+
             _contextMenu.Items.Add(new ToolStripSeparator());
 
-            var exitItem = new ToolStripMenuItem("Exit");
+            var exitItem = new ToolStripMenuItem("\u274C  Exit");
             exitItem.Click += (s, e) => ExitApplication();
             _contextMenu.Items.Add(exitItem);
 
@@ -1637,7 +1641,7 @@ namespace AngryAudio
             }
             else
             {
-                _pauseMenuItem.Text = "Pause";
+                _pauseMenuItem.Text = "\u23F8  Pause";
                 _pauseMenuItem.ForeColor = DarkTheme.TextLight;
             }
         }
