@@ -498,7 +498,7 @@ namespace AngryAudio
             _navPanels = new Panel[5]; _navLabels = new Label[5]; _navAccents = new Panel[5];
             var navBox = new Panel { Dock = DockStyle.Fill, BackColor = SB_BG, Padding = Dpi.Pad(0, 6, 0, 0) };
             for (int i = 4; i >= 0; i--) {
-                
+                int idx = i;
                 var nav = new Panel { Dock = DockStyle.Top, Height = Dpi.S(34), BackColor = SB_BG };
                 var ac = new Panel { Location = new Point(0, 0), Size = new Size(Dpi.S(3), Dpi.S(34)), BackColor = SB_BG };
                 nav.Controls.Add(ac);
