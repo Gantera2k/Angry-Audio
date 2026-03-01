@@ -2849,8 +2849,8 @@ namespace AngryAudio
 
             float t = (phase / (float)(Math.PI * 2));
             t = t - (float)Math.Floor(t); // normalize 0-1
-            int trailCount = 18;
-            float trailSpacing = 0.018f;
+            int trailCount = 35; // way more trail particles
+            float trailSpacing = 0.012f; // tighter spacing = denser trail
 
             for (int i = trailCount; i >= 0; i--)
             {
@@ -2860,46 +2860,83 @@ namespace AngryAudio
 
                 if (i == 0)
                 {
-                    for (int glow = 3; glow >= 0; glow--)
+                    // === STAR HEAD — big bright unmissable ===
+                    // Huge outer glow
+                    for (int glow = 5; glow >= 0; glow--)
                     {
-                        float sz = 3 + glow * 2;
-                        int alpha = glow == 0 ? 255 : (int)(120 / (glow + 1));
-                        Color c = glow == 0 ? Color.FromArgb(alpha, 220, 245, 255) : Color.FromArgb(alpha, Accent.R, Accent.G, Accent.B);
+                        float sz = 6 + glow * 4;
+                        int alpha = glow == 0 ? 255 : Math.Max(10, (int)(180 / (glow + 1)));
+                        Color c = glow == 0 ? Color.FromArgb(alpha, 240, 250, 255)
+                                 : glow < 2 ? Color.FromArgb(alpha, 180, 230, 255)
+                                 : Color.FromArgb(alpha, Accent.R, Accent.G, Accent.B);
                         using (var brush = new SolidBrush(c))
                             g.FillEllipse(brush, pt.X - sz / 2, pt.Y - sz / 2, sz, sz);
                     }
-                    int sparkAlpha = (int)(180 + 75 * Math.Sin(phase * 3));
-                    using (var pen = new Pen(Color.FromArgb(sparkAlpha, 200, 240, 255), 1f))
+
+                    // Big cross sparkle that pulses
+                    int sparkAlpha = (int)(200 + 55 * Math.Sin(phase * 4));
+                    float armLen = 10 + 3 * (float)Math.Sin(phase * 3);
+                    using (var pen = new Pen(Color.FromArgb(sparkAlpha, 220, 245, 255), 2f))
                     {
-                        float armLen = 5;
                         g.DrawLine(pen, pt.X - armLen, pt.Y, pt.X + armLen, pt.Y);
                         g.DrawLine(pen, pt.X, pt.Y - armLen, pt.X, pt.Y + armLen);
+                    }
+                    // Diagonal sparkle arms
+                    float diagLen = armLen * 0.6f;
+                    using (var pen = new Pen(Color.FromArgb(sparkAlpha / 2, 200, 240, 255), 1f))
+                    {
+                        g.DrawLine(pen, pt.X - diagLen, pt.Y - diagLen, pt.X + diagLen, pt.Y + diagLen);
+                        g.DrawLine(pen, pt.X + diagLen, pt.Y - diagLen, pt.X - diagLen, pt.Y + diagLen);
                     }
                 }
                 else
                 {
+                    // === TRAIL — big fat sparkle particles ===
                     float fade = 1.0f - (float)i / trailCount;
-                    float sz = 3f * fade;
-                    int alpha = (int)(180 * fade * fade);
-                    if (alpha < 2) continue;
+                    float sz = 7f * fade; // much bigger trail dots
+                    int alpha = (int)(240 * fade * fade);
+                    if (alpha < 3) continue;
+
+                    // Alternate white / cyan / light blue
                     Color sparkColor = (i % 3 == 0)
-                        ? Color.FromArgb(alpha, 220, 245, 255)
-                        : Color.FromArgb(alpha, Accent.R, Accent.G, Accent.B);
+                        ? Color.FromArgb(alpha, 240, 250, 255)
+                        : (i % 3 == 1)
+                        ? Color.FromArgb(alpha, Accent.R, Accent.G, Accent.B)
+                        : Color.FromArgb(alpha, 150, 210, 255);
                     using (var brush = new SolidBrush(sparkColor))
                         g.FillEllipse(brush, pt.X - sz / 2, pt.Y - sz / 2, sz, sz);
-                    if (i % 2 == 0 && fade > 0.3f)
+
+                    // Small glow behind each trail particle
+                    if (fade > 0.4f)
                     {
-                        float ox = (float)(Math.Sin(i * 7.3 + phase * 2) * 4);
-                        float oy = (float)(Math.Cos(i * 5.1 + phase * 2) * 4);
-                        float msz = 2f * fade;
-                        int mAlpha = (int)(100 * fade);
-                        using (var brush = new SolidBrush(Color.FromArgb(mAlpha, 180, 220, 255)))
-                            g.FillEllipse(brush, pt.X + ox - msz / 2, pt.Y + oy - msz / 2, msz, msz);
+                        float glowSz = sz * 2.5f;
+                        int glowA = (int)(60 * fade);
+                        using (var brush = new SolidBrush(Color.FromArgb(glowA, Accent.R, Accent.G, Accent.B)))
+                            g.FillEllipse(brush, pt.X - glowSz / 2, pt.Y - glowSz / 2, glowSz, glowSz);
+                    }
+
+                    // Spray sparkles flying off the trail
+                    if (fade > 0.2f)
+                    {
+                        for (int sp = 0; sp < 3; sp++)
+                        {
+                            float ox = (float)(Math.Sin(i * 7.3 + sp * 2.1 + phase * 2.5) * (8 + sp * 4));
+                            float oy = (float)(Math.Cos(i * 5.1 + sp * 3.7 + phase * 2.5) * (8 + sp * 4));
+                            float msz = (4f - sp) * fade;
+                            int mAlpha = (int)((120 - sp * 30) * fade);
+                            if (mAlpha < 2) continue;
+                            Color mColor = (sp == 0)
+                                ? Color.FromArgb(mAlpha, 220, 245, 255)
+                                : Color.FromArgb(mAlpha, 160, 210, 255);
+                            using (var brush = new SolidBrush(mColor))
+                                g.FillEllipse(brush, pt.X + ox - msz / 2, pt.Y + oy - msz / 2, msz, msz);
+                        }
                     }
                 }
             }
 
-            using (var pen = new Pen(Color.FromArgb(40, Accent.R, Accent.G, Accent.B), 1f))
+            // Glowing border outline
+            using (var pen = new Pen(Color.FromArgb(60, Accent.R, Accent.G, Accent.B), 1.5f))
             using (var path = RoundedRect(new Rectangle(0, 0, w - 1, h - 1), radius))
                 g.DrawPath(pen, path);
         }
