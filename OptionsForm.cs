@@ -498,7 +498,7 @@ namespace AngryAudio
             _navPanels = new Panel[5]; _navLabels = new Label[5]; _navAccents = new Panel[5];
             var navBox = new Panel { Dock = DockStyle.Fill, BackColor = SB_BG, Padding = Dpi.Pad(0, 6, 0, 0) };
             for (int i = 4; i >= 0; i--) {
-                int idx = i;
+                
                 var nav = new Panel { Dock = DockStyle.Top, Height = Dpi.S(34), BackColor = SB_BG };
                 var ac = new Panel { Location = new Point(0, 0), Size = new Size(Dpi.S(3), Dpi.S(34)), BackColor = SB_BG };
                 nav.Controls.Add(ac);
@@ -1430,7 +1430,8 @@ namespace AngryAudio
             _pttKeyCode2=vk;
             // Duplicate check
             if(vk==_pttKeyCode || (_pttKeyCode3>0 && vk==_pttKeyCode3)){_capturingKey2=false;KeyPreview=false;KeyDown-=OnKeyCapture2;_pttKeyCode2=0;_settings.PushToTalkKey2=0;ShakeReject(_lblPttKey2, ()=>{UpdateKey2Visibility();});return;}
-            _lblPttKey2.Text=KeyName(_pttKeyCode2);_lblPttKey2.BackColor=INPUT_BG;_lblPttKey2.ForeColor=ACC;_capturingKey2=false;KeyPreview=false;KeyDown-=OnKeyCapture2;_settings.PushToTalkKey2=_pttKeyCode2;_key2ShowOverlay=true;_settings.PttKey2ShowOverlay=true;if(_chkKey2Overlay!=null)_chkKey2Overlay.Checked=true;UpdateKey2Visibility();if(_onToggle!=null)_onToggle("ptt_key2:"+_pttKeyCode2);}
+            _lblPttKey2.Text=KeyName(_pttKeyCode2);_lblPttKey2.BackColor=INPUT_BG;_lblPttKey2.ForeColor=ACC;_capturingKey2=false;KeyPreview=false;KeyDown-=OnKeyCapture2;_settings.PushToTalkKey2=_pttKeyCode2;_key2ShowOverlay=true;_settings.PttKey2ShowOverlay=true;if(_chkKey2Overlay!=null)_chkKey2Overlay.Checked=true;UpdateKey2Visibility();if(_onToggle!=null)_onToggle("ptt_key2:"+_pttKeyCode2);
+            EnforceToggleSelection();}
         void StartKeyCapture3(){_capturingKey3=true;_lblPttKey3.Text="Press...";_lblPttKey3.BackColor=ACC;_lblPttKey3.ForeColor=Color.White;_btnAddKey3.Visible=false;_lblPttKey3.Visible=true;_lblKey3Label.Visible=true;_lblKey3Hint.Visible=true;KeyPreview=true;KeyDown+=OnKeyCapture3;}
         void OnKeyCapture3(object s,KeyEventArgs e){if(!_capturingKey3)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){if(_pttKeyCode3==0){UpdateKey3Visibility();}else{_lblPttKey3.Text=KeyName(_pttKeyCode3);}_lblPttKey3.BackColor=INPUT_BG;_lblPttKey3.ForeColor=ACC;_capturingKey3=false;KeyPreview=false;KeyDown-=OnKeyCapture3;return;}
             int vk=(int)e.KeyCode;
@@ -1441,7 +1442,8 @@ namespace AngryAudio
             _pttKeyCode3=vk;
             // Duplicate check
             if(vk==_pttKeyCode || (_pttKeyCode2>0 && vk==_pttKeyCode2)){_capturingKey3=false;KeyPreview=false;KeyDown-=OnKeyCapture3;_pttKeyCode3=0;_settings.PushToTalkKey3=0;ShakeReject(_lblPttKey3, ()=>{UpdateKey3Visibility();});return;}
-            _lblPttKey3.Text=KeyName(_pttKeyCode3);_lblPttKey3.BackColor=INPUT_BG;_lblPttKey3.ForeColor=ACC;_capturingKey3=false;KeyPreview=false;KeyDown-=OnKeyCapture3;_settings.PushToTalkKey3=_pttKeyCode3;_key3ShowOverlay=true;_settings.PttKey3ShowOverlay=true;if(_chkKey3Overlay!=null)_chkKey3Overlay.Checked=true;UpdateKey3Visibility();if(_onToggle!=null)_onToggle("ptt_key3:"+_pttKeyCode3);}
+            _lblPttKey3.Text=KeyName(_pttKeyCode3);_lblPttKey3.BackColor=INPUT_BG;_lblPttKey3.ForeColor=ACC;_capturingKey3=false;KeyPreview=false;KeyDown-=OnKeyCapture3;_settings.PushToTalkKey3=_pttKeyCode3;_key3ShowOverlay=true;_settings.PttKey3ShowOverlay=true;if(_chkKey3Overlay!=null)_chkKey3Overlay.Checked=true;UpdateKey3Visibility();if(_onToggle!=null)_onToggle("ptt_key3:"+_pttKeyCode3);
+            EnforceToggleSelection();}
         void UpdateKey3Visibility(){bool hasKey3=_pttKeyCode3>0;_lblPttKey3.Visible=hasKey3;_lblKey3Label.Visible=hasKey3;_lblKey3Hint.Visible=hasKey3;_btnRemoveKey3.Visible=hasKey3;_btnAddKey3.Visible=!hasKey3 && _pttKeyCode2 > 0;if(_chkKey3Overlay!=null)_chkKey3Overlay.Visible=hasKey3;}
         CheckBox MakeOverlayCheck(int y, Panel card, bool initialOn, Action<bool> onChange) {
             // Custom eye toggle — owner-drawn, no text
@@ -1504,7 +1506,8 @@ namespace AngryAudio
             _pttKeyCode=vk;
             // Duplicate check
             if((_pttKeyCode2>0 && vk==_pttKeyCode2)||(_pttKeyCode3>0 && vk==_pttKeyCode3)){_capturingKey=false;KeyPreview=false;KeyDown-=OnKeyCapture;_pttKeyCode=_settings.PushToTalkKey;_lblPttKey.Text=KeyName(_pttKeyCode);ShakeReject(_lblPttKey);return;}
-            _lblPttKey.Text=KeyName(_pttKeyCode);_lblPttKey.BackColor=INPUT_BG;_lblPttKey.ForeColor=ACC;_capturingKey=false;KeyPreview=false;KeyDown-=OnKeyCapture;_settings.PushToTalkKey=_pttKeyCode;if(_onToggle!=null)_onToggle("ptt_key:"+_pttKeyCode);}
+            _lblPttKey.Text=KeyName(_pttKeyCode);_lblPttKey.BackColor=INPUT_BG;_lblPttKey.ForeColor=ACC;_capturingKey=false;KeyPreview=false;KeyDown-=OnKeyCapture;_settings.PushToTalkKey=_pttKeyCode;if(_onToggle!=null)_onToggle("ptt_key:"+_pttKeyCode);
+            EnforceToggleSelection();}
         [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vKey);
         static bool IsKeyDown(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
         string KeyName(int c){return PushToTalk.GetKeyName(c);}
@@ -1534,6 +1537,113 @@ namespace AngryAudio
             };
             shakeTimer.Start();
         }
+
+        private Timer _enforceTimer;
+        private Panel _enforceOverlay; // blocks interaction
+
+        /// <summary>If a hotkey is set but no PTT/PTM/PTToggle is enabled, shake the hotkey field
+        /// and flash the three toggle rows in sequence (1-2-3, 1-2-3...) until user picks one.</summary>
+        void EnforceToggleSelection()
+        {
+            if (_tglPtt.Checked || _tglPtm.Checked || _tglPtToggle.Checked) return;
+
+            // Already enforcing?
+            if (_enforceTimer != null) return;
+
+            var card = _tglPtt.Parent;
+            if (card == null) return;
+
+            // Create a transparent overlay that blocks clicks except on the 3 toggles
+            _enforceOverlay = new Panel {
+                Location = Point.Empty,
+                Size = this.ClientSize,
+                BackColor = Color.FromArgb(120, 0, 0, 0)
+            };
+            _enforceOverlay.BringToFront();
+            this.Controls.Add(_enforceOverlay);
+            _enforceOverlay.BringToFront();
+
+            // Bring the card to front so toggles are clickable
+            card.Parent.BringToFront();
+            card.BringToFront();
+            _tglPtt.BringToFront();
+            _tglPtm.BringToFront();
+            _tglPtToggle.BringToFront();
+
+            // Highlight panels for each toggle row
+            var highlights = new Panel[3];
+            var toggles = new ToggleSwitch[] { _tglPtt, _tglPtm, _tglPtToggle };
+            Color flashColor = Color.FromArgb(60, ACC.R, ACC.G, ACC.B);
+            Color flashBorder = Color.FromArgb(180, ACC.R, ACC.G, ACC.B);
+
+            for (int i = 0; i < 3; i++)
+            {
+                var tgl = toggles[i];
+                highlights[i] = new Panel {
+                    Location = new Point(Dpi.S(4), tgl.Top - Dpi.S(4)),
+                    Size = new Size(card.Width - Dpi.S(8), Dpi.S(42)),
+                    BackColor = Color.Transparent
+                };
+                
+                highlights[i].Paint += (s, e) => {
+                    using (var p = new Pen(flashBorder, 2f))
+                        e.Graphics.DrawRectangle(p, 1, 1, ((Panel)s).Width - 3, ((Panel)s).Height - 3);
+                };
+                highlights[i].Visible = false;
+                card.Controls.Add(highlights[i]);
+                highlights[i].BringToFront();
+                // Keep toggle and its labels on top
+                tgl.BringToFront();
+                foreach (Control c in card.Controls)
+                    if (c is Label && c.Top >= tgl.Top - Dpi.S(2) && c.Top <= tgl.Top + Dpi.S(30))
+                        c.BringToFront();
+            }
+
+            // Sequential flash: 1, 2, 3, pause, shake, repeat
+            int step = 0;
+            int cycle = 0;
+            _enforceTimer = new Timer { Interval = 200 };
+            _enforceTimer.Tick += (s, e) => {
+                // Check if user picked a toggle
+                if (_tglPtt.Checked || _tglPtm.Checked || _tglPtToggle.Checked)
+                {
+                    _enforceTimer.Stop(); _enforceTimer.Dispose(); _enforceTimer = null;
+                    foreach (var h in highlights) { try { card.Controls.Remove(h); h.Dispose(); } catch { } }
+                    try { this.Controls.Remove(_enforceOverlay); _enforceOverlay.Dispose(); _enforceOverlay = null; } catch { }
+                    return;
+                }
+
+                if (step < 3)
+                {
+                    // Light up one at a time: 1, 2, 3
+                    for (int i = 0; i < 3; i++)
+                    {
+                        highlights[i].BackColor = (i == step) ? flashColor : Color.Transparent;
+                        highlights[i].Visible = true;
+                        highlights[i].Invalidate();
+                    }
+                    step++;
+                }
+                else if (step == 3)
+                {
+                    // All off
+                    for (int i = 0; i < 3; i++) { highlights[i].BackColor = Color.Transparent; highlights[i].Invalidate(); }
+                    step++;
+                }
+                else
+                {
+                    // Shake the hotkey label and reset cycle
+                    ShakeReject(_lblPttKey);
+                    step = 0;
+                    cycle++;
+                }
+            };
+            _enforceTimer.Start();
+
+            // Initial shake
+            ShakeReject(_lblPttKey);
+        }
+
         void ScanApps(){
             try{
                 var ss=Audio.GetAudioSessions();
