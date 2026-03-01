@@ -1835,6 +1835,20 @@ namespace AngryAudio
                 dismissAction();
         }
 
+        /// <summary>Dismiss ALL toasts except MicStatusOverlay. Used when mic warning takes priority.</summary>
+        private void DismissAllToasts()
+        {
+            DismissActiveToast();
+            // Dismiss info toast (PTT Active, etc.)
+            Action dismissInfo = () => {
+                try { if (_activeInfoToast != null && !_activeInfoToast.IsDisposed) _activeInfoToast.Dismiss(); } catch { }
+            };
+            if (_contextMenu != null && _contextMenu.IsHandleCreated)
+                try { _contextMenu.BeginInvoke(dismissInfo); } catch { dismissInfo(); }
+            else
+                dismissInfo();
+        }
+
         // --- Mic Unprotected Warning ---
 
         private MicWarningToast _micWarningToast;
@@ -1854,8 +1868,8 @@ namespace AngryAudio
             Logger.Info("CheckMicUnprotected: unprotected=" + unprotected + " micEnf=" + _settings.MicEnforceEnabled + " afkMic=" + _settings.AfkMicMuteEnabled + " ptt=" + _settings.PushToTalkEnabled + " ptm=" + _settings.PushToMuteEnabled + " ptToggle=" + _settings.PushToToggleEnabled);
             if (!unprotected) return;
 
-            // Dismiss any active correction/info toasts so the warning stands alone
-            DismissActiveToast();
+            // Kill ALL other popups so the red warning stands alone (except MicStatusOverlay)
+            DismissAllToasts();
 
             Action showWarning = () =>
             {
