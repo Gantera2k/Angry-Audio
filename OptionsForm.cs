@@ -1362,7 +1362,7 @@ namespace AngryAudio
         }
 
         void BuildFooter() {
-            _footer = new BufferedPanel{Dock=DockStyle.Bottom,Height=Dpi.S(50),BackColor=BG};
+            _footer = new BufferedPanel{Dock=DockStyle.Bottom,Height=Dpi.S(70),BackColor=BG};
             _footer.Paint += (s,e) => {
                 PaintUnifiedStars(e.Graphics, _footer);
                 using(var p=new Pen(BDR)) e.Graphics.DrawLine(p,0,0,_footer.Width,0);
@@ -1384,12 +1384,12 @@ namespace AngryAudio
             _saveOrbitPhase = 0f;
             _saveOrbitTimer = new Timer { Interval = 30 };
             _saveOrbitTimer.Tick += (s, e) => {
-                _saveOrbitPhase += 0.08f;
+                _saveOrbitPhase += 0.18f;
                 if (_saveOrbitPhase > (float)(Math.PI * 2)) _saveOrbitPhase -= (float)(Math.PI * 2);
-                float pulse = (float)((Math.Sin(_saveOrbitPhase * 0.6) + 1.0) / 2.0);
-                int r = (int)(40 + (140 - 40) * pulse);
-                int gb = (int)(100 + (220 - 100) * pulse);
-                int bl = (int)(140 + (255 - 140) * pulse);
+                float pulse = (float)((Math.Sin(_saveOrbitPhase * 0.8) + 1.0) / 2.0);
+                int r = (int)(20 + (180 - 20) * pulse);
+                int gb = (int)(50 + (240 - 50) * pulse);
+                int bl = (int)(80 + (255 - 80) * pulse);
                 if (!bs.ClientRectangle.Contains(bs.PointToClient(Cursor.Position)))
                     bs.BackColor = Color.FromArgb(r, gb, bl);
                 bs.Invalidate();
@@ -1402,8 +1402,8 @@ namespace AngryAudio
             bc.MouseEnter+=(s,e)=>{bc.BackColor=Color.FromArgb(55,55,55);bc.ForeColor=TXT;};
             bc.MouseLeave+=(s,e)=>{bc.BackColor=Color.FromArgb(28,28,28);bc.ForeColor=TXT2;};
             _footer.Controls.Add(bc);
-            bs.Location = new Point(ClientSize.Width - bs.Width - Dpi.S(16), Dpi.S(10));
-            bc.Location = new Point(bs.Left - bc.Width - Dpi.S(10), Dpi.S(10));
+            bs.Location = new Point(ClientSize.Width - bs.Width - Dpi.S(16), Dpi.S(20));
+            bc.Location = new Point(bs.Left - bc.Width - Dpi.S(10), Dpi.S(20));
         }
 
         void StartKeyCapture(){_capturingKey=true;_lblPttKey.Text="Press...";_lblPttKey.BackColor=ACC;_lblPttKey.ForeColor=Color.White;KeyPreview=true;KeyDown+=OnKeyCapture;}
