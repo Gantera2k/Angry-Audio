@@ -171,6 +171,8 @@ namespace AngryAudioInstaller
         int _twinkleTick;
         ShootingStar _shootingStar;
         CelestialEvents _celestialEvents;
+        Bitmap _starCache, _starCacheDim;
+        int _starCacheW, _starCacheH, _starCacheTick = -1;
 
         // Hit-test rectangles — computed during OnPaint, used by OnClick
         Rectangle _btnRect1;  // Primary: Install / Launch / Retry / Uninstall
@@ -651,8 +653,26 @@ namespace AngryAudioInstaller
 
             int w = ClientSize.Width, h = ClientSize.Height;
 
-            // Stars — unified system matching Options/Welcome
-            DarkTheme.PaintCardStars(g, w, h, 42, _twinkleTick, 1.0f);
+            // Star cache — exact same approach as OptionsForm
+            if (_starCache == null || _starCacheW != w || _starCacheH != h || _starCacheTick != _twinkleTick)
+            {
+                _starCacheW = w; _starCacheH = h; _starCacheTick = _twinkleTick;
+                if (_starCache != null) _starCache.Dispose();
+                if (_starCacheDim != null) _starCacheDim.Dispose();
+                _starCache = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                _starCacheDim = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+                using (var sg = Graphics.FromImage(_starCache)) {
+                    sg.SmoothingMode = SmoothingMode.AntiAlias;
+                    DarkTheme.PaintCardStars(sg, w, h, 42, _twinkleTick, 1.0f);
+                }
+                using (var sg = Graphics.FromImage(_starCacheDim)) {
+                    sg.SmoothingMode = SmoothingMode.AntiAlias;
+                    DarkTheme.PaintCardStars(sg, w, h, 42, _twinkleTick, 0.35f);
+                }
+            }
+
+            // Background stars — full brightness
+            g.DrawImage(_starCache, 0, 0);
 
             // Shooting stars painted AFTER measuring card so they pass behind it
             // (deferred below after card is drawn)
@@ -778,18 +798,18 @@ namespace AngryAudioInstaller
             // Draw card with frosted glass matching Options/Welcome
             using (var path = RoundRectPath(new Rectangle(cx, cy, cw, ch), S(10)))
             {
-                // Base: fill with BG so stars show through
+                // Base: fill with BG
                 using (var brush = new SolidBrush(BG))
                     g.FillPath(brush, path);
-                // Stars inside card (full brightness, clipped)
+                // Stars inside card (full brightness, clipped) — blit cache
                 var oldClip = g.Clip;
                 g.SetClip(path);
-                DarkTheme.PaintCardStars(g, w, h, 42, _twinkleTick, 1.0f);
+                g.DrawImage(_starCache, 0, 0);
                 // Glass tint
                 using (var tint = new SolidBrush(Color.FromArgb(170, CARD.R, CARD.G, CARD.B)))
                     g.FillRectangle(tint, cx, cy, cw, ch);
-                // Dimmed stars on top
-                DarkTheme.PaintCardStars(g, w, h, 42, _twinkleTick, 0.35f);
+                // Dimmed stars on top — blit dim cache
+                g.DrawImage(_starCacheDim, 0, 0);
                 g.Clip = oldClip;
                 using (var pen = new Pen(BDR))
                     g.DrawPath(pen, path);
@@ -1092,7 +1112,7 @@ namespace AngryAudioInstaller
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { _paintTimer?.Dispose(); _shootingStar?.Stop(); _shootingStar?.Dispose(); _celestialEvents?.Stop(); _celestialEvents?.Dispose(); }
+            if (disposing) { _paintTimer?.Dispose(); _shootingStar?.Stop(); _shootingStar?.Dispose(); _celestialEvents?.Stop(); _celestialEvents?.Dispose(); _starCache?.Dispose(); _starCacheDim?.Dispose(); }
             base.Dispose(disposing);
         }
     }

@@ -1445,8 +1445,7 @@ namespace AngryAudio
             _pttKeyCode2=vk;
             // Duplicate check
             if(vk==_pttKeyCode || (_pttKeyCode3>0 && vk==_pttKeyCode3)){_capturingKey2=false;KeyPreview=false;KeyDown-=OnKeyCapture2;_pttKeyCode2=0;_settings.PushToTalkKey2=0;ShakeReject(_lblPttKey2, ()=>{UpdateKey2Visibility();});return;}
-            _lblPttKey2.Text=KeyName(_pttKeyCode2);_lblPttKey2.BackColor=INPUT_BG;_lblPttKey2.ForeColor=ACC;_capturingKey2=false;KeyPreview=false;KeyDown-=OnKeyCapture2;_settings.PushToTalkKey2=_pttKeyCode2;_key2ShowOverlay=true;_settings.PttKey2ShowOverlay=true;if(_chkKey2Overlay!=null)_chkKey2Overlay.Checked=true;UpdateKey2Visibility();if(_onToggle!=null)_onToggle("ptt_key2:"+_pttKeyCode2);
-            EnforceToggleSelection();}
+            _lblPttKey2.Text=KeyName(_pttKeyCode2);_lblPttKey2.BackColor=INPUT_BG;_lblPttKey2.ForeColor=ACC;_capturingKey2=false;KeyPreview=false;KeyDown-=OnKeyCapture2;_settings.PushToTalkKey2=_pttKeyCode2;_key2ShowOverlay=true;_settings.PttKey2ShowOverlay=true;if(_chkKey2Overlay!=null)_chkKey2Overlay.Checked=true;UpdateKey2Visibility();if(_onToggle!=null)_onToggle("ptt_key2:"+_pttKeyCode2);}
         void StartKeyCapture3(){
             if(!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked){EnforceToggleSelection();return;}
             if(_capturingKey || _capturingKey2){return;}
@@ -1460,8 +1459,7 @@ namespace AngryAudio
             _pttKeyCode3=vk;
             // Duplicate check
             if(vk==_pttKeyCode || (_pttKeyCode2>0 && vk==_pttKeyCode2)){_capturingKey3=false;KeyPreview=false;KeyDown-=OnKeyCapture3;_pttKeyCode3=0;_settings.PushToTalkKey3=0;ShakeReject(_lblPttKey3, ()=>{UpdateKey3Visibility();});return;}
-            _lblPttKey3.Text=KeyName(_pttKeyCode3);_lblPttKey3.BackColor=INPUT_BG;_lblPttKey3.ForeColor=ACC;_capturingKey3=false;KeyPreview=false;KeyDown-=OnKeyCapture3;_settings.PushToTalkKey3=_pttKeyCode3;_key3ShowOverlay=true;_settings.PttKey3ShowOverlay=true;if(_chkKey3Overlay!=null)_chkKey3Overlay.Checked=true;UpdateKey3Visibility();if(_onToggle!=null)_onToggle("ptt_key3:"+_pttKeyCode3);
-            EnforceToggleSelection();}
+            _lblPttKey3.Text=KeyName(_pttKeyCode3);_lblPttKey3.BackColor=INPUT_BG;_lblPttKey3.ForeColor=ACC;_capturingKey3=false;KeyPreview=false;KeyDown-=OnKeyCapture3;_settings.PushToTalkKey3=_pttKeyCode3;_key3ShowOverlay=true;_settings.PttKey3ShowOverlay=true;if(_chkKey3Overlay!=null)_chkKey3Overlay.Checked=true;UpdateKey3Visibility();if(_onToggle!=null)_onToggle("ptt_key3:"+_pttKeyCode3);}
         void UpdateKey3Visibility(){bool hasKey3=_pttKeyCode3>0;_lblPttKey3.Visible=hasKey3;_lblKey3Label.Visible=hasKey3;_lblKey3Hint.Visible=hasKey3;_btnRemoveKey3.Visible=hasKey3;_btnAddKey3.Visible=!hasKey3 && _pttKeyCode2 > 0;if(_chkKey3Overlay!=null)_chkKey3Overlay.Visible=hasKey3;}
         CheckBox MakeOverlayCheck(int y, Panel card, bool initialOn, Action<bool> onChange) {
             // Custom eye toggle — owner-drawn, no text
@@ -1524,8 +1522,7 @@ namespace AngryAudio
             _pttKeyCode=vk;
             // Duplicate check
             if((_pttKeyCode2>0 && vk==_pttKeyCode2)||(_pttKeyCode3>0 && vk==_pttKeyCode3)){_capturingKey=false;KeyPreview=false;KeyDown-=OnKeyCapture;_pttKeyCode=_settings.PushToTalkKey;_lblPttKey.Text=KeyName(_pttKeyCode);ShakeReject(_lblPttKey);return;}
-            _lblPttKey.Text=KeyName(_pttKeyCode);_lblPttKey.BackColor=INPUT_BG;_lblPttKey.ForeColor=ACC;_capturingKey=false;KeyPreview=false;KeyDown-=OnKeyCapture;_settings.PushToTalkKey=_pttKeyCode;if(_onToggle!=null)_onToggle("ptt_key:"+_pttKeyCode);
-            EnforceToggleSelection();}
+            _lblPttKey.Text=KeyName(_pttKeyCode);_lblPttKey.BackColor=INPUT_BG;_lblPttKey.ForeColor=ACC;_capturingKey=false;KeyPreview=false;KeyDown-=OnKeyCapture;_settings.PushToTalkKey=_pttKeyCode;if(_onToggle!=null)_onToggle("ptt_key:"+_pttKeyCode);}
         [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vKey);
         static bool IsKeyDown(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
         string KeyName(int c){return PushToTalk.GetKeyName(c);}
