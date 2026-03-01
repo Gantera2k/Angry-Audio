@@ -139,7 +139,7 @@ namespace AngryAudioInstaller
     {
         // Colors — match Angry Audio dark theme
         static readonly Color BG = AngryAudio.DarkTheme.BG;
-        static readonly Color CARD = AngryAudio.DarkTheme.CardBG;
+        // CARD color removed — StarBackground uses DarkTheme.CardBG directly
         static readonly Color ACC = AngryAudio.DarkTheme.Accent;
         static readonly Color TXT = Color.FromArgb(220, 220, 220);
         static readonly Color TXT2 = Color.FromArgb(160, 160, 160);
@@ -169,10 +169,7 @@ namespace AngryAudioInstaller
         bool _uninstalling;
 
         int _twinkleTick;
-        ShootingStar _shootingStar;
-        CelestialEvents _celestialEvents;
-        Bitmap _starCache, _starCacheDim;
-        int _starCacheW, _starCacheH, _starCacheTick = -1;
+        StarBackground _stars;
 
         // Hit-test rectangles — computed during OnPaint, used by OnClick
         Rectangle _btnRect1;  // Primary: Install / Launch / Retry / Uninstall
@@ -216,14 +213,10 @@ namespace AngryAudioInstaller
             try { Icon = ExtractEmbeddedIcon(); } catch { }
 
             // Stars now use DarkTheme.PaintCardStars for consistency
-
-            _shootingStar = new ShootingStar(() => { try { if (!IsDisposed) Invalidate(); } catch { } });
-            _shootingStar.Start();
-            _celestialEvents = new CelestialEvents(() => { try { if (!IsDisposed) Invalidate(); } catch { } });
-            _celestialEvents.Start();
+            _stars = new StarBackground(() => { try { if (!IsDisposed) Invalidate(); } catch { } });
 
             _paintTimer = new Timer { Interval = 16 };
-            _paintTimer.Tick += (s, e) => { _twinkleTick++; Invalidate(); };
+            _paintTimer.Tick += (s, e) => { _twinkleTick++; _stars.Tick(); Invalidate(); };
             _paintTimer.Start();
 
             Paint += OnPaint;
@@ -654,25 +647,10 @@ namespace AngryAudioInstaller
             int w = ClientSize.Width, h = ClientSize.Height;
 
             // Star cache — exact same approach as OptionsForm
-            if (_starCache == null || _starCacheW != w || _starCacheH != h || _starCacheTick != _twinkleTick)
-            {
-                _starCacheW = w; _starCacheH = h; _starCacheTick = _twinkleTick;
-                if (_starCache != null) _starCache.Dispose();
-                if (_starCacheDim != null) _starCacheDim.Dispose();
-                _starCache = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
-                _starCacheDim = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
-                using (var sg = Graphics.FromImage(_starCache)) {
-                    sg.SmoothingMode = SmoothingMode.AntiAlias;
-                    DarkTheme.PaintCardStars(sg, w, h, 42, _twinkleTick, 1.0f);
-                }
-                using (var sg = Graphics.FromImage(_starCacheDim)) {
-                    sg.SmoothingMode = SmoothingMode.AntiAlias;
-                    DarkTheme.PaintCardStars(sg, w, h, 42, _twinkleTick, 0.35f);
-                }
-            }
+            _stars.Tick();
 
             // Background stars — full brightness
-            g.DrawImage(_starCache, 0, 0);
+            _stars.PaintBackground(g, w, h);
 
             // Shooting stars painted AFTER measuring card so they pass behind it
             // (deferred below after card is drawn)
@@ -795,21 +773,14 @@ namespace AngryAudioInstaller
             int maxCardBottom = h - S(36);
             if (cy + ch > maxCardBottom) ch = maxCardBottom - cy;
 
-            // Draw card with frosted glass matching Options/Welcome
+            // Draw card with frosted glass — using shared StarBackground
             using (var path = RoundRectPath(new Rectangle(cx, cy, cw, ch), S(10)))
             {
-                // Base: fill with BG
                 using (var brush = new SolidBrush(BG))
                     g.FillPath(brush, path);
-                // Stars inside card (full brightness, clipped) — blit cache
                 var oldClip = g.Clip;
                 g.SetClip(path);
-                g.DrawImage(_starCache, 0, 0);
-                // Glass tint
-                using (var tint = new SolidBrush(Color.FromArgb(170, CARD.R, CARD.G, CARD.B)))
-                    g.FillRectangle(tint, cx, cy, cw, ch);
-                // Dimmed stars on top — blit dim cache
-                g.DrawImage(_starCacheDim, 0, 0);
+                _stars.PaintCardGlass(g, w, h, new Rectangle(cx, cy, cw, ch));
                 g.Clip = oldClip;
                 using (var pen = new Pen(BDR))
                     g.DrawPath(pen, path);
@@ -818,19 +789,7 @@ namespace AngryAudioInstaller
             using (var p = new Pen(Color.FromArgb(30, ACC.R, ACC.G, ACC.B), 1.5f))
                 g.DrawLine(p, cx + S(16), cy, cx + cw - S(16), cy);
 
-            // Shooting stars — painted after card so they pass behind it
-            {
-                var oldClipStar = g.Clip;
-                var excludeCard = new Region(new Rectangle(0, 0, w, h));
-                excludeCard.Exclude(new Rectangle(cx, cy, cw, ch));
-                g.Clip = excludeCard;
-                if (_shootingStar != null)
-                    DarkTheme.PaintShootingStar(g, w, h, _shootingStar);
-                if (_celestialEvents != null)
-                    DarkTheme.PaintCelestialEvent(g, w, h, _celestialEvents);
-                g.Clip = oldClipStar;
-                excludeCard.Dispose();
-            }
+            // (shooting stars already painted by _stars.PaintBackground above)
 
             // Mascot
             try { AngryAudio.Mascot.DrawMascot(g, cx + S(20), cy + S(16), S(64)); } catch { }
@@ -1112,7 +1071,7 @@ namespace AngryAudioInstaller
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { _paintTimer?.Dispose(); _shootingStar?.Stop(); _shootingStar?.Dispose(); _celestialEvents?.Stop(); _celestialEvents?.Dispose(); _starCache?.Dispose(); _starCacheDim?.Dispose(); }
+            if (disposing) { _paintTimer?.Dispose(); _stars?.Dispose(); }
             base.Dispose(disposing);
         }
     }

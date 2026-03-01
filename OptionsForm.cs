@@ -1595,36 +1595,47 @@ namespace AngryAudio
                         c.BringToFront();
             }
 
+            // Animation: shake + 1-2-3, 1-2-3, pause, repeat
+            // Steps: 0-2 = first 1-2-3, 3-5 = second 1-2-3, 6 = clear, 7-10 = pause, 11 = shake + restart
             int step = 0;
-            _enforceTimer = new Timer { Interval = 200 };
+            _enforceTimer = new Timer { Interval = 180 };
             _enforceTimer.Tick += (s, e) => {
                 if (_tglPtt.Checked || _tglPtm.Checked || _tglPtToggle.Checked)
                 {
                     _enforceTimer.Stop(); _enforceTimer.Dispose(); _enforceTimer = null;
                     foreach (var h in highlights) { try { card.Controls.Remove(h); h.Dispose(); } catch { } }
-                    // Reset hotkey label colors back to normal
                     _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC;
                     return;
                 }
 
-                if (step < 3)
+                if (step < 6)
                 {
+                    int idx = step % 3;
                     for (int i = 0; i < 3; i++)
                     {
-                        highlights[i].BackColor = (i == step) ? flashColor : Color.Transparent;
+                        highlights[i].BackColor = (i == idx) ? flashColor : Color.Transparent;
                         highlights[i].Visible = true;
                         highlights[i].Invalidate();
                     }
                     step++;
                 }
-                else if (step == 3)
+                else if (step == 6)
                 {
                     for (int i = 0; i < 3; i++) { highlights[i].BackColor = Color.Transparent; highlights[i].Invalidate(); }
-                    step = 0; // loop the flash, but do NOT re-shake
+                    step++;
+                }
+                else if (step < 11)
+                {
+                    step++; // pause ticks
+                }
+                else
+                {
+                    ShakeReject(_lblPttKey);
+                    step = 0; // restart: shake + 123 123
                 }
             };
             _enforceTimer.Start();
-            ShakeReject(_lblPttKey); // shake once at start only
+            ShakeReject(_lblPttKey);
         }
 
         /// <summary>Paint a premium circle-X remove icon with anti-aliased lines.</summary>

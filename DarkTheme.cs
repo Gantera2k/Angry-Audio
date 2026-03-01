@@ -402,6 +402,96 @@ namespace AngryAudio
     }
 
     /// <summary>
+    /// Shared star background system — used by Options, Welcome, and Installer.
+    /// Handles star caching, shooting stars, celestial events, and card glass tint.
+    /// Call PaintBackground() for full starfield, PaintCardGlass() for frosted card overlay.
+    /// </summary>
+    public class StarBackground : IDisposable
+    {
+        Bitmap _cache, _cacheDim;
+        int _cacheW, _cacheH, _cacheTick = -1;
+        public ShootingStar Shooting;
+        public CelestialEvents Celestial;
+        int _twinkleTick;
+        const int SEED = 42;
+
+        public StarBackground(Action invalidate)
+        {
+            Shooting = new ShootingStar(invalidate);
+            Shooting.Start();
+            Celestial = new CelestialEvents(invalidate);
+            Celestial.Start();
+        }
+
+        public void Tick() { _twinkleTick++; }
+
+        void EnsureCache(int w, int h)
+        {
+            if (w <= 0 || h <= 0) return;
+            if (_cache != null && _cacheW == w && _cacheH == h && _cacheTick == _twinkleTick) return;
+            _cacheW = w; _cacheH = h; _cacheTick = _twinkleTick;
+            if (_cache != null) _cache.Dispose();
+            if (_cacheDim != null) _cacheDim.Dispose();
+            _cache = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            _cacheDim = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            using (var sg = System.Drawing.Graphics.FromImage(_cache)) {
+                sg.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                DarkTheme.PaintCardStars(sg, w, h, SEED, _twinkleTick, 1.0f);
+            }
+            using (var sg = System.Drawing.Graphics.FromImage(_cacheDim)) {
+                sg.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                DarkTheme.PaintCardStars(sg, w, h, SEED, _twinkleTick, 0.35f);
+            }
+        }
+
+        /// <summary>Paint full starfield + shooting stars at form coordinates.</summary>
+        public void PaintBackground(System.Drawing.Graphics g, int w, int h)
+        {
+            EnsureCache(w, h);
+            if (_cache != null) g.DrawImage(_cache, 0, 0);
+            if (Shooting != null) DarkTheme.PaintShootingStar(g, w, h, Shooting);
+            if (Celestial != null) DarkTheme.PaintCelestialEvent(g, w, h, Celestial);
+        }
+
+        /// <summary>Paint dimmed starfield only (no shooting stars). For use inside glass cards.</summary>
+        public void PaintDimStars(System.Drawing.Graphics g, int w, int h)
+        {
+            EnsureCache(w, h);
+            if (_cacheDim != null) g.DrawImage(_cacheDim, 0, 0);
+        }
+
+        /// <summary>Paint full starfield cache only (no shooting stars). For card base layer.</summary>
+        public void PaintFullStars(System.Drawing.Graphics g, int w, int h)
+        {
+            EnsureCache(w, h);
+            if (_cache != null) g.DrawImage(_cache, 0, 0);
+        }
+
+        /// <summary>Paint frosted glass card: full stars → glass tint → dimmed stars.</summary>
+        public void PaintCardGlass(System.Drawing.Graphics g, int w, int h, System.Drawing.Rectangle cardRect, System.Drawing.Drawing2D.GraphicsPath clipPath = null)
+        {
+            EnsureCache(w, h);
+            // Full stars under glass
+            if (_cache != null) g.DrawImage(_cache, 0, 0);
+            // Glass tint
+            using (var tint = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(170, DarkTheme.CardBG.R, DarkTheme.CardBG.G, DarkTheme.CardBG.B)))
+            {
+                if (clipPath != null) g.FillPath(tint, clipPath);
+                else g.FillRectangle(tint, cardRect);
+            }
+            // Dimmed stars on top
+            if (_cacheDim != null) g.DrawImage(_cacheDim, 0, 0);
+        }
+
+        public void Dispose()
+        {
+            Shooting?.Stop(); Shooting?.Dispose();
+            Celestial?.Stop(); Celestial?.Dispose();
+            _cache?.Dispose(); _cacheDim?.Dispose();
+        }
+    }
+
+    /// <summary>
     /// Manages shooting star animation — supports multiple simultaneous meteors.
     /// </summary>
     public class ShootingStar
