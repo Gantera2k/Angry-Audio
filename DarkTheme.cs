@@ -2987,12 +2987,14 @@ namespace AngryAudio
     }
 
     /// <summary>Transparent click-through overlay that paints the orbiting star ON TOP of a button.
-    /// Uses WS_EX_TRANSPARENT so clicks pass through to the button underneath.</summary>
+    /// Uses WM_NCHITTEST passthrough so clicks reach the button underneath.</summary>
     class StarOverlay : Control
     {
         private Control _target;
         private Timer _timer;
         private float _phase;
+        private const int WM_NCHITTEST = 0x84;
+        private const int HTTRANSPARENT = -1;
 
         public StarOverlay(Control target, Control parent)
         {
@@ -3000,7 +3002,6 @@ namespace AngryAudio
             SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint |
                      ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
             BackColor = Color.Transparent;
-            Enabled = false; // clicks pass through
 
             // Position: surround the target button with padding for glow
             int pad = 20;
@@ -3032,13 +3033,11 @@ namespace AngryAudio
                 _target.Width + pad * 2, _target.Height + pad * 2);
         }
 
-        protected override CreateParams CreateParams
+        // Make all mouse input pass through to controls underneath
+        protected override void WndProc(ref Message m)
         {
-            get {
-                var cp = base.CreateParams;
-                cp.ExStyle |= 0x20; // WS_EX_TRANSPARENT
-                return cp;
-            }
+            if (m.Msg == WM_NCHITTEST) { m.Result = (IntPtr)HTTRANSPARENT; return; }
+            base.WndProc(ref m);
         }
 
         protected override void OnPaintBackground(PaintEventArgs e) { /* don't paint background */ }
@@ -3047,7 +3046,6 @@ namespace AngryAudio
         {
             var g = e.Graphics;
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            // Translate so (0,0) = button's top-left within our padded bounds
             int pad = (this.Width - _target.Width) / 2;
             g.TranslateTransform(pad, pad);
             DarkTheme.PaintOrbitingStar(g, _target.Width, _target.Height, _phase, 6);
