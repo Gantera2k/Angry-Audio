@@ -101,8 +101,14 @@ namespace AngryAudio
         {
             if (_isClosing) return;
             _isClosing = true;
-            _holdTimer.Stop(); _fadeOutTimer.Stop(); _fadeInTimer.Stop();
-            Close();
+            _holdTimer.Stop(); _fadeInTimer.Stop(); _fadeOutTimer.Stop();
+            // Fast fade — premium feel, no zombies
+            var fastFade = new Timer { Interval = 16 };
+            fastFade.Tick += (s, e) => {
+                try { Opacity -= 0.15; } catch { }
+                if (Opacity <= 0.05) { fastFade.Stop(); fastFade.Dispose(); try { Close(); } catch { } }
+            };
+            fastFade.Start();
         }
 
         private void StartFadeOut()
@@ -355,7 +361,13 @@ namespace AngryAudio
             if (_isClosing) return;
             _isClosing = true;
             _holdTimer.Stop(); _fadeOutTimer.Stop(); _fadeInTimer.Stop(); _tickTimer.Stop();
-            Close();
+            // Fast fade — premium feel, no zombies
+            var fastFade = new Timer { Interval = 16 };
+            fastFade.Tick += (s, e) => {
+                try { Opacity -= 0.15; } catch { }
+                if (Opacity <= 0.05) { fastFade.Stop(); fastFade.Dispose(); try { Close(); } catch { } }
+            };
+            fastFade.Start();
         }
 
         public void ShowNoFocus()
