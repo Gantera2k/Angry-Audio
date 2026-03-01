@@ -1426,11 +1426,9 @@ namespace AngryAudio
                             _settings.PushToTalkEnabled = false;
                             DisablePtt();
                             Logger.Info("AFK mic mute enabled — PTT auto-disabled.");
-                            ShowBalloon("AFK Mic Protection Active", "AFK mute is guarding your mic. PTT stepped aside.");
                         }
                         else
                         {
-                            ShowBalloon("AFK Mic Mute Enabled", "Your mic will auto-mute when you go idle.");
                         }
                         _settings.MicOverlayEnabled = true;
                         if (_micStatus != null && !_micStatus.IsDisposed)
@@ -1449,7 +1447,6 @@ namespace AngryAudio
                         break;
                     case "afk_spk_on":
                         _settings.AfkSpeakerMuteEnabled = true;
-                        ShowBalloon("AFK Speaker Mute Enabled", "Speakers will auto-mute when you go idle.");
                         break;
                     case "afk_spk_off":
                         _settings.AfkSpeakerMuteEnabled = false;
@@ -1466,11 +1463,9 @@ namespace AngryAudio
                             _settings.AfkMicMuteEnabled = false;
                             _micAfkState = AfkState.Active;
                             Logger.Info("PTT enabled — AFK mic mute auto-disabled (PTT overrides).");
-                            ShowBalloon("Push-to-Talk Active", "Hold your hotkey (" + PushToTalk.GetKeyName(_settings.PushToTalkKey) + ") to unmute. AFK mute stepped aside.");
                         }
                         else
                         {
-                            ShowBalloon("Push-to-Talk Active", "Hold your hotkey (" + PushToTalk.GetKeyName(_settings.PushToTalkKey) + ") to unmute. Mic is locked down.");
                         }
                         DisablePtt();
                         EnablePtt();
@@ -1500,11 +1495,9 @@ namespace AngryAudio
                             _settings.AfkMicMuteEnabled = false;
                             _micAfkState = AfkState.Active;
                             Logger.Info("PTM enabled — AFK mic mute auto-disabled.");
-                            ShowBalloon("Push-to-Mute Active", "Hold your hotkey (" + PushToTalk.GetKeyName(_settings.PushToTalkKey) + ") to mute. AFK mute stepped aside.");
                         }
                         else
                         {
-                            ShowBalloon("Push-to-Mute Active", "Hold your hotkey (" + PushToTalk.GetKeyName(_settings.PushToTalkKey) + ") to mute. Mic is open.");
                         }
                         DisablePtt();
                         EnablePtt();
@@ -1535,11 +1528,9 @@ namespace AngryAudio
                             _settings.AfkMicMuteEnabled = false;
                             _micAfkState = AfkState.Active;
                             Logger.Info("Toggle enabled — AFK mic mute auto-disabled.");
-                            ShowBalloon("Push-to-Toggle Active", "Press your hotkey (" + PushToTalk.GetKeyName(_settings.PushToTalkKey) + ") to toggle mic. AFK mute stepped aside.");
                         }
                         else
                         {
-                            ShowBalloon("Push-to-Toggle Active", "Press your hotkey (" + PushToTalk.GetKeyName(_settings.PushToTalkKey) + ") to toggle mic on/off.");
                         }
                         DisablePtt();
                         EnablePtt();
@@ -1559,7 +1550,6 @@ namespace AngryAudio
                         break;
                     case "overlay_on":
                         _settings.MicOverlayEnabled = true;
-                        ShowBalloon("Mic Overlay Enabled", "Mic status indicator is now visible on screen.");
                         if (_micStatus != null && !_micStatus.IsDisposed)
                         {
                             _micStatus.OverlayEnabled = true;
@@ -1582,7 +1572,6 @@ namespace AngryAudio
                     case "app_lock_on":
                         _settings.AppVolumeEnforceEnabled = true;
                         EnforceAppVolumes();
-                        ShowBalloon("App Volume Lock Enabled", "Individual app volumes are now enforced.");
                         break;
                     case "app_lock_off":
                         _settings.AppVolumeEnforceEnabled = false;
@@ -1590,7 +1579,6 @@ namespace AngryAudio
                         break;
                     case "notify_corr_on":
                         _settings.NotifyOnCorrection = true;
-                        ShowBalloon("Correction Alerts On", "You'll see a toast when volume is corrected.");
                         break;
                     case "notify_corr_off":
                         _settings.NotifyOnCorrection = false;
@@ -1598,7 +1586,6 @@ namespace AngryAudio
                         break;
                     case "notify_dev_on":
                         _settings.NotifyOnDeviceChange = true;
-                        ShowBalloon("Device Alerts On", "You'll be notified when audio devices change.");
                         break;
                     case "notify_dev_off":
                         _settings.NotifyOnDeviceChange = false;
@@ -1607,12 +1594,10 @@ namespace AngryAudio
                     case "startup_on":
                         _settings.StartWithWindows = true;
                         _settings.ApplyStartupSetting();
-                        ShowBalloon("Start with Windows", "Angry Audio will launch automatically at login.");
                         break;
                     case "startup_off":
                         _settings.StartWithWindows = false;
                         _settings.ApplyStartupSetting();
-                        ShowBalloon("Manual Start Only", "Angry Audio won't start automatically anymore.");
                         break;
                 }
                 _settings.Save();
