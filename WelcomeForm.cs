@@ -737,65 +737,7 @@ namespace AngryAudio
         {
             var btn = (Button)sender;
             if (!btn.Visible) return;
-
-            // Pulsing glow intensity: oscillates between 0.3 and 1.0
-            float pulse = 0.3f + 0.7f * (float)((Math.Sin(_pulsePhase) + 1.0) / 2.0);
-            int glowAlpha = (int)(pulse * 120);
-            int w = btn.Width, h = btn.Height;
-
-            // Outer glow — drawn as expanding rounded rects with decreasing alpha
-            var g = e.Graphics;
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-
-            for (int i = 3; i >= 1; i--)
-            {
-                int expand = i * 2;
-                int alpha = (int)(glowAlpha * (1.0f - i * 0.25f));
-                if (alpha < 1) continue;
-                var glowRect = new Rectangle(-expand, -expand, w - 1 + expand * 2, h - 1 + expand * 2);
-                using (var pen = new Pen(Color.FromArgb(alpha, ACC.R, ACC.G, ACC.B), 2f))
-                using (var path = RoundedRect(glowRect, Dpi.S(6) + expand))
-                    g.DrawPath(pen, path);
-            }
-
-            // Inner bright border pulse
-            int borderAlpha = (int)(pulse * 200);
-            var innerRect = new Rectangle(0, 0, w - 1, h - 1);
-            using (var pen = new Pen(Color.FromArgb(borderAlpha, 140, 220, 255), 1.5f))
-            using (var path = RoundedRect(innerRect, Dpi.S(6)))
-                g.DrawPath(pen, path);
-
-            // Shimmer sweep across button
-            float shimmerPos = (_pulsePhase / (float)(Math.PI * 2)); // 0 to 1
-            int bandW = Math.Max(w / 4, 12);
-            int cx = (int)(shimmerPos * (w + bandW)) - bandW / 2;
-            var shimmerRect = new Rectangle(cx - bandW / 2, 0, bandW, h);
-
-            // Clip to button bounds
-            var clipPath = RoundedRect(innerRect, Dpi.S(6));
-            var oldClip = g.Clip;
-            g.SetClip(clipPath, CombineMode.Intersect);
-            try
-            {
-                using (var lgb = new LinearGradientBrush(
-                    new Point(shimmerRect.Left, 0), new Point(shimmerRect.Right, 0),
-                    Color.Transparent, Color.Transparent))
-                {
-                    var cb = new ColorBlend(3);
-                    int shimAlpha = (int)(pulse * 80);
-                    cb.Colors = new[] {
-                        Color.FromArgb(0, 255, 255, 255),
-                        Color.FromArgb(shimAlpha, 255, 255, 255),
-                        Color.FromArgb(0, 255, 255, 255)
-                    };
-                    cb.Positions = new[] { 0f, 0.5f, 1f };
-                    lgb.InterpolationColors = cb;
-                    g.FillRectangle(lgb, shimmerRect);
-                }
-            }
-            catch { }
-            g.Clip = oldClip;
-            clipPath.Dispose();
+            DarkTheme.PaintOrbitingStar(e.Graphics, btn.Width, btn.Height, _pulsePhase, Dpi.S(6));
         }
 
         private static GraphicsPath RoundedRect(Rectangle r, int radius)

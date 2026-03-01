@@ -2835,5 +2835,110 @@ namespace AngryAudio
                 int pa=(int)(a*0.5f*(0.5f+0.5f*(float)Math.Sin(t*50+pt)));
                 using(var b=new SolidBrush(Color.FromArgb(pa,160,140,200))) g.FillEllipse(b,px-1,py-1,2,2);}
         }
+
+        /// <summary>Paints a shooting star orbiting a button's rounded-rect perimeter with sparkle trail.
+        /// phase should increment continuously (e.g. += 0.08 per 30ms tick).</summary>
+        public static void PaintOrbitingStar(Graphics g, int w, int h, float phase, int cornerRadius)
+        {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            int radius = cornerRadius;
+            float straightW = w - 1 - 2 * radius;
+            float straightH = h - 1 - 2 * radius;
+            float cornerArc = (float)(Math.PI * radius / 2.0);
+            float perimeter = 2 * straightW + 2 * straightH + 4 * cornerArc;
+
+            float t = (phase / (float)(Math.PI * 2));
+            t = t - (float)Math.Floor(t); // normalize 0-1
+            int trailCount = 18;
+            float trailSpacing = 0.018f;
+
+            for (int i = trailCount; i >= 0; i--)
+            {
+                float tt = t - i * trailSpacing;
+                if (tt < 0) tt += 1.0f;
+                PointF pt = OrbitPoint(tt, w, h, radius, straightW, straightH, cornerArc, perimeter);
+
+                if (i == 0)
+                {
+                    for (int glow = 3; glow >= 0; glow--)
+                    {
+                        float sz = 3 + glow * 2;
+                        int alpha = glow == 0 ? 255 : (int)(120 / (glow + 1));
+                        Color c = glow == 0 ? Color.FromArgb(alpha, 220, 245, 255) : Color.FromArgb(alpha, Accent.R, Accent.G, Accent.B);
+                        using (var brush = new SolidBrush(c))
+                            g.FillEllipse(brush, pt.X - sz / 2, pt.Y - sz / 2, sz, sz);
+                    }
+                    int sparkAlpha = (int)(180 + 75 * Math.Sin(phase * 3));
+                    using (var pen = new Pen(Color.FromArgb(sparkAlpha, 200, 240, 255), 1f))
+                    {
+                        float armLen = 5;
+                        g.DrawLine(pen, pt.X - armLen, pt.Y, pt.X + armLen, pt.Y);
+                        g.DrawLine(pen, pt.X, pt.Y - armLen, pt.X, pt.Y + armLen);
+                    }
+                }
+                else
+                {
+                    float fade = 1.0f - (float)i / trailCount;
+                    float sz = 3f * fade;
+                    int alpha = (int)(180 * fade * fade);
+                    if (alpha < 2) continue;
+                    Color sparkColor = (i % 3 == 0)
+                        ? Color.FromArgb(alpha, 220, 245, 255)
+                        : Color.FromArgb(alpha, Accent.R, Accent.G, Accent.B);
+                    using (var brush = new SolidBrush(sparkColor))
+                        g.FillEllipse(brush, pt.X - sz / 2, pt.Y - sz / 2, sz, sz);
+                    if (i % 2 == 0 && fade > 0.3f)
+                    {
+                        float ox = (float)(Math.Sin(i * 7.3 + phase * 2) * 4);
+                        float oy = (float)(Math.Cos(i * 5.1 + phase * 2) * 4);
+                        float msz = 2f * fade;
+                        int mAlpha = (int)(100 * fade);
+                        using (var brush = new SolidBrush(Color.FromArgb(mAlpha, 180, 220, 255)))
+                            g.FillEllipse(brush, pt.X + ox - msz / 2, pt.Y + oy - msz / 2, msz, msz);
+                    }
+                }
+            }
+
+            using (var pen = new Pen(Color.FromArgb(40, Accent.R, Accent.G, Accent.B), 1f))
+            using (var path = RoundedRect(new Rectangle(0, 0, w - 1, h - 1), radius))
+                g.DrawPath(pen, path);
+        }
+
+        private static PointF OrbitPoint(float t, int w, int h, int radius, float straightW, float straightH, float cornerArc, float perimeter)
+        {
+            float d = t * perimeter;
+            if (d < straightW) return new PointF(radius + d, 0);
+            d -= straightW;
+            if (d < cornerArc)
+            {
+                float angle = (float)(-Math.PI / 2 + (d / cornerArc) * (Math.PI / 2));
+                return new PointF(w - 1 - radius + (float)Math.Cos(angle) * radius, radius + (float)Math.Sin(angle) * radius);
+            }
+            d -= cornerArc;
+            if (d < straightH) return new PointF(w - 1, radius + d);
+            d -= straightH;
+            if (d < cornerArc)
+            {
+                float angle = (float)((d / cornerArc) * (Math.PI / 2));
+                return new PointF(w - 1 - radius + (float)Math.Cos(angle) * radius, h - 1 - radius + (float)Math.Sin(angle) * radius);
+            }
+            d -= cornerArc;
+            if (d < straightW) return new PointF(w - 1 - radius - d, h - 1);
+            d -= straightW;
+            if (d < cornerArc)
+            {
+                float angle = (float)(Math.PI / 2 + (d / cornerArc) * (Math.PI / 2));
+                return new PointF(radius + (float)Math.Cos(angle) * radius, h - 1 - radius + (float)Math.Sin(angle) * radius);
+            }
+            d -= cornerArc;
+            if (d < straightH) return new PointF(0, h - 1 - radius - d);
+            d -= straightH;
+            if (d < cornerArc)
+            {
+                float angle = (float)(Math.PI + (d / cornerArc) * (Math.PI / 2));
+                return new PointF(radius + (float)Math.Cos(angle) * radius, radius + (float)Math.Sin(angle) * radius);
+            }
+            return new PointF(radius, 0);
+        }
     }
 }

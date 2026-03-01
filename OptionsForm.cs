@@ -362,7 +362,7 @@ namespace AngryAudio
             _shootingStar.Start();
             _celestialEvents = new CelestialEvents(() => { InvalidateCards(); });
             _celestialEvents.Start();
-            FormClosing += (s, e) => { _pollTimer?.Stop(); _pollTimer?.Dispose(); _twinkleTimer?.Stop(); _twinkleTimer?.Dispose(); _shootingStar?.Stop(); _shootingStar?.Dispose(); _celestialEvents?.Stop(); _celestialEvents?.Dispose(); _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _updateShimmerTimer?.Stop(); _updateShimmerTimer?.Dispose(); _starCache?.Dispose(); _starCacheDim?.Dispose(); };
+            FormClosing += (s, e) => { _pollTimer?.Stop(); _pollTimer?.Dispose(); _twinkleTimer?.Stop(); _twinkleTimer?.Dispose(); _shootingStar?.Stop(); _shootingStar?.Dispose(); _celestialEvents?.Stop(); _celestialEvents?.Dispose(); _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _updateShimmerTimer?.Stop(); _updateShimmerTimer?.Dispose(); _saveOrbitTimer?.Stop(); _saveOrbitTimer?.Dispose(); _starCache?.Dispose(); _starCacheDim?.Dispose(); };
         }
 
         private Size _defaultSize;
@@ -1372,6 +1372,11 @@ namespace AngryAudio
             bs.FlatAppearance.BorderSize=0; bs.Click+=(s,e)=>DoSave();
             bs.MouseEnter+=(s,e)=>bs.BackColor=Color.FromArgb(140,220,255);
             bs.MouseLeave+=(s,e)=>bs.BackColor=ACC;
+            bs.Paint += (s, e) => { DarkTheme.PaintOrbitingStar(e.Graphics, bs.Width, bs.Height, _saveOrbitPhase, Dpi.S(6)); };
+            _saveOrbitPhase = 0f;
+            _saveOrbitTimer = new Timer { Interval = 30 };
+            _saveOrbitTimer.Tick += (s, e) => { _saveOrbitPhase += 0.08f; if (_saveOrbitPhase > (float)(Math.PI * 2)) _saveOrbitPhase -= (float)(Math.PI * 2); bs.Invalidate(); };
+            _saveOrbitTimer.Start();
             _footer.Controls.Add(bs);
             var bc = new Button{Text="Cancel",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(80,30),ForeColor=TXT2,BackColor=Color.FromArgb(28,28,28),Anchor=AnchorStyles.Top|AnchorStyles.Right,TabStop=false};
             bc.FlatAppearance.BorderColor=INPUT_BDR; bc.Click+=(s,e)=>{DialogResult=DialogResult.Cancel;Close();};
@@ -1656,6 +1661,8 @@ namespace AngryAudio
         // WS_EX_COMPOSITED: forces all child controls to paint in a single composited pass.
         // Eliminates the parent-then-child paint gap that causes black line artifacts on sliders.
         private Timer _updateShimmerTimer;
+        private Timer _saveOrbitTimer;
+        private float _saveOrbitPhase;
         private float _updateShimmerX;
         private Button _updateBtn;
         private bool _updateShimmering;
