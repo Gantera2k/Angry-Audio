@@ -325,10 +325,10 @@ namespace AngryAudio
             } catch { try { g.ResetTransform(); } catch { } }
         }
 
-        /// <summary>Paints card bg (BG + stars + glass + dimmed stars) into a child control's Graphics for seamless transparency.</summary>
+        /// <summary>Paints card bg (BG + static stars + glass + dimmed static stars). Shooting star passes behind cards.</summary>
         void PaintCardBg(Graphics g, Control child) {
             using (var b = new SolidBrush(BG)) g.FillRectangle(b, 0, 0, child.Width, child.Height);
-            PaintUnifiedStars(g, child);
+            PaintUnifiedStars(g, child, 1.0f, false); // static stars only — no shooting star
             using (var tint = new SolidBrush(Color.FromArgb(200, DarkTheme.CardBG.R, DarkTheme.CardBG.G, DarkTheme.CardBG.B)))
                 g.FillRectangle(tint, 0, 0, child.Width, child.Height);
             PaintUnifiedStars(g, child, 0.25f, false);
@@ -454,14 +454,13 @@ namespace AngryAudio
             // Shooting star animation
             _shootingStar = new ShootingStar(() => { try {
                 var p = _currentPage == 1 ? _page1 : _page2;
-                if (p.Visible) { foreach (Control ch in p.Controls) ch.Invalidate(); p.Invalidate(); }
+                if (p.Visible) p.Invalidate();
                 _headerPanel.Invalidate();
-                footer.Invalidate();
             } catch { } });
             _shootingStar.Start();
             _celestialEvents = new CelestialEvents(() => { try {
                 var p = _currentPage == 1 ? _page1 : _page2;
-                if (p.Visible) { foreach (Control ch in p.Controls) ch.Invalidate(); p.Invalidate(); }
+                if (p.Visible) p.Invalidate();
                 _headerPanel.Invalidate();
                 footer.Invalidate();
             } catch { } });
