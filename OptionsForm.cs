@@ -362,7 +362,7 @@ namespace AngryAudio
             _shootingStar.Start();
             _celestialEvents = new CelestialEvents(() => { InvalidateCards(); });
             _celestialEvents.Start();
-            FormClosing += (s, e) => { _enforceTimer?.Stop(); _enforceTimer?.Dispose(); _pollTimer?.Stop(); _pollTimer?.Dispose(); _twinkleTimer?.Stop(); _twinkleTimer?.Dispose(); _shootingStar?.Stop(); _shootingStar?.Dispose(); _celestialEvents?.Stop(); _celestialEvents?.Dispose(); _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _updateShimmerTimer?.Stop(); _updateShimmerTimer?.Dispose(); _saveOrbitTimer?.Stop(); _saveOrbitTimer?.Dispose(); _starCache?.Dispose(); _starCacheDim?.Dispose(); };
+            FormClosing += (s, e) => { CleanupEnforcement(); _pollTimer?.Stop(); _pollTimer?.Dispose(); _twinkleTimer?.Stop(); _twinkleTimer?.Dispose(); _shootingStar?.Stop(); _shootingStar?.Dispose(); _celestialEvents?.Stop(); _celestialEvents?.Dispose(); _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _updateShimmerTimer?.Stop(); _updateShimmerTimer?.Dispose(); _saveOrbitTimer?.Stop(); _saveOrbitTimer?.Dispose(); _starCache?.Dispose(); _starCacheDim?.Dispose(); };
         }
 
         private Size _defaultSize;
@@ -1602,16 +1602,13 @@ namespace AngryAudio
             // Animation: shake + 1-2-3, 1-2-3, then STOP.
             // If user clicks anywhere without choosing a toggle, repeat.
             int step = 0;
+            _enforceCard = card;
+            _enforceHighlights = highlights;
             _enforceTimer = new Timer { Interval = 180 };
             _enforceTimer.Tick += (s, e) => {
                 if (_tglPtt.Checked || _tglPtm.Checked || _tglPtToggle.Checked)
                 {
-                    _enforceTimer.Stop(); _enforceTimer.Dispose(); _enforceTimer = null;
-                    foreach (var h in highlights) { try { card.Controls.Remove(h); h.Dispose(); } catch { } }
-                    _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC;
-                    // Remove the click-to-re-trigger handler
-                    MouseClick -= _enforceClickHandler;
-                    _enforceClickHandler = null;
+                    CleanupEnforcement();
                     return;
                 }
 
@@ -1628,13 +1625,11 @@ namespace AngryAudio
                 }
                 else if (step == 6)
                 {
-                    // Clear all highlights and STOP
                     for (int i = 0; i < 3; i++) { highlights[i].BackColor = Color.Transparent; highlights[i].Invalidate(); }
                     _enforceTimer.Stop();
                 }
             };
 
-            // Click handler: any click anywhere re-triggers the animation
             _enforceClickHandler = (s, e) => {
                 if (_tglPtt.Checked || _tglPtm.Checked || _tglPtToggle.Checked) return;
                 step = 0;
@@ -1642,11 +1637,28 @@ namespace AngryAudio
                 if (!_enforceTimer.Enabled) _enforceTimer.Start();
             };
             MouseClick += _enforceClickHandler;
-            // Also catch clicks on the card itself
             card.MouseClick += _enforceClickHandler;
 
             _enforceTimer.Start();
             ShakeReject(_lblPttKey);
+        }
+        private Control _enforceCard;
+        private Panel[] _enforceHighlights;
+
+        void CleanupEnforcement()
+        {
+            if (_enforceTimer != null) { _enforceTimer.Stop(); _enforceTimer.Dispose(); _enforceTimer = null; }
+            if (_enforceHighlights != null && _enforceCard != null)
+                foreach (var h in _enforceHighlights) { try { _enforceCard.Controls.Remove(h); h.Dispose(); } catch { } }
+            _enforceHighlights = null;
+            if (_lblPttKey != null) { _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; }
+            if (_enforceClickHandler != null)
+            {
+                MouseClick -= _enforceClickHandler;
+                if (_enforceCard != null) _enforceCard.MouseClick -= _enforceClickHandler;
+                _enforceClickHandler = null;
+            }
+            _enforceCard = null;
         }
         private MouseEventHandler _enforceClickHandler;
 
