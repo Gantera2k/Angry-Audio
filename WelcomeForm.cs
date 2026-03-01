@@ -272,6 +272,7 @@ namespace AngryAudio
         private int _currentPage = 1;
         private Timer _pulseTimer;
         private float _pulsePhase; // 0 to 2*PI, drives the glow animation
+        private Panel _wizFooter; // stored ref for parent-level star painting
         private ShootingStar _shootingStar;
         private CelestialEvents _celestialEvents;
 
@@ -365,7 +366,17 @@ namespace AngryAudio
                     Color dc = (i == _currentPage) ? ACC : Color.FromArgb(50, 50, 50);
                     using (var b = new SolidBrush(dc)) g.FillEllipse(b, dx, dotY, Dpi.S(8), Dpi.S(8));
                 }
+                // Orbiting star — painted on PARENT so glow extends beyond button bounds
+                Button activeBtn = _btnNext.Visible ? _btnNext : (_btnSave.Visible ? _btnSave : null);
+                if (activeBtn != null)
+                {
+                    var saved = g.Save();
+                    g.TranslateTransform(activeBtn.Left, activeBtn.Top);
+                    DarkTheme.PaintOrbitingStar(g, activeBtn.Width, activeBtn.Height, _pulsePhase, Dpi.S(6));
+                    g.Restore(saved);
+                }
             };
+            _wizFooter = footer;
             Controls.Add(footer);
 
             _btnBack = MakeBtn("\u2190 Back", TXT2, Color.FromArgb(28, 28, 28), false);
@@ -407,9 +418,8 @@ namespace AngryAudio
                     _btnSave.BackColor = pulseBg;
                 if (_btnNext.Visible) _btnNext.Invalidate();
                 if (_btnSave.Visible) _btnSave.Invalidate();
+                if (_wizFooter != null) _wizFooter.Invalidate();
             };
-            _btnNext.Paint += PaintButtonPulse;
-            _btnSave.Paint += PaintButtonPulse;
             _pulseTimer.Start();
 
             // Header — consistent on both pages
@@ -742,25 +752,6 @@ namespace AngryAudio
             b.MouseEnter += (s, e) => b.BackColor = bold ? Color.FromArgb(120, 200, 240) : Color.FromArgb(38, 38, 38);
             b.MouseLeave += (s, e) => b.BackColor = origBg;
             return b;
-        }
-
-        void PaintButtonPulse(object sender, PaintEventArgs e)
-        {
-            var btn = (Button)sender;
-            if (!btn.Visible) return;
-            DarkTheme.PaintOrbitingStar(e.Graphics, btn.Width, btn.Height, _pulsePhase, Dpi.S(6));
-        }
-
-        private static GraphicsPath RoundedRect(Rectangle r, int radius)
-        {
-            var path = new GraphicsPath();
-            int d = radius * 2;
-            path.AddArc(r.X, r.Y, d, d, 180, 90);
-            path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
-            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
-            path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
-            path.CloseFigure();
-            return path;
         }
 
         void PaintHeader(object sender, PaintEventArgs e) {
