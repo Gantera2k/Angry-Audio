@@ -1782,11 +1782,8 @@ namespace AngryAudio
             {
                 try
                 {
-                    // Fade out any existing toast gracefully
-                    if (_activeToast != null && !_activeToast.IsDisposed)
-                    {
-                        try { _activeToast.Dismiss(); } catch { }
-                    }
+                    // Kill ALL existing toasts before showing new one
+                    ToastStack.DismissAllExcept(null);
 
                     _activeToast = new CorrectionToast(message, _settings.MicEnforceEnabled, _settings.SpeakerEnforceEnabled);
                     _activeToast.FormClosed += (s, e) =>
@@ -1941,8 +1938,8 @@ namespace AngryAudio
                 {
                     try
                     {
-                        if (_activeInfoToast != null && !_activeInfoToast.IsDisposed)
-                            try { _activeInfoToast.Dismiss(); } catch { }
+                        // Kill ALL existing toasts — not just the tracked reference
+                        ToastStack.DismissAllExcept(null);
 
                         _activeInfoToast = new InfoToast(title, message, btn1Text, btn2Text);
                         if (onBtn1 != null)

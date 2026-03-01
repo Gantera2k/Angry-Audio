@@ -53,7 +53,7 @@ namespace AngryAudio
         }
 
         /// <summary>
-        /// Close all toasts except those matching excludeType.
+        /// Dismiss all toasts except those matching excludeType. Uses fast-fade Dismiss() if available.
         /// </summary>
         public static void DismissAllExcept(Type excludeType)
         {
@@ -67,7 +67,13 @@ namespace AngryAudio
             {
                 if (t == null || t.IsDisposed) continue;
                 if (excludeType != null && excludeType.IsInstanceOfType(t)) continue;
-                try { t.Close(); } catch { }
+                try
+                {
+                    var dismiss = t.GetType().GetMethod("Dismiss", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    if (dismiss != null) dismiss.Invoke(t, null);
+                    else t.Close();
+                }
+                catch { try { t.Close(); } catch { } }
             }
         }
 
