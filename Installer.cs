@@ -138,13 +138,13 @@ namespace AngryAudioInstaller
     class InstallerForm : Form
     {
         // Colors — match Angry Audio dark theme
-        static readonly Color BG = Color.FromArgb(18, 18, 22);
-        static readonly Color CARD = Color.FromArgb(24, 26, 32);
-        static readonly Color ACC = Color.FromArgb(88, 180, 220);
+        static readonly Color BG = AngryAudio.DarkTheme.BG;
+        static readonly Color CARD = AngryAudio.DarkTheme.CardBG;
+        static readonly Color ACC = AngryAudio.DarkTheme.Accent;
         static readonly Color TXT = Color.FromArgb(220, 220, 220);
         static readonly Color TXT2 = Color.FromArgb(160, 160, 160);
         static readonly Color TXT3 = Color.FromArgb(100, 100, 100);
-        static readonly Color BDR = Color.FromArgb(40, 44, 52);
+        static readonly Color BDR = AngryAudio.DarkTheme.Border;
         static readonly Color GREEN = Color.FromArgb(80, 200, 120);
         static readonly Color ERR = Color.FromArgb(220, 60, 60);
 
@@ -643,11 +643,8 @@ namespace AngryAudioInstaller
             // Stars — unified system matching Options/Welcome
             DarkTheme.PaintCardStars(g, w, h, 42, 0, 1.0f);
 
-            // Shooting stars
-            if (_shootingStar != null)
-                DarkTheme.PaintShootingStar(g, w, h, _shootingStar);
-            if (_celestialEvents != null)
-                DarkTheme.PaintCelestialEvent(g, w, h, _celestialEvents);
+            // Shooting stars painted AFTER measuring card so they pass behind it
+            // (deferred below after card is drawn)
 
             // --- Dynamic card layout: measure content, then size card to fit ---
             int cx = S(24);
@@ -789,7 +786,20 @@ namespace AngryAudioInstaller
             // Top accent glow line
             using (var p = new Pen(Color.FromArgb(30, ACC.R, ACC.G, ACC.B), 1.5f))
                 g.DrawLine(p, cx + S(16), cy, cx + cw - S(16), cy);
-            // (no left accent bar — keeps symmetry clean)
+
+            // Shooting stars — painted after card so they pass behind it
+            {
+                var oldClipStar = g.Clip;
+                var excludeCard = new Region(new Rectangle(0, 0, w, h));
+                excludeCard.Exclude(new Rectangle(cx, cy, cw, ch));
+                g.Clip = excludeCard;
+                if (_shootingStar != null)
+                    DarkTheme.PaintShootingStar(g, w, h, _shootingStar);
+                if (_celestialEvents != null)
+                    DarkTheme.PaintCelestialEvent(g, w, h, _celestialEvents);
+                g.Clip = oldClipStar;
+                excludeCard.Dispose();
+            }
 
             // Mascot
             try { AngryAudio.Mascot.DrawMascot(g, cx + S(20), cy + S(16), S(64)); } catch { }
@@ -982,14 +992,14 @@ namespace AngryAudioInstaller
         void DrawButton(Graphics g, Rectangle rect, string text, Color color, bool outline = false, bool hover = false)
         {
             if (rect.IsEmpty) return;
-            using (var path = RoundRectPath(rect, S(8)))
+            int cr = S(8);
+            using (var path = RoundRectPath(rect, cr))
             {
                 if (outline)
                 {
                     // Outline style — very visible hover change
                     if (hover)
                     {
-                        // Fill with color tint, bright border
                         using (var brush = new SolidBrush(Color.FromArgb(color.R / 3, color.G / 3, color.B / 3)))
                             g.FillPath(brush, path);
                         using (var pen = new Pen(color, 2f))
@@ -1005,20 +1015,29 @@ namespace AngryAudioInstaller
                 }
                 else
                 {
-                    // Solid fill — dramatically brighter on hover
+                    // Solid fill with pulsing color (matching Options footer)
+                    float phase = _twinkleTick * 0.05f;
+                    float pulse = (float)((Math.Sin(phase * 0.8) + 1.0) / 2.0);
                     int lift = hover ? 45 : 0;
-                    Color top = Color.FromArgb(Math.Min(255, color.R + lift + 15), Math.Min(255, color.G + lift + 15), Math.Min(255, color.B + lift + 15));
-                    Color bot = Color.FromArgb(Math.Min(255, color.R + lift), Math.Min(255, color.G + lift), Math.Min(255, color.B + lift));
+                    int pr = (int)(Math.Min(255, color.R * 0.3 + color.R * 0.7 * pulse + lift));
+                    int pg = (int)(Math.Min(255, color.G * 0.3 + color.G * 0.7 * pulse + lift));
+                    int pb = (int)(Math.Min(255, color.B * 0.3 + color.B * 0.7 * pulse + lift));
+                    Color top = Color.FromArgb(Math.Min(255, pr + 15), Math.Min(255, pg + 15), Math.Min(255, pb + 15));
+                    Color bot = Color.FromArgb(pr, pg, pb);
                     using (var brush = new LinearGradientBrush(
                         new Point(rect.X, rect.Y), new Point(rect.X, rect.Bottom), top, bot))
                         g.FillPath(brush, path);
                     // Top highlight
                     using (var pen = new Pen(Color.FromArgb(hover ? 100 : 30, 255, 255, 255)))
                         g.DrawLine(pen, rect.X + S(12), rect.Y + 1, rect.Right - S(12), rect.Y + 1);
-                    // Hover glow border
                     if (hover)
                         using (var pen = new Pen(Color.FromArgb(90, 255, 255, 255), 1.5f))
                             g.DrawPath(pen, path);
+                    // Orbiting star effect (matching Options/Welcome buttons)
+                    var saved = g.Save();
+                    g.TranslateTransform(rect.X, rect.Y);
+                    DarkTheme.PaintOrbitingStar(g, rect.Width, rect.Height, phase, cr);
+                    g.Restore(saved);
                 }
                 float fontSize = rect.Height < S(30) ? 8f : 10.5f;
                 Color textColor = outline ? color : Color.White;
