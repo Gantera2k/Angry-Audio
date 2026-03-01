@@ -1768,9 +1768,7 @@ namespace AngryAudio
 
                 _updateBtn.Click -= _updateCheckHandler;
                 _updateBtn.Click -= _updateDownloadHandler;
-                _updateDownloadHandler = (s2, e2) => {
-                    try { System.Diagnostics.Process.Start("https://github.com/Gantera2k/Angry-Audio/releases/latest"); } catch { }
-                };
+                _updateDownloadHandler = (s2, e2) => { DownloadAndInstallUpdate(_updateBtn); };
                 _updateBtn.Click += _updateDownloadHandler;
             }
             else if (_pendingUpdateResult == 1)
@@ -1783,10 +1781,99 @@ namespace AngryAudio
             }
             else
             {
-                _updateBtn.Text = "\u26A0 Check Failed — Retry";
+                _updateBtn.Text = "\u26A0 Check Failed \u2014 Retry";
                 _updateBtn.ForeColor = Color.FromArgb(255, 180, 80);
                 _updateBtn.FlatAppearance.BorderColor = Color.FromArgb(255, 180, 80);
 
+            }
+        }
+
+        private void DownloadAndInstallUpdate(Button btn)
+        {
+            btn.Enabled = false;
+            btn.Text = "Downloading...";
+            btn.ForeColor = Color.White;
+            btn.FlatAppearance.BorderColor = ACC;
+
+            // Restart shimmer for download phase
+            _updateShimmerX = -0.3f;
+            _updateShimmering = true;
+            _updateBtn = btn;
+            btn.Paint -= UpdateBtnShimmerPaint;
+            btn.Paint += UpdateBtnShimmerPaint;
+            _updateShimmerTimer.Start();
+
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                string tempPath = null;
+                try
+                {
+                    System.Net.ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls12;
+
+                    // Download to temp folder
+                    tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Angry_Audio_Setup.exe");
+                    using (var client = new System.Net.WebClient())
+                    {
+                        client.Headers.Add("User-Agent", "AngryAudio/" + AppVersion.Version);
+                        client.DownloadFile(
+                            "https://github.com/Gantera2k/Angry-Audio/releases/download/Angry/Angry_Audio_Setup.exe",
+                            tempPath);
+                    }
+
+                    // Launch installer and exit current app
+                    if (btn.InvokeRequired)
+                        btn.BeginInvoke((Action)(() => LaunchInstallerAndExit(tempPath, btn)));
+                    else
+                        LaunchInstallerAndExit(tempPath, btn);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("Update download failed.", ex);
+                    if (btn.InvokeRequired)
+                    {
+                        btn.BeginInvoke((Action)(() =>
+                        {
+                            _updateShimmering = false;
+                            btn.Paint -= UpdateBtnShimmerPaint;
+                            btn.Invalidate();
+                            btn.Enabled = true;
+                            btn.Text = "\u26A0 Download Failed \u2014 Retry";
+                            btn.ForeColor = Color.FromArgb(255, 180, 80);
+                            btn.FlatAppearance.BorderColor = Color.FromArgb(255, 180, 80);
+                        }));
+                    }
+                }
+            });
+        }
+
+        private void LaunchInstallerAndExit(string installerPath, Button btn)
+        {
+            try
+            {
+                _updateShimmering = false;
+                btn.Paint -= UpdateBtnShimmerPaint;
+                btn.Text = "Installing...";
+                btn.ForeColor = DarkTheme.Green;
+                btn.Invalidate();
+
+                // Launch the installer
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = installerPath,
+                    UseShellExecute = true
+                };
+                System.Diagnostics.Process.Start(psi);
+
+                // Close the app — installer will handle killing old instance
+                System.Windows.Forms.Application.Exit();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("Failed to launch installer.", ex);
+                btn.Enabled = true;
+                btn.Text = "\u26A0 Launch Failed \u2014 Retry";
+                btn.ForeColor = Color.FromArgb(255, 180, 80);
+                btn.FlatAppearance.BorderColor = Color.FromArgb(255, 180, 80);
             }
         }
 
