@@ -30,7 +30,9 @@ namespace AngryAudio
         // Hook — ONLY for consuming toggle keys (CapsLock etc.)
         private const int WH_KEYBOARD_LL = 13;
         private const int WM_KEYDOWN = 0x0100;
+        private const int WM_KEYUP = 0x0101;
         private const int WM_SYSKEYDOWN = 0x0104;
+        private const int WM_SYSKEYUP = 0x0105;
         private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 
         [DllImport("user32.dll", SetLastError = true)]
@@ -55,6 +57,7 @@ namespace AngryAudio
         // State
         private bool _enabled;
         private bool _keyHeld;
+        private volatile int _hookKeyDown; // Set by LL hook when consuming toggle keys
         private bool _disposed;
         private System.Collections.Generic.HashSet<int> _hotkeys = new System.Collections.Generic.HashSet<int>();
 
@@ -184,7 +187,13 @@ namespace AngryAudio
                 int triggeredKey = 0;
                 foreach (int vk in _hotkeys)
                 {
-                    if ((GetAsyncKeyState(vk) & 0x8000) != 0)
+                    // For hooked toggle keys, check both GetAsyncKeyState AND the hook's direct signal
+                    bool isToggleKey = (vk == VK_CAPS_LOCK || vk == VK_SCROLL_LOCK || vk == VK_NUM_LOCK);
+                    bool keyDown = (GetAsyncKeyState(vk) & 0x8000) != 0;
+                    if (!keyDown && isToggleKey && _hookKeyDown == vk)
+                        keyDown = true; // Hook saw it even if GetAsyncKeyState didn't
+                    
+                    if (keyDown)
                     {
                         anyDown = true;
                         triggeredKey = vk;
@@ -310,7 +319,22 @@ namespace AngryAudio
                     {
                         if (_hotkeys.Contains(vkCode) &&
                             (vkCode == VK_CAPS_LOCK || vkCode == VK_SCROLL_LOCK || vkCode == VK_NUM_LOCK))
+                        {
+                            Logger.Info("HOOK: Consuming VK 0x" + vkCode.ToString("X2") + " — setting _hookKeyDown");
+                            _hookKeyDown = vkCode;
                             return (IntPtr)1;
+                        }
+                    }
+                }
+                else if (msg == WM_KEYUP || msg == WM_SYSKEYUP)
+                {
+                    int vkCode = Marshal.ReadInt32(lParam);
+                    if (_hotkeys.Contains(vkCode) &&
+                        (vkCode == VK_CAPS_LOCK || vkCode == VK_SCROLL_LOCK || vkCode == VK_NUM_LOCK))
+                    {
+                        Logger.Info("HOOK: Key UP VK 0x" + vkCode.ToString("X2") + " — clearing _hookKeyDown");
+                        _hookKeyDown = 0;
+                        return (IntPtr)1; // Consume KEYUP too to prevent toggle
                     }
                 }
             }

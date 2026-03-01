@@ -252,6 +252,7 @@ namespace AngryAudio
                 if (_tglPtToggle.Checked) { if (_tglPtt != null && _tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtm != null && _tglPtm.Checked) _tglPtm.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; }
             };
             _tglPtToggle.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtToggle);
+            UpdatePttTogglesEnabled(); // Disable until hotkey is set
 
             // Hotkey row — below all 3 toggles, matching Options panel style
             _lblPttKey = new Label { Text = "Add Key", Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), ForeColor = ACC, BackColor = INPUT_BG, Size = Dpi.Size(80, 26), TextAlign = ContentAlignment.MiddleCenter, Location = Dpi.Pt(118, y + 174) };
@@ -607,8 +608,32 @@ namespace AngryAudio
             return c;
         }
 
-        void StartKeyCapture() { _capturingKey = true; _lblPttKey.Text = "Press..."; _lblPttKey.BackColor = ACC; _lblPttKey.ForeColor = Color.White; KeyPreview = true; KeyDown += OnKeyCapture; }
-        void OnKeyCapture(object s, KeyEventArgs e) { if (!_capturingKey) return; e.Handled = true; e.SuppressKeyPress = true; if (e.KeyCode == Keys.Escape) { _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; KeyPreview = false; KeyDown -= OnKeyCapture; return; } _pttKeyCode = (int)e.KeyCode; _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; KeyPreview = false; KeyDown -= OnKeyCapture; }
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vKey);
+        private Timer _captureTimer;
+        private bool[] _prevKeyState = new bool[256];
+        void StartKeyCapture() { _capturingKey = true; _lblPttKey.Text = "Press..."; _lblPttKey.BackColor = ACC; _lblPttKey.ForeColor = Color.White; StartCapturePolling(); }
+        void StartCapturePolling() {
+            for (int i = 0; i < 256; i++) _prevKeyState[i] = (GetAsyncKeyState(i) & 0x8000) != 0;
+            if (_captureTimer == null) { _captureTimer = new Timer { Interval = 30 }; _captureTimer.Tick += CaptureTimerTick; }
+            _captureTimer.Start();
+        }
+        void StopCapturePolling() { if (_captureTimer != null) _captureTimer.Stop(); }
+        void CaptureTimerTick(object s, EventArgs e) {
+            if (!_capturingKey) { StopCapturePolling(); return; }
+            for (int vk = 1; vk < 256; vk++) {
+                if (vk >= 1 && vk <= 3) continue; // skip mouse buttons
+                bool down = (GetAsyncKeyState(vk) & 0x8000) != 0;
+                bool wasDown = _prevKeyState[vk];
+                _prevKeyState[vk] = down;
+                if (down && !wasDown) {
+                    StopCapturePolling();
+                    OnKeyCapture(this, new KeyEventArgs((Keys)vk));
+                    return;
+                }
+            }
+        }
+        void OnKeyCapture(object s, KeyEventArgs e) { if (!_capturingKey) return; if (e.KeyCode == Keys.Escape) { _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; return; } _pttKeyCode = (int)e.KeyCode; _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; UpdatePttTogglesEnabled(); }
+        void UpdatePttTogglesEnabled() { bool hasKey = _pttKeyCode > 0; if (_tglPtt != null) _tglPtt.Enabled = hasKey; if (_tglPtm != null) _tglPtm.Enabled = hasKey; if (_tglPtToggle != null) _tglPtToggle.Enabled = hasKey; }
         string KeyName(int c) { return PushToTalk.GetKeyName(c); }
 
         void HidePage(Panel p) {

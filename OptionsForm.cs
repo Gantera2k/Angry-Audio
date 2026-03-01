@@ -576,6 +576,7 @@ namespace AngryAudio
             int y = 64;
             _tglPtt = Tgl("Enable Push-to-Talk", "Mic stays muted at the OS level until you hold the hotkey.", y, card);
             _tglPtt.CheckedChanged += (s,e) => { if (!_loading) {
+                if (_tglPtt.Checked && _pttKeyCode <= 0) { _loading = true; _tglPtt.Checked = false; _loading = false; return; }
                 _settings.PushToTalkEnabled = _tglPtt.Checked; _settings.PushToTalkKey = _pttKeyCode; _settings.PushToTalkKey2 = _pttKeyCode2; _settings.PushToTalkKey3 = _pttKeyCode3;
                 if (_onToggle != null) _onToggle(_tglPtt.Checked ? "ptt_on" : "ptt_off");
                 if (_tglPtt.Checked) { _loading = true; if (_tglPtm.Checked) _tglPtm.Checked = false; if (_tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic.Checked) _tglAfkMic.Checked = false; _loading = false; }
@@ -583,6 +584,7 @@ namespace AngryAudio
             y += 42;
             _tglPtm = Tgl("Enable Push-to-Mute", "Mic stays open \u2014 hold the hotkey to mute for coughs and sneezes.", y, card);
             _tglPtm.CheckedChanged += (s,e) => { if (!_loading) {
+                if (_tglPtm.Checked && _pttKeyCode <= 0) { _loading = true; _tglPtm.Checked = false; _loading = false; return; }
                 _settings.PushToMuteEnabled = _tglPtm.Checked; _settings.PushToTalkKey = _pttKeyCode; _settings.PushToTalkKey2 = _pttKeyCode2; _settings.PushToTalkKey3 = _pttKeyCode3;
                 if (_onToggle != null) _onToggle(_tglPtm.Checked ? "ptm_on" : "ptm_off");
                 if (_tglPtm.Checked) { _loading = true; if (_tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic.Checked) _tglAfkMic.Checked = false; _loading = false; }
@@ -590,6 +592,7 @@ namespace AngryAudio
             y += 42;
             _tglPtToggle = Tgl("Enable Push-to-Toggle", "Press the hotkey once to unmute, press again to mute.", y, card);
             _tglPtToggle.CheckedChanged += (s,e) => { if (!_loading) {
+                if (_tglPtToggle.Checked && _pttKeyCode <= 0) { _loading = true; _tglPtToggle.Checked = false; _loading = false; return; }
                 _settings.PushToToggleEnabled = _tglPtToggle.Checked; _settings.PushToTalkKey = _pttKeyCode; _settings.PushToTalkKey2 = _pttKeyCode2; _settings.PushToTalkKey3 = _pttKeyCode3;
                 if (_onToggle != null) _onToggle(_tglPtToggle.Checked ? "ptt_toggle_on" : "ptt_toggle_off");
                 if (_tglPtToggle.Checked) { _loading = true; if (_tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtm.Checked) _tglPtm.Checked = false; if (_tglAfkMic.Checked) _tglAfkMic.Checked = false; _loading = false; }

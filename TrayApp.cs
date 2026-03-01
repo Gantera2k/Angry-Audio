@@ -1353,6 +1353,15 @@ namespace AngryAudio
             // Handle parameterized commands
             if (toggleId != null && (toggleId.StartsWith("ptt_key:") || toggleId.StartsWith("ptt_key2:") || toggleId.StartsWith("ptt_key3:")))
             {
+                // Parse and save the key value to settings
+                int colonIdx = toggleId.IndexOf(':');
+                int keyVal = 0;
+                if (colonIdx >= 0) int.TryParse(toggleId.Substring(colonIdx + 1), out keyVal);
+                if (toggleId.StartsWith("ptt_key:")) _settings.PushToTalkKey = keyVal;
+                else if (toggleId.StartsWith("ptt_key2:")) _settings.PushToTalkKey2 = keyVal;
+                else if (toggleId.StartsWith("ptt_key3:")) _settings.PushToTalkKey3 = keyVal;
+                Logger.Info("Hotkey updated via toggle: " + toggleId + " → saved to settings");
+                
                 // Re-enable PTT with updated keys if currently active
                 if ((_settings.PushToTalkEnabled || _settings.PushToMuteEnabled || _settings.PushToToggleEnabled) && _pushToTalk != null && _pushToTalk.Enabled)
                 {
