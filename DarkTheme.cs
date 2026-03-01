@@ -2849,8 +2849,8 @@ namespace AngryAudio
 
             float t = (phase / (float)(Math.PI * 2));
             t = t - (float)Math.Floor(t);
-            int trailCount = 35;
-            float trailSpacing = 0.012f;
+            int trailCount = 50;
+            float trailSpacing = 0.010f;
 
             for (int i = trailCount; i >= 0; i--)
             {
@@ -2986,75 +2986,35 @@ namespace AngryAudio
         }
     }
 
-    /// <summary>Transparent click-through overlay that paints the orbiting star ON TOP of a button.
-    /// Uses WM_NCHITTEST passthrough so clicks reach the button underneath.</summary>
-    class StarOverlay : Control
+    /// <summary>Panel that can paint OVER its child controls by removing WS_CLIPCHILDREN.
+    /// Combined with double buffering, this allows glow effects around buttons without clipping or flicker.</summary>
+    class GlowPanel : Panel
     {
-        private Control _target;
-        private Timer _timer;
-        private float _phase;
-        private const int WM_NCHITTEST = 0x84;
-        private const int HTTRANSPARENT = -1;
-
-        public StarOverlay(Control target, Control parent)
+        public GlowPanel()
         {
-            _target = target;
-            SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint |
-                     ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
-            BackColor = Color.Transparent;
-
-            // Position: surround the target button with padding for glow
-            int pad = 20;
-            UpdateBounds(pad);
-
-            // Track target visibility and position
-            target.VisibleChanged += (s, e) => { this.Visible = target.Visible; };
-            target.LocationChanged += (s, e) => UpdateBounds(pad);
-            target.Resize += (s, e) => UpdateBounds(pad);
-            this.Visible = target.Visible;
-
-            parent.Controls.Add(this);
-            this.BringToFront();
-
-            _phase = 0f;
-            _timer = new Timer { Interval = 30 };
-            _timer.Tick += (s, e) => {
-                _phase += 0.08f;
-                if (_phase > (float)(Math.PI * 2)) _phase -= (float)(Math.PI * 2);
-                this.Invalidate();
-            };
-            _timer.Start();
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            UpdateStyles();
         }
 
-        private void UpdateBounds(int pad)
+        protected override CreateParams CreateParams
         {
-            this.Bounds = new Rectangle(
-                _target.Left - pad, _target.Top - pad,
-                _target.Width + pad * 2, _target.Height + pad * 2);
+            get {
+                var cp = base.CreateParams;
+                // Remove WS_CLIPCHILDREN so we can paint over child controls
+                cp.Style &= ~0x02000000; // ~WS_CLIPCHILDREN
+                return cp;
+            }
         }
 
-        // Make all mouse input pass through to controls underneath
-        protected override void WndProc(ref Message m)
-        {
-            if (m.Msg == WM_NCHITTEST) { m.Result = (IntPtr)HTTRANSPARENT; return; }
-            base.WndProc(ref m);
-        }
-
-        protected override void OnPaintBackground(PaintEventArgs e) { /* don't paint background */ }
+        /// <summary>Override to paint glow effects AFTER base paint (which draws children).</summary>
+        public Action<Graphics> PaintGlow;
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            var g = e.Graphics;
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            int pad = (this.Width - _target.Width) / 2;
-            g.TranslateTransform(pad, pad);
-            DarkTheme.PaintOrbitingStar(g, _target.Width, _target.Height, _phase, 6);
-        }
-
-        public void Cleanup()
-        {
-            _timer?.Stop();
-            _timer?.Dispose();
+            base.OnPaint(e);
+            // Paint glow ON TOP of children
+            PaintGlow?.Invoke(e.Graphics);
         }
     }
 }

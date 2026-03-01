@@ -352,7 +352,7 @@ namespace AngryAudio
             try { Icon = Mascot.CreateIcon(); } catch { }
 
             // Footer
-            var footer = new BufferedPanel { Dock = DockStyle.Bottom, Height = Dpi.S(48), BackColor = BG };
+            var footer = new GlowPanel { Dock = DockStyle.Bottom, Height = Dpi.S(48), BackColor = BG };
             footer.Paint += (s, e) => {
                 var g = e.Graphics;
                 PaintUnifiedStars(g, footer);
@@ -390,9 +390,17 @@ namespace AngryAudio
             _btnSave.Click += (s, e) => DoSave();
             footer.Controls.Add(_btnSave);
 
-            // Star overlays — transparent, paint ON TOP of buttons, clicks pass through
-            var _nextStarOverlay = new StarOverlay(_btnNext, footer);
-            var _saveStarOverlay = new StarOverlay(_btnSave, footer);
+            // Star glow — painted ON TOP of buttons via GlowPanel (no WS_CLIPCHILDREN)
+            footer.PaintGlow = (g) => {
+                Button activeBtn = _btnNext.Visible ? _btnNext : (_btnSave.Visible ? _btnSave : null);
+                if (activeBtn != null)
+                {
+                    var saved = g.Save();
+                    g.TranslateTransform(activeBtn.Left, activeBtn.Top);
+                    DarkTheme.PaintOrbitingStar(g, activeBtn.Width, activeBtn.Height, _pulsePhase, Dpi.S(6));
+                    g.Restore(saved);
+                }
+            };
 
             // Pulse glow animation — impossible to miss
             _pulsePhase = 0f;
@@ -411,6 +419,7 @@ namespace AngryAudio
                     _btnNext.BackColor = pulseBg;
                 if (_btnSave.Visible && !_btnSave.ClientRectangle.Contains(_btnSave.PointToClient(Cursor.Position)))
                     _btnSave.BackColor = pulseBg;
+                footer.Invalidate();
             };
             _pulseTimer.Start();
 
