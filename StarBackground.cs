@@ -41,12 +41,10 @@ namespace AngryAudio
     {
         Bitmap _cache, _cacheDim;
         int _cacheW, _cacheH, _cacheTick = -1;
-        int _requestedW, _requestedH; // actual form size (for shooting star coords)
         public ShootingStar Shooting;
         public CelestialEvents Celestial;
         int _twinkleTick;
         const int SEED = 42;
-        const int MAX_CACHE_W = 800, MAX_CACHE_H = 1200; // Cap cache size for performance
         static readonly Color TINT = DarkTheme.GlassTint;
 
         public StarBackground(Action invalidate)
@@ -62,23 +60,19 @@ namespace AngryAudio
         void EnsureCache(int w, int h)
         {
             if (w <= 0 || h <= 0) return;
-            _requestedW = w; _requestedH = h;
-            // Cap cache size — stars look the same at smaller resolution, saves massive perf on maximize
-            int cw = Math.Min(w, MAX_CACHE_W);
-            int ch = Math.Min(h, MAX_CACHE_H);
-            if (_cache != null && _cacheW == cw && _cacheH == ch && _cacheTick == _twinkleTick) return;
-            _cacheW = cw; _cacheH = ch; _cacheTick = _twinkleTick;
+            if (_cache != null && _cacheW == w && _cacheH == h && _cacheTick == _twinkleTick) return;
+            _cacheW = w; _cacheH = h; _cacheTick = _twinkleTick;
             if (_cache != null) _cache.Dispose();
             if (_cacheDim != null) _cacheDim.Dispose();
-            _cache = new Bitmap(cw, ch, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
-            _cacheDim = new Bitmap(cw, ch, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            _cache = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            _cacheDim = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
             using (var sg = Graphics.FromImage(_cache)) {
                 sg.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                DarkTheme.PaintCardStars(sg, cw, ch, SEED, _twinkleTick, 1.0f);
+                DarkTheme.PaintCardStars(sg, w, h, SEED, _twinkleTick, 1.0f);
             }
             using (var sg = Graphics.FromImage(_cacheDim)) {
                 sg.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                DarkTheme.PaintCardStars(sg, cw, ch, SEED, _twinkleTick, 0.35f);
+                DarkTheme.PaintCardStars(sg, w, h, SEED, _twinkleTick, 0.35f);
             }
         }
 
@@ -88,15 +82,7 @@ namespace AngryAudio
             try {
                 EnsureCache(w, h);
                 var src = dim ? _cacheDim : _cache;
-                if (src != null) {
-                    // Scale offset to cache coords if form is larger than cache
-                    float scaleX = (float)_cacheW / Math.Max(1, _requestedW);
-                    float scaleY = (float)_cacheH / Math.Max(1, _requestedH);
-                    if (_requestedW <= MAX_CACHE_W && _requestedH <= MAX_CACHE_H)
-                        g.DrawImage(src, -ox, -oy); // No scaling needed — 1:1
-                    else
-                        g.DrawImage(src, 0 - (int)(ox * scaleX), 0 - (int)(oy * scaleY), _requestedW, _requestedH);
-                }
+                if (src != null) g.DrawImage(src, -ox, -oy);
                 if (shootingStar) {
                     g.TranslateTransform(-ox, -oy);
                     if (Shooting != null) DarkTheme.PaintShootingStar(g, w, h, Shooting);
@@ -115,12 +101,7 @@ namespace AngryAudio
                 g.FillPath(tint, path);
             var oldClip = g.Clip;
             g.SetClip(path);
-            if (_cacheDim != null) {
-                if (_requestedW <= MAX_CACHE_W && _requestedH <= MAX_CACHE_H)
-                    g.DrawImage(_cacheDim, 0, 0);
-                else
-                    g.DrawImage(_cacheDim, 0, 0, _requestedW, _requestedH);
-            }
+            if (_cacheDim != null) g.DrawImage(_cacheDim, 0, 0);
             g.Clip = oldClip;
         }
 
@@ -131,26 +112,10 @@ namespace AngryAudio
             EnsureCache(w, h);
             using (var b = new SolidBrush(DarkTheme.BG))
                 g.FillRectangle(b, 0, 0, childW, childH);
-            if (_cache != null) {
-                if (_requestedW <= MAX_CACHE_W && _requestedH <= MAX_CACHE_H)
-                    g.DrawImage(_cache, -ox, -oy);
-                else {
-                    float sx = (float)_cacheW / Math.Max(1, _requestedW);
-                    float sy = (float)_cacheH / Math.Max(1, _requestedH);
-                    g.DrawImage(_cache, -(int)(ox * sx), -(int)(oy * sy), _requestedW, _requestedH);
-                }
-            }
+            if (_cache != null) g.DrawImage(_cache, -ox, -oy);
             using (var tint = new SolidBrush(TINT))
                 g.FillRectangle(tint, 0, 0, childW, childH);
-            if (_cacheDim != null) {
-                if (_requestedW <= MAX_CACHE_W && _requestedH <= MAX_CACHE_H)
-                    g.DrawImage(_cacheDim, -ox, -oy);
-                else {
-                    float sx2 = (float)_cacheW / Math.Max(1, _requestedW);
-                    float sy2 = (float)_cacheH / Math.Max(1, _requestedH);
-                    g.DrawImage(_cacheDim, -(int)(ox * sx2), -(int)(oy * sy2), _requestedW, _requestedH);
-                }
-            }
+            if (_cacheDim != null) g.DrawImage(_cacheDim, -ox, -oy);
         }
 
         public void Dispose()

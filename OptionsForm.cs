@@ -92,7 +92,11 @@ namespace AngryAudio
             _pollTimer.Start();
             // Twinkle timer — slowly animates card stars (150ms = ~6.6fps, gentle and efficient)
             _twinkleTimer = new Timer { Interval = 150 };
+            int _twinkleSkip = 0;
             _twinkleTimer.Tick += (s, e) => {
+                // Throttle twinkle when maximized — cache rebuild at full screen resolution is expensive
+                bool isLarge = Width > 900 || Height > 900;
+                if (isLarge) { _twinkleSkip++; if (_twinkleSkip % 4 != 0) { InvalidateCards(); return; } }
                 _stars.Tick();
                 InvalidateCards();
             };

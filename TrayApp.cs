@@ -1718,9 +1718,7 @@ namespace AngryAudio
             try { if (_openOptionsForm != null && !_openOptionsForm.IsDisposed) { _openOptionsForm.Close(); _openOptionsForm.Dispose(); _openOptionsForm = null; } } catch { _openOptionsForm = null; }
 
             _openWelcomeForm = new WelcomeForm(OnOptionToggle);
-            try
-            {
-                _openWelcomeForm.ShowDialog();
+            _openWelcomeForm.FormClosed += (s, e) => {
                 // Toggles already update settings via OnOptionToggle callbacks during the wizard.
                 // Just mark first run complete and save.
                 _settings.FirstRunComplete = true;
@@ -1744,12 +1742,10 @@ namespace AngryAudio
                     ShowSplash(() => CheckMicUnprotected());
                 else
                     CheckMicUnprotected();
-            }
-            finally
-            {
-                _openWelcomeForm.Dispose();
+
                 _openWelcomeForm = null;
-            }
+            };
+            _openWelcomeForm.Show();
         }
 
         // --- Correction Toast ---
