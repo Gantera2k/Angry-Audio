@@ -153,7 +153,7 @@ namespace AngryAudio
         public ShootingStar(Action invalidateCallback)
         {
             _invalidateCallback = invalidateCallback;
-            _timer = new Timer { Interval = 16 };
+            _timer = new Timer { Interval = 33 };
             _timer.Tick += OnTick;
             for (int i = 0; i < NaturalSlots; i++)
                 ScheduleNext(i);
@@ -421,7 +421,7 @@ namespace AngryAudio
             _invalidateCallback = invalidateCallback;
             _cooldownMs = 5000 + _rng.Next(10000);
             _elapsedMs = 0;
-            _timer = new Timer { Interval = 16 };
+            _timer = new Timer { Interval = 33 };
             _timer.Tick += OnTick;
         }
 

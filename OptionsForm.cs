@@ -93,15 +93,11 @@ namespace AngryAudio
             // Twinkle timer — slowly animates card stars (150ms = ~6.6fps, gentle and efficient)
             _twinkleTimer = new Timer { Interval = 150 };
             _twinkleTimer.Tick += (s, e) => {
-                // Freeze twinkle when form is large — GDI+ has no hardware accel,
-                // rebuilding two fullscreen bitmaps every 150ms kills performance
-                bool isLarge = (Width * Height) > 480000; // ~800×600
+                bool isLarge = (Width * Height) > 480000;
                 if (!isLarge) {
                     _stars.Tick();
-                    InvalidateCards();
-                } 
-                // When large: stars stay static but shooting stars/celestial events
-                // still animate via their own timers + invalidation callbacks
+                    InvalidateCardsDeep(); // Full invalidation only on twinkle change
+                }
             };
             _twinkleTimer.Start();
             // Shooting star animation — occasional streaks across card backgrounds
@@ -130,6 +126,7 @@ namespace AngryAudio
                 _captureTimer = new Timer { Interval = 30 };
                 _captureTimer.Tick += CaptureTimerTick;
             }
+            Logger.Info("CapturePolling STARTED — timer active, interval=30ms");
             _captureTimer.Start();
         }
 
@@ -137,17 +134,21 @@ namespace AngryAudio
             if (_captureTimer != null) _captureTimer.Stop();
         }
 
+        private int _capturePollCount;
         void CaptureTimerTick(object s, EventArgs e) {
-            if (!_capturingKey && !_capturingKey2 && !_capturingKey3) { StopCapturePolling(); return; }
+            _capturePollCount++;
+            if (!_capturingKey && !_capturingKey2 && !_capturingKey3) { StopCapturePolling(); Logger.Info("CapturePolling stopped — no active capture"); return; }
             // Scan for newly pressed keys (transition from up→down)
             for (int vk = 1; vk < 256; vk++) {
-                // Skip mouse buttons — we don't want LMB/RMB/MMB captured
-                if (vk <= 0x06 && vk != 0x04 && vk != 0x05) continue; // skip 1-3,6 (mouse buttons) keep 4,5 (XButton)
-                bool down = (GetAsyncKeyState(vk) & 0x8000) != 0;
+                // Skip mouse buttons (1=LMB, 2=RMB, 3=cancel, 4=MMB, 5=X1, 6=X2)
+                if (vk >= 1 && vk <= 3) continue;
+                short raw = GetAsyncKeyState(vk);
+                bool down = (raw & 0x8000) != 0;
                 bool wasDown = _prevKeyState[vk];
                 _prevKeyState[vk] = down;
                 if (down && !wasDown) {
-                    // New key press detected — build KeyEventArgs and route to handler
+                    Logger.Info("CAPTURED vk=0x" + vk.ToString("X2") + " (" + ((Keys)vk).ToString() + ") after " + _capturePollCount + " polls");
+                    _capturePollCount = 0;
                     var ke = new KeyEventArgs((Keys)vk);
                     StopCapturePolling();
                     if (_capturingKey) OnKeyCapture(this, ke);
@@ -184,7 +185,17 @@ namespace AngryAudio
         void InvalidateCards() {
             try {
                 _contentPanel.Invalidate(false); // background stars + shooting stars
-                // Only invalidate the active visible card, not all children
+                // Only invalidate the active card panel itself, not every child control
+                // Children inherit the double-buffered background via their own Paint handlers
+                // which only need refreshing when twinkle changes (not shooting star movement)
+                if (_footer != null) _footer.Invalidate(false);
+            } catch { }
+        }
+
+        // Full invalidation — used by twinkle timer when stars change
+        void InvalidateCardsDeep() {
+            try {
+                _contentPanel.Invalidate(false);
                 for (int i = 0; i < 5; i++) {
                     if (_panes[i] != null && _panes[i].Visible) {
                         foreach (Control c in _panes[i].Controls) c.Invalidate(false);
@@ -1220,7 +1231,7 @@ namespace AngryAudio
             _hotkeyFlashTimer.Start();
         }
 
-        void StartKeyCapture(){if(_capturingKey2||_capturingKey3)return;_capturingKey=true;_lblPttKey.Text="Press...";_lblPttKey.BackColor=ACC;_lblPttKey.ForeColor=Color.White;StartCapturePolling();}
+        void StartKeyCapture(){if(_capturingKey2||_capturingKey3)return;_capturingKey=true;_lblPttKey.Text="Press...";_lblPttKey.BackColor=ACC;_lblPttKey.ForeColor=Color.White;Logger.Info("StartKeyCapture() called");StartCapturePolling();}
         void StartKeyCapture2(){
             if(!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked){EnforceToggleSelection();return;}
             if(_capturingKey || _capturingKey3){return;}
