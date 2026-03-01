@@ -1539,36 +1539,19 @@ namespace AngryAudio
         }
 
         private Timer _enforceTimer;
-        private Panel _enforceOverlay; // blocks interaction
 
         /// <summary>If a hotkey is set but no PTT/PTM/PTToggle is enabled, shake the hotkey field
         /// and flash the three toggle rows in sequence (1-2-3, 1-2-3...) until user picks one.</summary>
         void EnforceToggleSelection()
         {
             if (_tglPtt.Checked || _tglPtm.Checked || _tglPtToggle.Checked) return;
-
-            // Already enforcing?
             if (_enforceTimer != null) return;
 
             var card = _tglPtt.Parent;
             if (card == null) return;
 
-            // Create a transparent overlay that blocks clicks except on the 3 toggles
-            _enforceOverlay = new Panel {
-                Location = Point.Empty,
-                Size = this.ClientSize,
-                BackColor = Color.FromArgb(120, 0, 0, 0)
-            };
-            _enforceOverlay.BringToFront();
-            this.Controls.Add(_enforceOverlay);
-            _enforceOverlay.BringToFront();
-
-            // Bring the card to front so toggles are clickable
-            card.Parent.BringToFront();
-            card.BringToFront();
-            _tglPtt.BringToFront();
-            _tglPtm.BringToFront();
-            _tglPtToggle.BringToFront();
+            // Navigate to the PTT pane so user can see the toggles
+            SwitchPane(0);
 
             // Highlight panels for each toggle row
             var highlights = new Panel[3];
@@ -1584,7 +1567,6 @@ namespace AngryAudio
                     Size = new Size(card.Width - Dpi.S(8), Dpi.S(42)),
                     BackColor = Color.Transparent
                 };
-                
                 highlights[i].Paint += (s, e) => {
                     using (var p = new Pen(flashBorder, 2f))
                         e.Graphics.DrawRectangle(p, 1, 1, ((Panel)s).Width - 3, ((Panel)s).Height - 3);
@@ -1592,30 +1574,24 @@ namespace AngryAudio
                 highlights[i].Visible = false;
                 card.Controls.Add(highlights[i]);
                 highlights[i].BringToFront();
-                // Keep toggle and its labels on top
                 tgl.BringToFront();
                 foreach (Control c in card.Controls)
                     if (c is Label && c.Top >= tgl.Top - Dpi.S(2) && c.Top <= tgl.Top + Dpi.S(30))
                         c.BringToFront();
             }
 
-            // Sequential flash: 1, 2, 3, pause, shake, repeat
             int step = 0;
-            int cycle = 0;
             _enforceTimer = new Timer { Interval = 200 };
             _enforceTimer.Tick += (s, e) => {
-                // Check if user picked a toggle
                 if (_tglPtt.Checked || _tglPtm.Checked || _tglPtToggle.Checked)
                 {
                     _enforceTimer.Stop(); _enforceTimer.Dispose(); _enforceTimer = null;
                     foreach (var h in highlights) { try { card.Controls.Remove(h); h.Dispose(); } catch { } }
-                    try { this.Controls.Remove(_enforceOverlay); _enforceOverlay.Dispose(); _enforceOverlay = null; } catch { }
                     return;
                 }
 
                 if (step < 3)
                 {
-                    // Light up one at a time: 1, 2, 3
                     for (int i = 0; i < 3; i++)
                     {
                         highlights[i].BackColor = (i == step) ? flashColor : Color.Transparent;
@@ -1626,21 +1602,16 @@ namespace AngryAudio
                 }
                 else if (step == 3)
                 {
-                    // All off
                     for (int i = 0; i < 3; i++) { highlights[i].BackColor = Color.Transparent; highlights[i].Invalidate(); }
                     step++;
                 }
                 else
                 {
-                    // Shake the hotkey label and reset cycle
                     ShakeReject(_lblPttKey);
                     step = 0;
-                    cycle++;
                 }
             };
             _enforceTimer.Start();
-
-            // Initial shake
             ShakeReject(_lblPttKey);
         }
 
