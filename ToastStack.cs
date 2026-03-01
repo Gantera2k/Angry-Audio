@@ -52,6 +52,32 @@ namespace AngryAudio
             }
         }
 
+        /// <summary>
+        /// Dismiss all toasts except those matching excludeType. Uses Dismiss() if available, else Close().
+        /// </summary>
+        public static void DismissAllExcept(Type excludeType)
+        {
+            List<Form> toDismiss;
+            lock (_lock)
+            {
+                _toasts.RemoveAll(f => f == null || f.IsDisposed);
+                toDismiss = new List<Form>(_toasts);
+            }
+            foreach (var t in toDismiss)
+            {
+                if (t == null || t.IsDisposed) continue;
+                if (excludeType != null && excludeType.IsInstanceOfType(t)) continue;
+                try
+                {
+                    // Use Dismiss() for fade-out if available, else Close()
+                    var method = t.GetType().GetMethod("Dismiss", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    if (method != null) method.Invoke(t, null);
+                    else t.Close();
+                }
+                catch { }
+            }
+        }
+
         private static void OnToastClosed(object sender, FormClosedEventArgs e)
         {
             var form = sender as Form;

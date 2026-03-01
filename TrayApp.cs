@@ -1869,7 +1869,7 @@ namespace AngryAudio
             if (!unprotected) return;
 
             // Kill ALL other popups so the red warning stands alone (except MicStatusOverlay)
-            DismissAllToasts();
+            ToastStack.DismissAllExcept(typeof(MicWarningToast));
 
             Action showWarning = () =>
             {
