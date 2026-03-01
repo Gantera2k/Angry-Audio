@@ -718,7 +718,9 @@ namespace AngryAudio
             ShowTipFlag(ref _showTipMicLock);
             Invalidate(true);
         }
+        private bool _saved;
         void DoSave() {
+            if (_saved) return; _saved = true;
             ProtectMic = _tglMicEnf.Checked; ProtectSpeakers = _tglSpkEnf.Checked;
             MicVolPercent = _micSlider.Value; SpkVolPercent = _spkSlider.Value;
             AfkMicEnabled = _tglAfkMic.Checked; AfkMicSec = (int)_nudAfkMic.Value; AfkSpkEnabled = _tglAfkSpk.Checked; AfkSpkSec = (int)_nudAfkSpk.Value;
@@ -812,7 +814,9 @@ namespace AngryAudio
             base.OnFormClosing(e);
         }
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData) {
-            if (keyData == Keys.Space && !_capturingKey) return true;
+            if (_capturingKey) return base.ProcessCmdKey(ref msg, keyData);
+            if (keyData == Keys.Space) return true;
+            if (keyData == Keys.Escape) { Close(); return true; }
             return base.ProcessCmdKey(ref msg, keyData);
         }
         protected override CreateParams CreateParams {

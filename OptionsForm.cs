@@ -76,6 +76,15 @@ namespace AngryAudio
             _defaultSize = Size;
             DoubleBuffered = true;
             try { Icon = Mascot.CreateIcon(); } catch { }
+            // Restore window position
+            if (_settings.LastWindowX >= 0 && _settings.LastWindowY >= 0) {
+                StartPosition = FormStartPosition.Manual;
+                Location = new Point(_settings.LastWindowX, _settings.LastWindowY);
+                // Clamp to screen bounds
+                var screen = Screen.FromPoint(Location);
+                if (!screen.WorkingArea.IntersectsWith(new Rectangle(Location, Size)))
+                    StartPosition = FormStartPosition.CenterScreen;
+            }
 
             _sidebar = new Panel { Dock = DockStyle.Left, Width = Dpi.S(SB_W), BackColor = SB_BG };
             var sep = new Panel { Dock = DockStyle.Left, Width = 1, BackColor = BDR };
@@ -115,7 +124,7 @@ namespace AngryAudio
             _twinkleTimer.Start();
             // Shooting star animation — occasional streaks across card backgrounds
             _stars = new StarBackground(() => { InvalidateCards(); });
-            FormClosing += (s, e) => { StopCapturePolling(); _captureTimer?.Dispose(); CleanupEnforcement(); _pollTimer?.Stop(); _pollTimer?.Dispose(); _twinkleTimer?.Stop(); _twinkleTimer?.Dispose(); _hotkeyFlashTimer?.Stop(); _hotkeyFlashTimer?.Dispose(); _stars?.Dispose(); _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _updateShimmerTimer?.Stop(); _updateShimmerTimer?.Dispose(); _saveOrbitTimer?.Stop(); _saveOrbitTimer?.Dispose(); };
+            FormClosing += (s, e) => { if (WindowState == FormWindowState.Normal) { _settings.LastWindowX = Location.X; _settings.LastWindowY = Location.Y; _settings.Save(); } StopCapturePolling(); _captureTimer?.Dispose(); CleanupEnforcement(); _pollTimer?.Stop(); _pollTimer?.Dispose(); _twinkleTimer?.Stop(); _twinkleTimer?.Dispose(); _hotkeyFlashTimer?.Stop(); _hotkeyFlashTimer?.Dispose(); _stars?.Dispose(); _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _updateShimmerTimer?.Stop(); _updateShimmerTimer?.Dispose(); _saveOrbitTimer?.Stop(); _saveOrbitTimer?.Dispose(); };
         }
 
         private Size _defaultSize;

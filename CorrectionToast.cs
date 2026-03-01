@@ -585,7 +585,7 @@ namespace AngryAudio
             };
 
             _tickTimer = new Timer { Interval = 40 };
-            _tickTimer.Tick += (s, e) => { if (!_isClosing) { _pulsePhase += 0.06f; Invalidate(); } };
+            _tickTimer.Tick += (s, e) => { if (!_isClosing) { _pulsePhase += 0.08f; Invalidate(); } };
 
             MouseClick += OnMouseClick;
             MouseMove += OnMouseMove;
