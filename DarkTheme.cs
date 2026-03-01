@@ -13,6 +13,10 @@ namespace AngryAudio
         public static readonly Color CardBG   = Color.FromArgb(22, 22, 22);   // Card frosted glass base
         public static readonly Color InputBG  = Color.FromArgb(18, 18, 18);   // Input field background
         public static readonly Color Accent   = Color.FromArgb(74, 158, 204); // Primary accent blue
+
+        // Cached fonts for owner-drawn buttons (prevents GDI handle leak in Paint handlers)
+        public static readonly Font BtnFont = new Font("Segoe UI", 9.5f, FontStyle.Regular);
+        public static readonly Font BtnFontBold = new Font("Segoe UI", 9.5f, FontStyle.Bold);
         public static readonly Color Green    = Color.FromArgb(46, 160, 67);  // Success / active
         public static readonly Color Amber    = Color.FromArgb(218, 175, 67); // Badge / warning gold
         /// <summary>Pre-composited flat glass color = CardBG@alpha200 over BG. Use as BackColor for controls on frosted cards.</summary>
@@ -2982,38 +2986,6 @@ namespace AngryAudio
                 return new PointF(radius + (float)Math.Cos(angle) * radius, radius + (float)Math.Sin(angle) * radius);
             }
             return new PointF(radius, 0);
-        }
-    }
-
-    /// <summary>Panel that can paint OVER its child controls by removing WS_CLIPCHILDREN.
-    /// Combined with double buffering, this allows glow effects around buttons without clipping or flicker.</summary>
-    class GlowPanel : Panel
-    {
-        public GlowPanel()
-        {
-            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
-                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
-            UpdateStyles();
-        }
-
-        protected override CreateParams CreateParams
-        {
-            get {
-                var cp = base.CreateParams;
-                // Remove WS_CLIPCHILDREN so we can paint over child controls
-                cp.Style &= ~0x02000000; // ~WS_CLIPCHILDREN
-                return cp;
-            }
-        }
-
-        /// <summary>Override to paint glow effects AFTER base paint (which draws children).</summary>
-        public Action<Graphics> PaintGlow;
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            base.OnPaint(e);
-            // Paint glow ON TOP of children
-            PaintGlow?.Invoke(e.Graphics);
         }
     }
 }

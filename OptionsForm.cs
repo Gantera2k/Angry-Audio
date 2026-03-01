@@ -1379,7 +1379,7 @@ namespace AngryAudio
                 Color sbg = _optSaveHover ? Color.FromArgb(140, 220, 255) : Color.FromArgb(pr, pg, pb);
                 using (var path = DarkTheme.RoundedRect(_optSaveRect, cr))
                 using (var b = new SolidBrush(sbg)) g.FillPath(b, path);
-                TextRenderer.DrawText(g, "Save", new Font("Segoe UI", 9.5f, FontStyle.Bold), _optSaveRect, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                TextRenderer.DrawText(g, "Save", DarkTheme.BtnFontBold, _optSaveRect, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
                 var saved = g.Save();
                 g.TranslateTransform(_optSaveRect.X, _optSaveRect.Y);
                 DarkTheme.PaintOrbitingStar(g, _optSaveRect.Width, _optSaveRect.Height, _saveOrbitPhase, cr);
@@ -1391,7 +1391,7 @@ namespace AngryAudio
                 using (var b = new SolidBrush(cbg)) g.FillPath(b, path);
                 using (var path = DarkTheme.RoundedRect(_optCancelRect, cr))
                 using (var p = new Pen(Color.FromArgb(50, 50, 50))) g.DrawPath(p, path);
-                TextRenderer.DrawText(g, "Cancel", new Font("Segoe UI", 9.5f), _optCancelRect, Color.FromArgb(170, 170, 170), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                TextRenderer.DrawText(g, "Cancel", DarkTheme.BtnFont, _optCancelRect, Color.FromArgb(170, 170, 170), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
             };
             _footer.MouseMove += (s, e) => {
                 bool sh = _optSaveRect.Contains(e.Location);

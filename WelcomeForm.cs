@@ -272,7 +272,6 @@ namespace AngryAudio
         private int _currentPage = 1;
         private Timer _pulseTimer;
         private float _pulsePhase; // 0 to 2*PI, drives the glow animation
-        private Panel _wizFooter; // stored ref for parent-level star painting
         private ShootingStar _shootingStar;
         private CelestialEvents _celestialEvents;
 
@@ -292,7 +291,6 @@ namespace AngryAudio
         static readonly Color TXT2 = DarkTheme.Txt2;
         static readonly Color TXT3 = DarkTheme.Txt3;
         static readonly Color INPUT_BG = DarkTheme.InputBG;
-        static readonly Color INPUT_BDR = DarkTheme.InputBdr;
 
         static readonly string PAGE1_TIP =
             "Apps can silently listen through your microphone without your " +
@@ -380,7 +378,7 @@ namespace AngryAudio
                     using (var b = new SolidBrush(bbg)) g.FillPath(b, path);
                     using (var path = DarkTheme.RoundedRect(_backRect, cr))
                     using (var p = new Pen(Color.FromArgb(50, 50, 50))) g.DrawPath(p, path);
-                    TextRenderer.DrawText(g, "\u2190 Back", new Font("Segoe UI", 9.5f), _backRect, Color.FromArgb(170, 170, 170), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                    TextRenderer.DrawText(g, "\u2190 Back", DarkTheme.BtnFont, _backRect, Color.FromArgb(170, 170, 170), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
                 }
                 // Next button
                 if (_nextVisible) {
@@ -390,7 +388,7 @@ namespace AngryAudio
                     Color nbg = _nextHover ? Color.FromArgb(140, 220, 255) : Color.FromArgb(pr, pg, pb);
                     using (var path = DarkTheme.RoundedRect(_nextRect, cr))
                     using (var b = new SolidBrush(nbg)) g.FillPath(b, path);
-                    TextRenderer.DrawText(g, "Next \u2192", new Font("Segoe UI", 9.5f, FontStyle.Bold), _nextRect, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                    TextRenderer.DrawText(g, "Next \u2192", DarkTheme.BtnFontBold, _nextRect, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
                     // Star — painted on same surface, extends freely beyond the "button" rect
                     var saved = g.Save();
                     g.TranslateTransform(_nextRect.X, _nextRect.Y);
@@ -405,7 +403,7 @@ namespace AngryAudio
                     Color sbg = _saveHover ? Color.FromArgb(140, 220, 255) : Color.FromArgb(pr, pg, pb);
                     using (var path = DarkTheme.RoundedRect(_saveRect, cr))
                     using (var b = new SolidBrush(sbg)) g.FillPath(b, path);
-                    TextRenderer.DrawText(g, "Save", new Font("Segoe UI", 9.5f, FontStyle.Bold), _saveRect, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                    TextRenderer.DrawText(g, "Save", DarkTheme.BtnFontBold, _saveRect, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
                     var saved = g.Save();
                     g.TranslateTransform(_saveRect.X, _saveRect.Y);
                     DarkTheme.PaintOrbitingStar(g, _saveRect.Width, _saveRect.Height, _pulsePhase, cr);
@@ -431,7 +429,6 @@ namespace AngryAudio
             // Wire up visibility controls for page switching
             _showPage1Extras = () => { _nextVisible = true; _saveVisible = false; _backVisible = false; footer.Invalidate(); };
             _showPage2Extras = () => { _nextVisible = false; _saveVisible = true; _backVisible = true; footer.Invalidate(); };
-            _wizFooter = footer;
             Controls.Add(footer);
 
             // Pulse animation — only invalidates the single footer panel
@@ -765,15 +762,6 @@ namespace AngryAudio
                 }
             };
             return tip;
-        }
-
-        Button MakeBtn(string text, Color fg, Color bg, bool bold) {
-            var b = new Button { Text = text, FlatStyle = FlatStyle.Flat, Size = Dpi.Size(92, 30), ForeColor = fg, BackColor = bg, Font = new Font("Segoe UI", 9.5f, bold ? FontStyle.Bold : FontStyle.Regular), TabStop = false };
-            b.FlatAppearance.BorderSize = bold ? 0 : 1;
-            Color origBg = bg;
-            b.MouseEnter += (s, e) => b.BackColor = bold ? Color.FromArgb(120, 200, 240) : Color.FromArgb(38, 38, 38);
-            b.MouseLeave += (s, e) => b.BackColor = origBg;
-            return b;
         }
 
         void PaintHeader(object sender, PaintEventArgs e) {
