@@ -169,6 +169,7 @@ namespace AngryAudioInstaller
         bool _uninstalling;
 
         int _twinkleTick;
+        float _orbitPhase;
         StarBackground _stars;
 
         // Hit-test rectangles — computed during OnPaint, used by OnClick
@@ -217,7 +218,7 @@ namespace AngryAudioInstaller
 
             _paintTimer = new Timer { Interval = 33 }; // 30fps — smooth enough, halves CPU
             int _twinkleCounter = 0;
-            _paintTimer.Tick += (s, e) => { _twinkleCounter++; if (_twinkleCounter % 5 == 0) { _twinkleTick++; _stars.Tick(); } Invalidate(); };
+            _paintTimer.Tick += (s, e) => { _twinkleCounter++; _orbitPhase += 0.08f; if (_twinkleCounter % 5 == 0) { _twinkleTick++; _stars.Tick(); } Invalidate(); };
             _paintTimer.Start();
 
             Paint += OnPaint;
@@ -1002,7 +1003,7 @@ namespace AngryAudioInstaller
                 else
                 {
                     // Solid fill with pulsing color (matching Options footer)
-                    float phase = _twinkleTick * 0.05f;
+                    float phase = _orbitPhase;
                     float pulse = (float)((Math.Sin(phase * 0.8) + 1.0) / 2.0);
                     int lift = hover ? 45 : 0;
                     int pr = (int)(Math.Min(255, color.R * 0.3 + color.R * 0.7 * pulse + lift));

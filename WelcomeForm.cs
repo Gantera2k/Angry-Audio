@@ -203,16 +203,20 @@ namespace AngryAudio
 
             // Pulse animation — only invalidates the single footer panel
             _pulsePhase = 0f;
+            int _guideFrameSkip = 0;
             _pulseTimer = new Timer { Interval = 30 };
             _pulseTimer.Tick += (s, e) => {
                 _pulsePhase += 0.08f;
                 if (_pulsePhase > (float)(Math.PI * 2)) _pulsePhase -= (float)(Math.PI * 2);
                 footer.Invalidate();
-                // Guide star on cards (only when relevant states)
-                if (_guideState == GuideState.HOTKEY || _guideState == GuideState.TOGGLES)
-                    _card1.Invalidate(false);
-                if (_guideState == GuideState.PAGE2 && _card2 != null)
-                    _card2.Invalidate(false);
+                // Guide star on cards — throttle to every other frame (15fps) to reduce stutter
+                _guideFrameSkip++;
+                if (_guideFrameSkip % 2 == 0) {
+                    if ((_guideState == GuideState.HOTKEY || _guideState == GuideState.TOGGLES) && _card1 != null && _card1.Visible)
+                        _card1.Invalidate(false);
+                    if (_guideState == GuideState.PAGE2 && _card2 != null && _card2.Visible)
+                        _card2.Invalidate(false);
+                }
             };
             _pulseTimer.Start();
 
@@ -724,17 +728,31 @@ namespace AngryAudio
         }
         Label MakeTip(string text) {
             var lbl = new Label {
-                Text = text, AutoSize = false, Size = Dpi.Size(200, 48),
-                Font = new Font("Segoe UI", 8.5f), ForeColor = Color.FromArgb(220, 220, 220),
-                BackColor = Color.FromArgb(40, 44, 52), TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(Dpi.S(8), Dpi.S(4), Dpi.S(8), Dpi.S(4))
+                Text = text, AutoSize = false, Size = Dpi.Size(210, 52),
+                Font = new Font("Segoe UI", 8f), ForeColor = Color.FromArgb(200, 210, 220),
+                BackColor = Color.FromArgb(22, 26, 34), TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(Dpi.S(10), Dpi.S(6), Dpi.S(10), Dpi.S(6))
             };
             lbl.Paint += (s, e) => {
-                using (var p = new Pen(Color.FromArgb(74, 158, 204), Dpi.S(1)))
-                    e.Graphics.DrawRectangle(p, 0, 0, lbl.Width - 1, lbl.Height - 1);
+                var g = e.Graphics;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                int r = Dpi.S(6);
+                // Dark fill with subtle gradient
+                using (var path = DarkTheme.RoundedRect(new Rectangle(1, 1, lbl.Width - 3, lbl.Height - 3), r))
+                using (var b = new System.Drawing.Drawing2D.LinearGradientBrush(
+                    new Point(0, 0), new Point(0, lbl.Height),
+                    Color.FromArgb(28, 34, 44), Color.FromArgb(18, 22, 30)))
+                    g.FillPath(b, path);
+                // Accent border
+                using (var path = DarkTheme.RoundedRect(new Rectangle(0, 0, lbl.Width - 1, lbl.Height - 1), r))
+                using (var p = new Pen(Color.FromArgb(100, ACC.R, ACC.G, ACC.B), 1.2f))
+                    g.DrawPath(p, path);
+                // Text
+                var tf = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak;
+                var textRect = new Rectangle(Dpi.S(10), Dpi.S(4), lbl.Width - Dpi.S(20), lbl.Height - Dpi.S(8));
+                TextRenderer.DrawText(g, lbl.Text, lbl.Font, textRect, lbl.ForeColor, tf);
             };
             lbl.Click += (s, e) => lbl.Visible = false;
-            // Auto-dismiss after 8 seconds
             var dismiss = new Timer { Interval = 8000 };
             dismiss.Tick += (s, e) => { lbl.Visible = false; dismiss.Stop(); dismiss.Dispose(); };
             lbl.VisibleChanged += (s, e) => { if (lbl.Visible) dismiss.Start(); else try { dismiss.Stop(); } catch {} };

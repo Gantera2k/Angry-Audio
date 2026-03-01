@@ -1732,8 +1732,25 @@ namespace AngryAudio
 
             _openWelcomeForm = new WelcomeForm(OnOptionToggle);
             _openWelcomeForm.FormClosed += (s, e) => {
-                // Toggles already update settings via OnOptionToggle callbacks during the wizard.
-                // Just mark first run complete and save.
+                // Read ALL properties from wizard into settings
+                var wf = _openWelcomeForm;
+                if (wf != null) {
+                    _settings.MicEnforceEnabled = wf.ProtectMic;
+                    _settings.SpeakerEnforceEnabled = wf.ProtectSpeakers;
+                    _settings.MicVolumePercent = wf.MicVolPercent;
+                    _settings.SpeakerVolumePercent = wf.SpkVolPercent;
+                    _settings.AfkMicMuteEnabled = wf.AfkMicEnabled;
+                    _settings.AfkMicMuteSec = wf.AfkMicSec;
+                    _settings.AfkSpeakerMuteEnabled = wf.AfkSpkEnabled;
+                    _settings.AfkSpeakerMuteSec = wf.AfkSpkSec;
+                    _settings.PushToTalkEnabled = wf.PttEnabled;
+                    _settings.PushToMuteEnabled = wf.PtMuteEnabled;
+                    _settings.PushToToggleEnabled = wf.PtToggleEnabled;
+                    if (wf.PttKey > 0) _settings.PushToTalkKey = wf.PttKey;
+                    _settings.StartWithWindows = wf.StartupEnabled;
+                    _settings.NotifyOnCorrection = wf.NotifyCorrEnabled;
+                    _settings.NotifyOnDeviceChange = wf.NotifyDevEnabled;
+                }
                 _settings.FirstRunComplete = true;
                 _settings.Save();
                 _settings.ApplyStartupSetting();
@@ -1747,6 +1764,8 @@ namespace AngryAudio
                 {
                     if (_settings.MicEnforceEnabled) EnforceMic(true);
                     if (_settings.SpeakerEnforceEnabled) EnforceSpeaker(true);
+                    if (_settings.PushToTalkEnabled || _settings.PushToMuteEnabled || _settings.PushToToggleEnabled)
+                        EnablePtt();
                 }
                 Logger.Info("First-run wizard complete.");
 

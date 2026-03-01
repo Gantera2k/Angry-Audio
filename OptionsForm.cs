@@ -103,7 +103,12 @@ namespace AngryAudio
                     bool hotDown = (GetAsyncKeyState(_pttKeyCode) & 0x8000) != 0;
                     if (!hotDown && _pttKeyCode2 > 0) hotDown = (GetAsyncKeyState(_pttKeyCode2) & 0x8000) != 0;
                     if (!hotDown && _pttKeyCode3 > 0) hotDown = (GetAsyncKeyState(_pttKeyCode3) & 0x8000) != 0;
-                    if (hotDown && !_hotkeyWasDown) FlashModeToggles();
+                    if (hotDown && !_hotkeyWasDown) {
+                        FlashModeToggles();
+                        // If no toggle is on, remind user they need one
+                        if (!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked)
+                            EnforceToggleSelection();
+                    }
                     _hotkeyWasDown = hotDown;
                 }
             };
