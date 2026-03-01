@@ -1654,7 +1654,7 @@ namespace AngryAudio
             _settings.AppVolumeEnforceEnabled=_tglAppEnf.Checked;_settings.AppVolumeRules=CollectAppRules();
             _settings.StartWithWindows=_tglStartup.Checked;_settings.NotifyOnCorrection=_tglNotifyCorr.Checked;_settings.NotifyOnDeviceChange=_tglNotifyDev.Checked;
             _settings.Save();DialogResult=DialogResult.OK;Close();
-        }catch(Exception ex){Logger.Error("Options save failed.",ex);MessageBox.Show("Save failed: "+ex.Message,"Error",MessageBoxButtons.OK,MessageBoxIcon.Error);}}
+        }catch(Exception ex){Logger.Error("Options save failed.",ex);DarkMessage.Show("Save failed: "+ex.Message,"Error");}}
 
         Dictionary<string,int> ParseAppRules(){ return CollectAppRules(); }
         static int Clamp(int v,int min,int max){return v<min?min:v>max?max:v;}

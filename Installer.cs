@@ -80,12 +80,10 @@ namespace AngryAudioInstaller
 
                 if (!elevated)
                 {
-                    MessageBox.Show(
+                    DarkMessage.Show(
                         "Angry Audio Setup requires administrator privileges to install.\n\n" +
                         "Please right-click the installer and select \"Run as administrator\".",
-                        "Angry Audio Setup",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
+                        "Angry Audio Setup");
                 }
                 return; // Always exit — either elevated copy is running, or user was told to retry
             }

@@ -652,7 +652,7 @@ namespace AngryAudio
                 }
             }
         }
-        void OnKeyCapture(object s, KeyEventArgs e) { if (!_capturingKey) return; if (e.KeyCode == Keys.Escape) { _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; return; } _pttKeyCode = (int)e.KeyCode; _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; UpdatePttTogglesEnabled(); FlashToggles(); ShowTipFlag(ref _showTipHotkey); }
+        void OnKeyCapture(object s, KeyEventArgs e) { if (!_capturingKey) return; if (e.KeyCode == Keys.Escape) { _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; Logger.Info("Welcome: key capture cancelled"); return; } _pttKeyCode = (int)e.KeyCode; _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; Logger.Info("Welcome: captured key vk=" + _pttKeyCode + " (" + KeyName(_pttKeyCode) + ")"); UpdatePttTogglesEnabled(); FlashToggles(); ShowTipFlag(ref _showTipHotkey); }
         void UpdatePttTogglesEnabled() { bool hasKey = _pttKeyCode > 0; if (_tglPtt != null) _tglPtt.Enabled = hasKey; if (_tglPtm != null) _tglPtm.Enabled = hasKey; if (_tglPtToggle != null) _tglPtToggle.Enabled = hasKey; }
 
         // --- Toggle flicker animation (draws attention to mode selection) ---
@@ -721,6 +721,7 @@ namespace AngryAudio
         private bool _saved;
         void DoSave() {
             if (_saved) return; _saved = true;
+            Logger.Info("Welcome: DoSave — PTT=" + _tglPtt.Checked + " PTM=" + _tglPtm.Checked + " Toggle=" + _tglPtToggle.Checked + " Key=" + _pttKeyCode + " MicLock=" + _tglMicEnf.Checked + " SpkLock=" + _tglSpkEnf.Checked);
             ProtectMic = _tglMicEnf.Checked; ProtectSpeakers = _tglSpkEnf.Checked;
             MicVolPercent = _micSlider.Value; SpkVolPercent = _spkSlider.Value;
             AfkMicEnabled = _tglAfkMic.Checked; AfkMicSec = (int)_nudAfkMic.Value; AfkSpkEnabled = _tglAfkSpk.Checked; AfkSpkSec = (int)_nudAfkSpk.Value;

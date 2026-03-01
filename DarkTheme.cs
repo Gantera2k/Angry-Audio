@@ -22,6 +22,15 @@ namespace AngryAudio
         // Cached fonts for owner-drawn buttons (prevents GDI handle leak in Paint handlers)
         public static readonly Font BtnFont = new Font("Segoe UI", 9.5f, FontStyle.Regular);
         public static readonly Font BtnFontBold = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+        // Centralized font system — use these instead of 'new Font' everywhere
+        public static readonly Font Body     = new Font("Segoe UI", 9f);
+        public static readonly Font BodyBold = new Font("Segoe UI", 9f, FontStyle.Bold);
+        public static readonly Font Small    = new Font("Segoe UI", 7.5f);
+        public static readonly Font SmallBold = new Font("Segoe UI", 7.5f, FontStyle.Bold);
+        public static readonly Font Heading  = new Font("Segoe UI", 10f, FontStyle.Bold);
+        public static readonly Font Caption  = new Font("Segoe UI", 8f);
+        public static readonly Font Tiny     = new Font("Segoe UI", 7f);
+        public static readonly Font TinyItalic = new Font("Segoe UI", 7f, FontStyle.Italic);
         public static readonly Color Green    = Color.FromArgb(46, 160, 67);  // Success / active
         public static readonly Color Amber    = Color.FromArgb(218, 175, 67); // Badge / warning gold
         /// <summary>Pre-composited flat glass color = CardBG@alpha200 over BG. Use as BackColor for controls on frosted cards.</summary>
@@ -38,6 +47,11 @@ namespace AngryAudio
         public static readonly Color TextLight = Color.FromArgb(224, 224, 224);
         public static readonly Color Border = Color.FromArgb(61, 61, 61);
         public static readonly Color BtnHover = Color.FromArgb(70, 70, 70);
+        // Commonly used derived colors — centralized to avoid rogue RGB values
+        public static readonly Color InputHover = Color.FromArgb(28, 28, 28);  // Input field hover
+        public static readonly Color BtnBgDark = Color.FromArgb(20, 20, 20);   // Dark button background
+        public static readonly Color SepLine   = Color.FromArgb(40, 40, 40);   // Separator lines
+        public static readonly Color DotInactive = Color.FromArgb(50, 50, 50); // Inactive page dots
         public static readonly Color Separator = Color.FromArgb(50, 50, 50);
         public static readonly Color ErrorRed = Color.FromArgb(204, 74, 74);
 

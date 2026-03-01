@@ -106,9 +106,9 @@ namespace AngryAudio
             catch (Exception ex)
             {
                 Logger.Error("Fatal error during startup.", ex);
-                MessageBox.Show(
+                DarkMessage.Show(
                     "Angry Audio encountered a fatal error and needs to close.\n\n" + ex.Message,
-                    "Angry Audio — Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    "Angry Audio — Error");
             }
             finally
             {
