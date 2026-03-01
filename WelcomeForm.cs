@@ -270,6 +270,8 @@ namespace AngryAudio
         private bool _capturingKey;
         private Button _btnNext, _btnBack, _btnSave;
         private int _currentPage = 1;
+        private Timer _pulseTimer;
+        private float _pulsePhase; // 0 to 2*PI, drives the glow animation
         private ShootingStar _shootingStar;
         private CelestialEvents _celestialEvents;
 
@@ -385,6 +387,19 @@ namespace AngryAudio
             _btnSave.Visible = false;
             _btnSave.Click += (s, e) => DoSave();
             footer.Controls.Add(_btnSave);
+
+            // Pulse glow animation — impossible to miss
+            _pulsePhase = 0f;
+            _pulseTimer = new Timer { Interval = 30 };
+            _pulseTimer.Tick += (s, e) => {
+                _pulsePhase += 0.08f;
+                if (_pulsePhase > (float)(Math.PI * 2)) _pulsePhase -= (float)(Math.PI * 2);
+                if (_btnNext.Visible) _btnNext.Invalidate();
+                if (_btnSave.Visible) _btnSave.Invalidate();
+            };
+            _btnNext.Paint += PaintButtonPulse;
+            _btnSave.Paint += PaintButtonPulse;
+            _pulseTimer.Start();
 
             // Header — consistent on both pages
             _headerPanel = new BufferedPanel { Dock = DockStyle.Top, Height = Dpi.S(180), BackColor = BG };
@@ -718,6 +733,83 @@ namespace AngryAudio
             return b;
         }
 
+        void PaintButtonPulse(object sender, PaintEventArgs e)
+        {
+            var btn = (Button)sender;
+            if (!btn.Visible) return;
+
+            // Pulsing glow intensity: oscillates between 0.3 and 1.0
+            float pulse = 0.3f + 0.7f * (float)((Math.Sin(_pulsePhase) + 1.0) / 2.0);
+            int glowAlpha = (int)(pulse * 120);
+            int w = btn.Width, h = btn.Height;
+
+            // Outer glow — drawn as expanding rounded rects with decreasing alpha
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            for (int i = 3; i >= 1; i--)
+            {
+                int expand = i * 2;
+                int alpha = (int)(glowAlpha * (1.0f - i * 0.25f));
+                if (alpha < 1) continue;
+                var glowRect = new Rectangle(-expand, -expand, w - 1 + expand * 2, h - 1 + expand * 2);
+                using (var pen = new Pen(Color.FromArgb(alpha, ACC.R, ACC.G, ACC.B), 2f))
+                using (var path = RoundedRect(glowRect, Dpi.S(6) + expand))
+                    g.DrawPath(pen, path);
+            }
+
+            // Inner bright border pulse
+            int borderAlpha = (int)(pulse * 200);
+            var innerRect = new Rectangle(0, 0, w - 1, h - 1);
+            using (var pen = new Pen(Color.FromArgb(borderAlpha, 140, 220, 255), 1.5f))
+            using (var path = RoundedRect(innerRect, Dpi.S(6)))
+                g.DrawPath(pen, path);
+
+            // Shimmer sweep across button
+            float shimmerPos = (_pulsePhase / (float)(Math.PI * 2)); // 0 to 1
+            int bandW = Math.Max(w / 4, 12);
+            int cx = (int)(shimmerPos * (w + bandW)) - bandW / 2;
+            var shimmerRect = new Rectangle(cx - bandW / 2, 0, bandW, h);
+
+            // Clip to button bounds
+            var clipPath = RoundedRect(innerRect, Dpi.S(6));
+            var oldClip = g.Clip;
+            g.SetClip(clipPath, CombineMode.Intersect);
+            try
+            {
+                using (var lgb = new LinearGradientBrush(
+                    new Point(shimmerRect.Left, 0), new Point(shimmerRect.Right, 0),
+                    Color.Transparent, Color.Transparent))
+                {
+                    var cb = new ColorBlend(3);
+                    int shimAlpha = (int)(pulse * 80);
+                    cb.Colors = new[] {
+                        Color.FromArgb(0, 255, 255, 255),
+                        Color.FromArgb(shimAlpha, 255, 255, 255),
+                        Color.FromArgb(0, 255, 255, 255)
+                    };
+                    cb.Positions = new[] { 0f, 0.5f, 1f };
+                    lgb.InterpolationColors = cb;
+                    g.FillRectangle(lgb, shimmerRect);
+                }
+            }
+            catch { }
+            g.Clip = oldClip;
+            clipPath.Dispose();
+        }
+
+        private static GraphicsPath RoundedRect(Rectangle r, int radius)
+        {
+            var path = new GraphicsPath();
+            int d = radius * 2;
+            path.AddArc(r.X, r.Y, d, d, 180, 90);
+            path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+            path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
         void PaintHeader(object sender, PaintEventArgs e) {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -902,6 +994,7 @@ namespace AngryAudio
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e) {
+            _pulseTimer?.Stop(); _pulseTimer?.Dispose();
             _pollTimer?.Stop(); _pollTimer?.Dispose();
             _micFlashTimer?.Stop(); _micFlashTimer?.Dispose();
             _spkFlashTimer?.Stop(); _spkFlashTimer?.Dispose();
