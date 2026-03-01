@@ -352,14 +352,14 @@ namespace AngryAudio
             try { Icon = Mascot.CreateIcon(); } catch { }
 
             // Footer
-            var footer = new BufferedPanel { Dock = DockStyle.Bottom, Height = Dpi.S(80), BackColor = BG };
+            var footer = new BufferedPanel { Dock = DockStyle.Bottom, Height = Dpi.S(100), BackColor = BG };
             footer.Paint += (s, e) => {
                 var g = e.Graphics;
                 PaintUnifiedStars(g, footer);
                 g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
                 using (var p = new Pen(Color.FromArgb(30, 30, 30))) g.DrawLine(p, Dpi.S(16), 0, footer.Width - Dpi.S(32), 0);
                 // Step indicator dots (2 pages)
-                int dotY = Dpi.S(55);
+                int dotY = Dpi.S(75);
                 int cx = footer.Width / 2;
                 for (int i = 1; i <= 2; i++) {
                     int dx = cx + (i - 2) * Dpi.S(16) + Dpi.S(4);
@@ -380,21 +380,21 @@ namespace AngryAudio
             Controls.Add(footer);
 
             _btnBack = MakeBtn("\u2190 Back", TXT2, Color.FromArgb(28, 28, 28), false);
-            _btnBack.Location = Dpi.Pt(16, 25); _btnBack.Visible = false;
+            _btnBack.Location = Dpi.Pt(16, 35); _btnBack.Visible = false;
             _btnBack.FlatAppearance.BorderColor = INPUT_BDR;
             _btnBack.Click += (s, e) => { if (_currentPage == 2) ShowPage1(); };
             footer.Controls.Add(_btnBack);
 
             _btnNext = MakeBtn("Next \u2192", Color.White, ACC, true);
             _btnNext.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            _btnNext.Location = new Point(ClientSize.Width - Dpi.S(108), Dpi.S(25));
+            _btnNext.Location = new Point(ClientSize.Width - Dpi.S(108), Dpi.S(35));
             _btnNext.Click += (s, e) => { if (_currentPage == 1) ShowPage2(); };
             footer.Controls.Add(_btnNext);
 
             _btnSave = MakeBtn("Save", Color.White, ACC, true);
             _btnSave.Size = Dpi.Size(105, 30);
             _btnSave.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            _btnSave.Location = new Point(ClientSize.Width - Dpi.S(121), Dpi.S(25));
+            _btnSave.Location = new Point(ClientSize.Width - Dpi.S(121), Dpi.S(35));
             _btnSave.Visible = false;
             _btnSave.Click += (s, e) => DoSave();
             footer.Controls.Add(_btnSave);
@@ -403,7 +403,7 @@ namespace AngryAudio
             _pulsePhase = 0f;
             _pulseTimer = new Timer { Interval = 30 };
             _pulseTimer.Tick += (s, e) => {
-                _pulsePhase += 0.18f;
+                _pulsePhase += 0.08f;
                 if (_pulsePhase > (float)(Math.PI * 2)) _pulsePhase -= (float)(Math.PI * 2);
                 // Dramatic flash — button goes from very dark to nearly white
                 float pulse = (float)((Math.Sin(_pulsePhase * 0.8) + 1.0) / 2.0);
