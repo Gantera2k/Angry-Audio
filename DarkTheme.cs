@@ -11,6 +11,7 @@ namespace AngryAudio
         // === SHARED COLOR PALETTE — single source of truth ===
         public static readonly Color BG       = Color.FromArgb(12, 12, 12);   // Main background
         public static readonly Color CardBG   = Color.FromArgb(22, 22, 22);   // Card frosted glass base
+        public static readonly Color GlassTint = Color.FromArgb(170, 22, 22, 22); // Card frosted glass tint (single source of truth)
         public static readonly Color InputBG  = Color.FromArgb(18, 18, 18);   // Input field background
         public static readonly Color Accent   = Color.FromArgb(74, 158, 204); // Primary accent blue
 
@@ -402,9 +403,26 @@ namespace AngryAudio
     }
 
     /// <summary>
-    /// Shared star background system — used by Options, Welcome, and Installer.
+    /// THE single star background system — used by ALL surfaces.
     /// Handles star caching, shooting stars, celestial events, and card glass tint.
-    /// Call PaintBackground() for full starfield, PaintCardGlass() for frosted card overlay.
+    /// 
+    /// Usage (all surfaces):
+    ///   var stars = new StarBackground(invalidateCallback);
+    ///   
+    ///   // In paint timer: stars.Tick();
+    ///   
+    ///   // Paint full background (form-level, no offset):
+    ///   stars.Paint(g, w, h);
+    ///   
+    ///   // Paint at offset (child panel in Options/Welcome):
+    ///   stars.Paint(g, w, h, offsetX, offsetY);
+    ///   stars.Paint(g, w, h, offsetX, offsetY, dim: true, shootingStar: false);
+    ///   
+    ///   // Paint frosted glass card (installer single-surface):
+    ///   stars.PaintGlassTint(g, w, h, path);
+    ///   
+    ///   // Paint child control bg (toggle/slider inside card):
+    ///   stars.PaintChildBg(g, w, h, offsetX, offsetY, childW, childH);
     /// </summary>
     public class StarBackground : IDisposable
     {
@@ -414,6 +432,7 @@ namespace AngryAudio
         public CelestialEvents Celestial;
         int _twinkleTick;
         const int SEED = 42;
+        static readonly Color TINT = DarkTheme.GlassTint;
 
         public StarBackground(Action invalidate)
         {
@@ -434,53 +453,56 @@ namespace AngryAudio
             if (_cacheDim != null) _cacheDim.Dispose();
             _cache = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
             _cacheDim = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
-            using (var sg = System.Drawing.Graphics.FromImage(_cache)) {
+            using (var sg = Graphics.FromImage(_cache)) {
                 sg.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                 DarkTheme.PaintCardStars(sg, w, h, SEED, _twinkleTick, 1.0f);
             }
-            using (var sg = System.Drawing.Graphics.FromImage(_cacheDim)) {
+            using (var sg = Graphics.FromImage(_cacheDim)) {
                 sg.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                 DarkTheme.PaintCardStars(sg, w, h, SEED, _twinkleTick, 0.35f);
             }
         }
 
-        /// <summary>Paint full starfield + shooting stars at form coordinates.</summary>
-        public void PaintBackground(System.Drawing.Graphics g, int w, int h)
+        /// <summary>Paint starfield. Optionally at offset, optionally dim, optionally with shooting stars.</summary>
+        public void Paint(Graphics g, int w, int h, int ox = 0, int oy = 0, bool dim = false, bool shootingStar = true)
         {
-            EnsureCache(w, h);
-            if (_cache != null) g.DrawImage(_cache, 0, 0);
-            if (Shooting != null) DarkTheme.PaintShootingStar(g, w, h, Shooting);
-            if (Celestial != null) DarkTheme.PaintCelestialEvent(g, w, h, Celestial);
+            try {
+                EnsureCache(w, h);
+                var src = dim ? _cacheDim : _cache;
+                if (src != null) g.DrawImage(src, -ox, -oy);
+                if (shootingStar) {
+                    g.TranslateTransform(-ox, -oy);
+                    if (Shooting != null) DarkTheme.PaintShootingStar(g, w, h, Shooting);
+                    if (Celestial != null) DarkTheme.PaintCelestialEvent(g, w, h, Celestial);
+                    g.ResetTransform();
+                }
+            } catch { try { g.ResetTransform(); } catch { } }
         }
 
-        /// <summary>Paint dimmed starfield only (no shooting stars). For use inside glass cards.</summary>
-        public void PaintDimStars(System.Drawing.Graphics g, int w, int h)
+        /// <summary>Paint frosted glass tint over a card area (call after Paint for background).
+        /// For single-surface forms (Installer): stars already visible, just tint + dim overlay.</summary>
+        public void PaintGlassTint(Graphics g, int w, int h, System.Drawing.Drawing2D.GraphicsPath path)
         {
             EnsureCache(w, h);
+            using (var tint = new SolidBrush(TINT))
+                g.FillPath(tint, path);
+            var oldClip = g.Clip;
+            g.SetClip(path);
             if (_cacheDim != null) g.DrawImage(_cacheDim, 0, 0);
+            g.Clip = oldClip;
         }
 
-        /// <summary>Paint full starfield cache only (no shooting stars). For card base layer.</summary>
-        public void PaintFullStars(System.Drawing.Graphics g, int w, int h)
+        /// <summary>Paint frosted glass card at offset (for child Panel paint handlers).
+        /// Pattern: BG fill → full stars → tint → dim stars.</summary>
+        public void PaintChildBg(Graphics g, int w, int h, int ox, int oy, int childW, int childH)
         {
             EnsureCache(w, h);
-            if (_cache != null) g.DrawImage(_cache, 0, 0);
-        }
-
-        /// <summary>Paint frosted glass card: full stars → glass tint → dimmed stars.</summary>
-        public void PaintCardGlass(System.Drawing.Graphics g, int w, int h, System.Drawing.Rectangle cardRect, System.Drawing.Drawing2D.GraphicsPath clipPath = null)
-        {
-            EnsureCache(w, h);
-            // Full stars under glass
-            if (_cache != null) g.DrawImage(_cache, 0, 0);
-            // Glass tint
-            using (var tint = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(170, DarkTheme.CardBG.R, DarkTheme.CardBG.G, DarkTheme.CardBG.B)))
-            {
-                if (clipPath != null) g.FillPath(tint, clipPath);
-                else g.FillRectangle(tint, cardRect);
-            }
-            // Dimmed stars on top
-            if (_cacheDim != null) g.DrawImage(_cacheDim, 0, 0);
+            using (var b = new SolidBrush(DarkTheme.BG))
+                g.FillRectangle(b, 0, 0, childW, childH);
+            if (_cache != null) g.DrawImage(_cache, -ox, -oy);
+            using (var tint = new SolidBrush(TINT))
+                g.FillRectangle(tint, 0, 0, childW, childH);
+            if (_cacheDim != null) g.DrawImage(_cacheDim, -ox, -oy);
         }
 
         public void Dispose()

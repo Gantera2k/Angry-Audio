@@ -299,10 +299,8 @@ namespace AngryAudio
         // Volume lock snapshot/restore
         private int _micPreLockVol = -1, _spkPreLockVol = -1;
         private Timer _sliderRestoreMicTimer, _sliderRestoreSpkTimer;
-        private int _twinkleTick;
         private Timer _twinkleTimer;
-        private ShootingStar _shootingStar;
-        private CelestialEvents _celestialEvents;
+        private StarBackground _stars;
 
         static readonly Color BG = DarkTheme.BG;
         static readonly Color SB_BG = Color.FromArgb(16, 16, 16);  // Sidebar slightly lighter — intentional
@@ -353,16 +351,13 @@ namespace AngryAudio
             // Twinkle timer — slowly animates card stars (150ms = ~6.6fps, gentle and efficient)
             _twinkleTimer = new Timer { Interval = 150 };
             _twinkleTimer.Tick += (s, e) => {
-                _twinkleTick++;
+                _stars.Tick();
                 InvalidateCards();
             };
             _twinkleTimer.Start();
             // Shooting star animation — occasional streaks across card backgrounds
-            _shootingStar = new ShootingStar(() => { InvalidateCards(); });
-            _shootingStar.Start();
-            _celestialEvents = new CelestialEvents(() => { InvalidateCards(); });
-            _celestialEvents.Start();
-            FormClosing += (s, e) => { CleanupEnforcement(); _pollTimer?.Stop(); _pollTimer?.Dispose(); _twinkleTimer?.Stop(); _twinkleTimer?.Dispose(); _shootingStar?.Stop(); _shootingStar?.Dispose(); _celestialEvents?.Stop(); _celestialEvents?.Dispose(); _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _updateShimmerTimer?.Stop(); _updateShimmerTimer?.Dispose(); _saveOrbitTimer?.Stop(); _saveOrbitTimer?.Dispose(); _starCache?.Dispose(); _starCacheDim?.Dispose(); };
+            _stars = new StarBackground(() => { InvalidateCards(); });
+            FormClosing += (s, e) => { CleanupEnforcement(); _pollTimer?.Stop(); _pollTimer?.Dispose(); _twinkleTimer?.Stop(); _twinkleTimer?.Dispose(); _stars?.Dispose(); _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _updateShimmerTimer?.Stop(); _updateShimmerTimer?.Dispose(); _saveOrbitTimer?.Stop(); _saveOrbitTimer?.Dispose(); };
         }
 
         private Size _defaultSize;
@@ -528,10 +523,10 @@ namespace AngryAudio
                 int dividerY = Dpi.S(24); // split between the two text lines
                 if (e.Y < dividerY) {
                     // Clicked "by Andrew Ganter" — spawn shooting star
-                    if (_shootingStar != null) _shootingStar.ForceLaunchMeteor();
+                    if (_stars.Shooting != null) _stars.Shooting.ForceLaunchMeteor();
                 } else {
                     // Clicked "Your privacy, your rules" — spawn rare event
-                    if (_celestialEvents != null) _celestialEvents.ForceLaunch();
+                    if (_stars.Celestial != null) _stars.Celestial.ForceLaunch();
                 }
             };
             _sidebar.Controls.Add(foot);
@@ -627,7 +622,7 @@ namespace AngryAudio
                 clipPath.AddArc(cardRect.X, cardRect.Bottom - d, d, d, 90, 90);
                 clipPath.CloseFigure();
                 // Dark tint over card area — visible grey for premium look
-                using (var tint = new SolidBrush(Color.FromArgb(170, DarkTheme.CardBG.R, DarkTheme.CardBG.G, DarkTheme.CardBG.B)))
+                using (var tint = new SolidBrush(DarkTheme.GlassTint))
                     g.FillPath(tint, clipPath);
                 // Dimmed unified stars through the glass
                 var oldClip = g.Clip;
@@ -697,9 +692,9 @@ namespace AngryAudio
 
         // === UNIFIED STARFIELD ===
         // ONE starfield across the entire form — no zones, no seams, no wasted GPU
-        const int STAR_SEED = 42;
+        // Star rendering — ALL surfaces use the shared StarBackground class
+        // No per-form star cache, no per-form ShootingStar/CelestialEvents
 
-        // Get control's offset from form client area
         Point FormOffset(Control c) {
             int x = 0, y = 0;
             Control cur = c;
@@ -707,55 +702,16 @@ namespace AngryAudio
             return new Point(x, y);
         }
 
-        // Cached star field bitmaps for performance — avoids re-rendering 150+ stars per control per frame
-        private Bitmap _starCache, _starCacheDim;
-        private int _starCacheW, _starCacheH, _starCacheTick = -1;
-
-        void EnsureStarCache() {
-            int cw = ClientSize.Width, ch = ClientSize.Height;
-            if (cw <= 0 || ch <= 0) return;
-            if (_starCache != null && _starCacheW == cw && _starCacheH == ch && _starCacheTick == _twinkleTick) return;
-            // Rebuild cache
-            _starCacheW = cw; _starCacheH = ch; _starCacheTick = _twinkleTick;
-            if (_starCache != null) _starCache.Dispose();
-            if (_starCacheDim != null) _starCacheDim.Dispose();
-            _starCache = new Bitmap(cw, ch, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
-            _starCacheDim = new Bitmap(cw, ch, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
-            using (var sg = Graphics.FromImage(_starCache)) {
-                sg.SmoothingMode = SmoothingMode.AntiAlias;
-                DarkTheme.PaintCardStars(sg, cw, ch, STAR_SEED, _twinkleTick, 1.0f);
-            }
-            using (var sg = Graphics.FromImage(_starCacheDim)) {
-                sg.SmoothingMode = SmoothingMode.AntiAlias;
-                DarkTheme.PaintCardStars(sg, cw, ch, STAR_SEED, _twinkleTick, 0.35f);
-            }
-        }
-
-        // Paint the unified starfield at form-level coordinates
         void PaintUnifiedStars(Graphics g, Control c, float alphaMul = 1.0f, bool shootingStar = true) {
-            try {
-                var off = FormOffset(c);
-                EnsureStarCache();
-                // Blit cached stars instead of re-rendering
-                var src = (alphaMul < 0.5f) ? _starCacheDim : _starCache;
-                if (src != null) g.DrawImage(src, -off.X, -off.Y);
-                // Shooting stars + celestial events are dynamic — render directly
-                if (shootingStar) {
-                    g.TranslateTransform(-off.X, -off.Y);
-                    if (_shootingStar != null) DarkTheme.PaintShootingStar(g, ClientSize.Width, ClientSize.Height, _shootingStar);
-                    if (_celestialEvents != null) DarkTheme.PaintCelestialEvent(g, ClientSize.Width, ClientSize.Height, _celestialEvents);
-                    g.ResetTransform();
-                }
-            } catch { try { g.ResetTransform(); } catch { } }
+            var off = FormOffset(c);
+            int w = ClientSize.Width, h = ClientSize.Height;
+            _stars.Paint(g, w, h, off.X, off.Y, dim: alphaMul < 0.5f, shootingStar: shootingStar);
         }
 
-        /// <summary>Paints card bg (BG + stars + glass + dimmed stars) into a child control's Graphics for seamless transparency.</summary>
         void PaintCardBg(Graphics g, Control child) {
-            using (var b = new SolidBrush(BG)) g.FillRectangle(b, 0, 0, child.Width, child.Height);
-            PaintUnifiedStars(g, child);
-            using (var tint = new SolidBrush(Color.FromArgb(170, DarkTheme.CardBG.R, DarkTheme.CardBG.G, DarkTheme.CardBG.B)))
-                g.FillRectangle(tint, 0, 0, child.Width, child.Height);
-            PaintUnifiedStars(g, child, 0.35f, false);
+            var off = FormOffset(child);
+            int w = ClientSize.Width, h = ClientSize.Height;
+            _stars.PaintChildBg(g, w, h, off.X, off.Y, child.Width, child.Height);
         }
 
         // Tgl now only creates ToggleSwitch — text is painted

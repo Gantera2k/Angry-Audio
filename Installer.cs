@@ -647,7 +647,7 @@ namespace AngryAudioInstaller
             int w = ClientSize.Width, h = ClientSize.Height;
 
             // Background stars
-            _stars.PaintBackground(g, w, h);
+            _stars.Paint(g, w, h);
 
             // Shooting stars painted AFTER measuring card so they pass behind it
             // (deferred below after card is drawn)
@@ -774,14 +774,8 @@ namespace AngryAudioInstaller
             // just apply glass tint + dimmed stars on top (same visual as Options)
             using (var path = RoundRectPath(new Rectangle(cx, cy, cw, ch), S(10)))
             {
-                // Glass tint directly over background stars (no opaque BG fill!)
-                using (var tint = new SolidBrush(Color.FromArgb(170, DarkTheme.CardBG.R, DarkTheme.CardBG.G, DarkTheme.CardBG.B)))
-                    g.FillPath(tint, path);
-                // Dimmed stars on top of glass
-                var oldClip = g.Clip;
-                g.SetClip(path);
-                _stars.PaintDimStars(g, w, h);
-                g.Clip = oldClip;
+                // Frosted glass card — single call handles tint + dim stars
+                _stars.PaintGlassTint(g, w, h, path);
                 // Border
                 using (var pen = new Pen(BDR))
                     g.DrawPath(pen, path);

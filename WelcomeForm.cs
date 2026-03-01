@@ -312,29 +312,15 @@ namespace AngryAudio
         }
 
         void PaintUnifiedStars(Graphics g, Control c, float alphaMul = 1.0f, bool shootingStar = true) {
-            try {
-                var off = FormOffset(c);
-                g.TranslateTransform(-off.X, -off.Y);
-                int w = ClientSize.Width, h = ClientSize.Height;
-                if (alphaMul < 0.5f)
-                    _stars.PaintDimStars(g, w, h);
-                else
-                    _stars.PaintFullStars(g, w, h);
-                if (shootingStar) {
-                    if (_stars.Shooting != null) DarkTheme.PaintShootingStar(g, w, h, _stars.Shooting);
-                    if (_stars.Celestial != null) DarkTheme.PaintCelestialEvent(g, w, h, _stars.Celestial);
-                }
-                g.ResetTransform();
-            } catch { try { g.ResetTransform(); } catch { } }
+            var off = FormOffset(c);
+            int w = ClientSize.Width, h = ClientSize.Height;
+            _stars.Paint(g, w, h, off.X, off.Y, dim: alphaMul < 0.5f, shootingStar: shootingStar);
         }
 
-        /// <summary>Paints card bg (BG + static stars + glass + dimmed static stars). Shooting star passes behind cards.</summary>
         void PaintCardBg(Graphics g, Control child) {
-            using (var b = new SolidBrush(BG)) g.FillRectangle(b, 0, 0, child.Width, child.Height);
-            PaintUnifiedStars(g, child, 1.0f, false); // static stars only — no shooting star
-            using (var tint = new SolidBrush(Color.FromArgb(170, DarkTheme.CardBG.R, DarkTheme.CardBG.G, DarkTheme.CardBG.B)))
-                g.FillRectangle(tint, 0, 0, child.Width, child.Height);
-            PaintUnifiedStars(g, child, 0.35f, false);
+            var off = FormOffset(child);
+            int w = ClientSize.Width, h = ClientSize.Height;
+            _stars.PaintChildBg(g, w, h, off.X, off.Y, child.Width, child.Height);
         }
 
         public WelcomeForm(Action<string> onToggle = null)
@@ -809,7 +795,7 @@ namespace AngryAudio
 
                 // 2) Frosted glass — visible grey tint for premium card look
                 var cardRect = new Rectangle(0, 0, c.Width - 1, c.Height - 1);
-                using (var tint = new SolidBrush(Color.FromArgb(170, DarkTheme.CardBG.R, DarkTheme.CardBG.G, DarkTheme.CardBG.B)))
+                using (var tint = new SolidBrush(DarkTheme.GlassTint))
                     g.FillRectangle(tint, cardRect);
                 PaintUnifiedStars(g, c, 0.35f, false);
 
