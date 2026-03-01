@@ -2836,7 +2836,7 @@ namespace AngryAudio
                 using(var b=new SolidBrush(Color.FromArgb(pa,160,140,200))) g.FillEllipse(b,px-1,py-1,2,2);}
         }
 
-        /// <summary>Paints a massive shooting star orbiting a button's rounded-rect perimeter.
+        /// <summary>Paints a shooting star orbiting a button's rounded-rect perimeter.
         /// phase should increment continuously (e.g. += 0.08 per 30ms tick).</summary>
         public static void PaintOrbitingStar(Graphics g, int w, int h, float phase, int cornerRadius)
         {
@@ -2849,10 +2849,9 @@ namespace AngryAudio
 
             float t = (phase / (float)(Math.PI * 2));
             t = t - (float)Math.Floor(t);
-            int trailCount = 40;
-            float trailSpacing = 0.010f;
+            int trailCount = 35;
+            float trailSpacing = 0.012f;
 
-            // Rainbow hue cycle for trail
             for (int i = trailCount; i >= 0; i--)
             {
                 float tt = t - i * trailSpacing;
@@ -2861,26 +2860,24 @@ namespace AngryAudio
 
                 if (i == 0)
                 {
-                    // === STAR HEAD — pure brilliant white ===
-                    for (int glow = 6; glow >= 0; glow--)
+                    // Star head — pure white, tight glow that won't clip
+                    for (int glow = 4; glow >= 0; glow--)
                     {
-                        float sz = 8 + glow * 5;
-                        int alpha = glow == 0 ? 255 : glow == 1 ? 200 : Math.Max(10, (int)(160.0 / (glow + 1)));
-                        // Pure white core, fading to soft white
-                        Color c = Color.FromArgb(alpha, 255, 255, 255);
-                        using (var brush = new SolidBrush(c))
+                        float sz = 5 + glow * 3;
+                        int alpha = glow == 0 ? 255 : glow == 1 ? 200 : Math.Max(15, (int)(140.0 / (glow + 1)));
+                        using (var brush = new SolidBrush(Color.FromArgb(alpha, 255, 255, 255)))
                             g.FillEllipse(brush, pt.X - sz / 2, pt.Y - sz / 2, sz, sz);
                     }
 
-                    // Cross sparkle — pure white
+                    // Cross sparkle — pure white, tight arms
                     int sparkAlpha = (int)(230 + 25 * Math.Sin(phase * 4));
-                    float armLen = 14 + 4 * (float)Math.Sin(phase * 3);
+                    float armLen = 8 + 3 * (float)Math.Sin(phase * 3);
                     using (var pen = new Pen(Color.FromArgb(sparkAlpha, 255, 255, 255), 2f))
                     {
                         g.DrawLine(pen, pt.X - armLen, pt.Y, pt.X + armLen, pt.Y);
                         g.DrawLine(pen, pt.X, pt.Y - armLen, pt.X, pt.Y + armLen);
                     }
-                    float diagLen = armLen * 0.6f;
+                    float diagLen = armLen * 0.5f;
                     using (var pen = new Pen(Color.FromArgb(sparkAlpha / 2, 255, 255, 255), 1f))
                     {
                         g.DrawLine(pen, pt.X - diagLen, pt.Y - diagLen, pt.X + diagLen, pt.Y + diagLen);
@@ -2890,47 +2887,43 @@ namespace AngryAudio
                 else
                 {
                     float fade = 1.0f - (float)i / trailCount;
-                    float sz = 8f * fade;
-                    int alpha = (int)(240 * fade * fade);
+                    float sz = 5f * fade;
+                    int alpha = (int)(230 * fade * fade);
                     if (alpha < 5) continue;
 
-                    // Rainbow color based on position in trail
+                    // Rainbow trail
                     float hue = ((float)i / trailCount * 360 + phase * 60) % 360;
-                    Color rainbow = HsvToColor(hue, 0.7f, 1.0f, alpha);
+                    Color rainbow = HsvToColor(hue, 0.8f, 1.0f, alpha);
 
                     using (var brush = new SolidBrush(rainbow))
                         g.FillEllipse(brush, pt.X - sz / 2, pt.Y - sz / 2, sz, sz);
 
-                    // White glow halo behind each particle
-                    if (fade > 0.3f)
+                    // Small white glow — tight, won't extend far
+                    if (fade > 0.4f)
                     {
-                        float glowSz = sz * 2.5f;
-                        int glowA = (int)(50 * fade);
+                        float glowSz = sz * 2f;
+                        int glowA = (int)(40 * fade);
                         using (var brush = new SolidBrush(Color.FromArgb(glowA, 255, 255, 255)))
                             g.FillEllipse(brush, pt.X - glowSz / 2, pt.Y - glowSz / 2, glowSz, glowSz);
                     }
 
-                    // Rainbow spray sparkles
-                    if (fade > 0.2f)
+                    // Rainbow micro-sparkles — close to trail, not flying far out
+                    if (fade > 0.3f && i % 3 == 0)
                     {
-                        for (int sp = 0; sp < 2; sp++)
-                        {
-                            float ox = (float)(Math.Sin(i * 7.3 + sp * 2.1 + phase * 2.5) * (8 + sp * 4));
-                            float oy = (float)(Math.Cos(i * 5.1 + sp * 3.7 + phase * 2.5) * (8 + sp * 4));
-                            float msz = (4f - sp) * fade;
-                            int mAlpha = (int)((140 - sp * 40) * fade);
-                            if (mAlpha < 3) continue;
-                            float mHue = ((float)(i + sp * 12) / trailCount * 360 + phase * 80) % 360;
-                            Color mColor = HsvToColor(mHue, 0.8f, 1.0f, mAlpha);
-                            using (var brush = new SolidBrush(mColor))
-                                g.FillEllipse(brush, pt.X + ox - msz / 2, pt.Y + oy - msz / 2, msz, msz);
-                        }
+                        float ox = (float)(Math.Sin(i * 7.3 + phase * 2.5) * 5);
+                        float oy = (float)(Math.Cos(i * 5.1 + phase * 2.5) * 5);
+                        float msz = 3f * fade;
+                        int mAlpha = (int)(120 * fade);
+                        float mHue = ((float)(i + 15) / trailCount * 360 + phase * 80) % 360;
+                        Color mColor = HsvToColor(mHue, 0.9f, 1.0f, mAlpha);
+                        using (var brush = new SolidBrush(mColor))
+                            g.FillEllipse(brush, pt.X + ox - msz / 2, pt.Y + oy - msz / 2, msz, msz);
                     }
                 }
             }
 
-            // Soft white border glow
-            using (var pen = new Pen(Color.FromArgb(50, 255, 255, 255), 1.5f))
+            // Soft white border
+            using (var pen = new Pen(Color.FromArgb(40, 255, 255, 255), 1f))
             using (var path = RoundedRect(new Rectangle(0, 0, w - 1, h - 1), radius))
                 g.DrawPath(pen, path);
         }

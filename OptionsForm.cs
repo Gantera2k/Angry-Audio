@@ -1362,7 +1362,7 @@ namespace AngryAudio
         }
 
         void BuildFooter() {
-            _footer = new BufferedPanel{Dock=DockStyle.Bottom,Height=Dpi.S(90),BackColor=BG};
+            _footer = new BufferedPanel{Dock=DockStyle.Bottom,Height=Dpi.S(50),BackColor=BG};
             _footer.Paint += (s,e) => {
                 PaintUnifiedStars(e.Graphics, _footer);
                 using(var p=new Pen(BDR)) e.Graphics.DrawLine(p,0,0,_footer.Width,0);
@@ -1402,8 +1402,8 @@ namespace AngryAudio
             bc.MouseEnter+=(s,e)=>{bc.BackColor=Color.FromArgb(55,55,55);bc.ForeColor=TXT;};
             bc.MouseLeave+=(s,e)=>{bc.BackColor=Color.FromArgb(28,28,28);bc.ForeColor=TXT2;};
             _footer.Controls.Add(bc);
-            bs.Location = new Point(ClientSize.Width - bs.Width - Dpi.S(16), Dpi.S(30));
-            bc.Location = new Point(bs.Left - bc.Width - Dpi.S(10), Dpi.S(30));
+            bs.Location = new Point(ClientSize.Width - bs.Width - Dpi.S(16), Dpi.S(10));
+            bc.Location = new Point(bs.Left - bc.Width - Dpi.S(10), Dpi.S(10));
         }
 
         void StartKeyCapture(){_capturingKey=true;_lblPttKey.Text="Press...";_lblPttKey.BackColor=ACC;_lblPttKey.ForeColor=Color.White;KeyPreview=true;KeyDown+=OnKeyCapture;}
