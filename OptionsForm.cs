@@ -981,7 +981,7 @@ namespace AngryAudio
         // Shared fonts for app rows — avoid per-row allocation
         static readonly Font _rowFont = new Font("Segoe UI", 9f);
         static readonly Font _rowVolFont = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-        static readonly Font _rowBtnFont = new Font("Segoe UI", 9f);
+        // _rowBtnFont removed — all X buttons are now owner-drawn via PaintRemoveIcon
 
         class AppRuleRow {
             public string Name;
@@ -1261,10 +1261,14 @@ namespace AngryAudio
 
                 // Remove button
                 string capName = ar.Name;
-                var btnX = new Button{Text="\u00D7",FlatStyle=FlatStyle.Flat,Size=new Size(Dpi.S(22),Dpi.S(22)),ForeColor=TXT4,BackColor=Color.Transparent,Font=_rowBtnFont,Location=new Point(btnXx,Dpi.S(11)),TabStop=false};
+                var btnX = new Button{Text="",FlatStyle=FlatStyle.Flat,Size=new Size(Dpi.S(22),Dpi.S(22)),BackColor=Color.Transparent,TabStop=false,Location=new Point(btnXx,Dpi.S(11))};
                 btnX.FlatAppearance.BorderSize=0;
-                btnX.MouseEnter+=(s,e)=>btnX.ForeColor=DarkTheme.ErrorRed;
-                btnX.MouseLeave+=(s,e)=>btnX.ForeColor=TXT4;
+                btnX.FlatAppearance.MouseOverBackColor=Color.Transparent;
+                btnX.FlatAppearance.MouseDownBackColor=Color.Transparent;
+                bool hoverX = false;
+                btnX.MouseEnter+=(s,e)=>{hoverX=true;btnX.Invalidate();};
+                btnX.MouseLeave+=(s,e)=>{hoverX=false;btnX.Invalidate();};
+                btnX.Paint+=(s,e)=>{PaintRemoveIcon(e.Graphics,btnX.ClientRectangle,hoverX);};
                 btnX.Click += (s,e) => { _appRows.RemoveAll(r=>r.Name==capName); RebuildAppList(); SyncAppRulesLive(); };
                 row.Controls.Add(btnX);
 
