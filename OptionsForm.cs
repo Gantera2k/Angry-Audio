@@ -1560,7 +1560,11 @@ namespace AngryAudio
         void EnforceToggleSelection()
         {
             if (_tglPtt.Checked || _tglPtm.Checked || _tglPtToggle.Checked) return;
-            if (_enforceTimer != null) { ShakeReject(_lblPttKey); return; }
+            if (_enforceTimer != null) {
+                // Re-trigger: user clicked something without choosing a toggle
+                if (_enforceClickHandler != null) _enforceClickHandler(null, null);
+                return;
+            }
 
             var card = _tglPtt.Parent;
             if (card == null) return;
@@ -1595,8 +1599,8 @@ namespace AngryAudio
                         c.BringToFront();
             }
 
-            // Animation: shake + 1-2-3, 1-2-3, pause, repeat
-            // Steps: 0-2 = first 1-2-3, 3-5 = second 1-2-3, 6 = clear, 7-10 = pause, 11 = shake + restart
+            // Animation: shake + 1-2-3, 1-2-3, then STOP.
+            // If user clicks anywhere without choosing a toggle, repeat.
             int step = 0;
             _enforceTimer = new Timer { Interval = 180 };
             _enforceTimer.Tick += (s, e) => {
@@ -1605,6 +1609,9 @@ namespace AngryAudio
                     _enforceTimer.Stop(); _enforceTimer.Dispose(); _enforceTimer = null;
                     foreach (var h in highlights) { try { card.Controls.Remove(h); h.Dispose(); } catch { } }
                     _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC;
+                    // Remove the click-to-re-trigger handler
+                    MouseClick -= _enforceClickHandler;
+                    _enforceClickHandler = null;
                     return;
                 }
 
@@ -1621,22 +1628,27 @@ namespace AngryAudio
                 }
                 else if (step == 6)
                 {
+                    // Clear all highlights and STOP
                     for (int i = 0; i < 3; i++) { highlights[i].BackColor = Color.Transparent; highlights[i].Invalidate(); }
-                    step++;
-                }
-                else if (step < 11)
-                {
-                    step++; // pause ticks
-                }
-                else
-                {
-                    ShakeReject(_lblPttKey);
-                    step = 0; // restart: shake + 123 123
+                    _enforceTimer.Stop();
                 }
             };
+
+            // Click handler: any click anywhere re-triggers the animation
+            _enforceClickHandler = (s, e) => {
+                if (_tglPtt.Checked || _tglPtm.Checked || _tglPtToggle.Checked) return;
+                step = 0;
+                ShakeReject(_lblPttKey);
+                if (!_enforceTimer.Enabled) _enforceTimer.Start();
+            };
+            MouseClick += _enforceClickHandler;
+            // Also catch clicks on the card itself
+            card.MouseClick += _enforceClickHandler;
+
             _enforceTimer.Start();
             ShakeReject(_lblPttKey);
         }
+        private MouseEventHandler _enforceClickHandler;
 
         /// <summary>Paint a premium circle-X remove icon with anti-aliased lines.</summary>
         void PaintRemoveIcon(Graphics g, Rectangle r, bool hover)

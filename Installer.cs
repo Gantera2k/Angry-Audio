@@ -646,10 +646,7 @@ namespace AngryAudioInstaller
 
             int w = ClientSize.Width, h = ClientSize.Height;
 
-            // Star cache — exact same approach as OptionsForm
-            _stars.Tick();
-
-            // Background stars — full brightness
+            // Background stars
             _stars.PaintBackground(g, w, h);
 
             // Shooting stars painted AFTER measuring card so they pass behind it
@@ -773,15 +770,19 @@ namespace AngryAudioInstaller
             int maxCardBottom = h - S(36);
             if (cy + ch > maxCardBottom) ch = maxCardBottom - cy;
 
-            // Draw card with frosted glass — using shared StarBackground
+            // Draw card with frosted glass — stars already painted on background,
+            // just apply glass tint + dimmed stars on top (same visual as Options)
             using (var path = RoundRectPath(new Rectangle(cx, cy, cw, ch), S(10)))
             {
-                using (var brush = new SolidBrush(BG))
-                    g.FillPath(brush, path);
+                // Glass tint directly over background stars (no opaque BG fill!)
+                using (var tint = new SolidBrush(Color.FromArgb(170, DarkTheme.CardBG.R, DarkTheme.CardBG.G, DarkTheme.CardBG.B)))
+                    g.FillPath(tint, path);
+                // Dimmed stars on top of glass
                 var oldClip = g.Clip;
                 g.SetClip(path);
-                _stars.PaintCardGlass(g, w, h, new Rectangle(cx, cy, cw, ch));
+                _stars.PaintDimStars(g, w, h);
                 g.Clip = oldClip;
+                // Border
                 using (var pen = new Pen(BDR))
                     g.DrawPath(pen, path);
             }
