@@ -92,25 +92,72 @@ namespace AngryAudio
             _pollTimer.Start();
             // Twinkle timer — slowly animates card stars (150ms = ~6.6fps, gentle and efficient)
             _twinkleTimer = new Timer { Interval = 150 };
-            int _twinkleSkip = 0;
             _twinkleTimer.Tick += (s, e) => {
-                // Throttle twinkle when maximized — cache rebuild at full screen resolution is expensive
-                bool isLarge = Width > 900 || Height > 900;
-                if (isLarge) { _twinkleSkip++; if (_twinkleSkip % 4 != 0) { InvalidateCards(); return; } }
-                _stars.Tick();
-                InvalidateCards();
+                // Freeze twinkle when form is large — GDI+ has no hardware accel,
+                // rebuilding two fullscreen bitmaps every 150ms kills performance
+                bool isLarge = (Width * Height) > 480000; // ~800×600
+                if (!isLarge) {
+                    _stars.Tick();
+                    InvalidateCards();
+                } 
+                // When large: stars stay static but shooting stars/celestial events
+                // still animate via their own timers + invalidation callbacks
             };
             _twinkleTimer.Start();
             // Shooting star animation — occasional streaks across card backgrounds
             _stars = new StarBackground(() => { InvalidateCards(); });
-            FormClosing += (s, e) => {  CleanupEnforcement(); _pollTimer?.Stop(); _pollTimer?.Dispose(); _twinkleTimer?.Stop(); _twinkleTimer?.Dispose(); _stars?.Dispose(); _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _updateShimmerTimer?.Stop(); _updateShimmerTimer?.Dispose(); _saveOrbitTimer?.Stop(); _saveOrbitTimer?.Dispose(); };
+            FormClosing += (s, e) => { StopCapturePolling(); _captureTimer?.Dispose(); CleanupEnforcement(); _pollTimer?.Stop(); _pollTimer?.Dispose(); _twinkleTimer?.Stop(); _twinkleTimer?.Dispose(); _stars?.Dispose(); _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _updateShimmerTimer?.Stop(); _updateShimmerTimer?.Dispose(); _saveOrbitTimer?.Stop(); _saveOrbitTimer?.Dispose(); };
         }
 
         private Size _defaultSize;
         private const int WM_NCLBUTTONDBLCLK = 0x00A3;
-        private const int WM_KD = 0x0100, WM_SKD = 0x0104;
+        private const int WM_KD = 0x0100;
         private Timer _hotkeyFlashTimer;
         private int _hotkeyFlashStep;
+
+        // === Key capture via GetAsyncKeyState polling ===
+        // WndProc/ProcessCmdKey/KeyDown all fail for CapsLock because WM_KEYDOWN
+        // goes to the FOCUSED CHILD CONTROL, not the Form. GetAsyncKeyState reads
+        // physical hardware state directly — same proven mechanism PushToTalk uses.
+        private Timer _captureTimer;
+        private bool[] _prevKeyState = new bool[256]; // track previous state to detect transitions
+
+        void StartCapturePolling() {
+            // Snapshot current key state so we only detect NEW presses
+            for (int i = 0; i < 256; i++)
+                _prevKeyState[i] = (GetAsyncKeyState(i) & 0x8000) != 0;
+            if (_captureTimer == null) {
+                _captureTimer = new Timer { Interval = 30 };
+                _captureTimer.Tick += CaptureTimerTick;
+            }
+            _captureTimer.Start();
+        }
+
+        void StopCapturePolling() {
+            if (_captureTimer != null) _captureTimer.Stop();
+        }
+
+        void CaptureTimerTick(object s, EventArgs e) {
+            if (!_capturingKey && !_capturingKey2 && !_capturingKey3) { StopCapturePolling(); return; }
+            // Scan for newly pressed keys (transition from up→down)
+            for (int vk = 1; vk < 256; vk++) {
+                // Skip mouse buttons — we don't want LMB/RMB/MMB captured
+                if (vk <= 0x06 && vk != 0x04 && vk != 0x05) continue; // skip 1-3,6 (mouse buttons) keep 4,5 (XButton)
+                bool down = (GetAsyncKeyState(vk) & 0x8000) != 0;
+                bool wasDown = _prevKeyState[vk];
+                _prevKeyState[vk] = down;
+                if (down && !wasDown) {
+                    // New key press detected — build KeyEventArgs and route to handler
+                    var ke = new KeyEventArgs((Keys)vk);
+                    StopCapturePolling();
+                    if (_capturingKey) OnKeyCapture(this, ke);
+                    else if (_capturingKey2) OnKeyCapture2(this, ke);
+                    else if (_capturingKey3) OnKeyCapture3(this, ke);
+                    return;
+                }
+            }
+        }
+
         protected override void WndProc(ref Message m)
         {
             // Title bar double-click: reset to default size instead of maximize
@@ -123,15 +170,6 @@ namespace AngryAudio
                 Location = new Point(
                     screen.WorkingArea.X + (screen.WorkingArea.Width - Width) / 2,
                     screen.WorkingArea.Y + (screen.WorkingArea.Height - Height) / 2);
-                return;
-            }
-            // Key capture — catches ALL keys including CapsLock/NumLock/ScrollLock
-            if ((m.Msg == WM_KD || m.Msg == WM_SKD) && (_capturingKey || _capturingKey2 || _capturingKey3)) {
-                int vk = (int)m.WParam;
-                var e = new KeyEventArgs((Keys)vk);
-                if (_capturingKey) OnKeyCapture(this, e);
-                else if (_capturingKey2) OnKeyCapture2(this, e);
-                else if (_capturingKey3) OnKeyCapture3(this, e);
                 return;
             }
             // Hotkey test — flash key labels when user presses their assigned hotkey
@@ -1182,11 +1220,11 @@ namespace AngryAudio
             _hotkeyFlashTimer.Start();
         }
 
-        void StartKeyCapture(){if(_capturingKey2||_capturingKey3)return;_capturingKey=true;_lblPttKey.Text="Press...";_lblPttKey.BackColor=ACC;_lblPttKey.ForeColor=Color.White;}
+        void StartKeyCapture(){if(_capturingKey2||_capturingKey3)return;_capturingKey=true;_lblPttKey.Text="Press...";_lblPttKey.BackColor=ACC;_lblPttKey.ForeColor=Color.White;StartCapturePolling();}
         void StartKeyCapture2(){
             if(!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked){EnforceToggleSelection();return;}
             if(_capturingKey || _capturingKey3){return;}
-            _capturingKey2=true;_lblPttKey2.Text="Press...";_lblPttKey2.BackColor=ACC;_lblPttKey2.ForeColor=Color.White;_btnAddKey2.Visible=false;_lblPttKey2.Visible=true;_lblKey2Label.Visible=true;_lblKey2Hint.Visible=true;}
+            _capturingKey2=true;_lblPttKey2.Text="Press...";_lblPttKey2.BackColor=ACC;_lblPttKey2.ForeColor=Color.White;_btnAddKey2.Visible=false;_lblPttKey2.Visible=true;_lblKey2Label.Visible=true;_lblKey2Hint.Visible=true;StartCapturePolling();}
         void OnKeyCapture2(object s,KeyEventArgs e){if(!_capturingKey2)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){if(_pttKeyCode2==0){UpdateKey2Visibility();}else{_lblPttKey2.Text=KeyName(_pttKeyCode2);}_lblPttKey2.BackColor=INPUT_BG;_lblPttKey2.ForeColor=ACC;_capturingKey2=false;return;}
             int vk=(int)e.KeyCode;
             if (vk == 0x10) vk = IsKeyDown(0xA1) ? 0xA1 : 0xA0;
@@ -1200,7 +1238,7 @@ namespace AngryAudio
         void StartKeyCapture3(){
             if(!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked){EnforceToggleSelection();return;}
             if(_capturingKey || _capturingKey2){return;}
-            _capturingKey3=true;_lblPttKey3.Text="Press...";_lblPttKey3.BackColor=ACC;_lblPttKey3.ForeColor=Color.White;_btnAddKey3.Visible=false;_lblPttKey3.Visible=true;_lblKey3Label.Visible=true;_lblKey3Hint.Visible=true;}
+            _capturingKey3=true;_lblPttKey3.Text="Press...";_lblPttKey3.BackColor=ACC;_lblPttKey3.ForeColor=Color.White;_btnAddKey3.Visible=false;_lblPttKey3.Visible=true;_lblKey3Label.Visible=true;_lblKey3Hint.Visible=true;StartCapturePolling();}
         void OnKeyCapture3(object s,KeyEventArgs e){if(!_capturingKey3)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){if(_pttKeyCode3==0){UpdateKey3Visibility();}else{_lblPttKey3.Text=KeyName(_pttKeyCode3);}_lblPttKey3.BackColor=INPUT_BG;_lblPttKey3.ForeColor=ACC;_capturingKey3=false;return;}
             int vk=(int)e.KeyCode;
             if (vk == 0x10) vk = IsKeyDown(0xA1) ? 0xA1 : 0xA0;
