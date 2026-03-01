@@ -98,6 +98,14 @@ namespace AngryAudio
                     _stars.Tick();
                     InvalidateCardsDeep(); // Full invalidation only on twinkle change
                 }
+                // Hotkey test detection — flash when user presses their assigned hotkey
+                if (!_capturingKey && !_capturingKey2 && !_capturingKey3 && _pttKeyCode > 0) {
+                    bool hotDown = (GetAsyncKeyState(_pttKeyCode) & 0x8000) != 0;
+                    if (!hotDown && _pttKeyCode2 > 0) hotDown = (GetAsyncKeyState(_pttKeyCode2) & 0x8000) != 0;
+                    if (!hotDown && _pttKeyCode3 > 0) hotDown = (GetAsyncKeyState(_pttKeyCode3) & 0x8000) != 0;
+                    if (hotDown && !_hotkeyWasDown) FlashModeToggles();
+                    _hotkeyWasDown = hotDown;
+                }
             };
             _twinkleTimer.Start();
             // Shooting star animation — occasional streaks across card backgrounds
@@ -107,9 +115,9 @@ namespace AngryAudio
 
         private Size _defaultSize;
         private const int WM_NCLBUTTONDBLCLK = 0x00A3;
-        private const int WM_KD = 0x0100;
         private Timer _hotkeyFlashTimer;
         private int _hotkeyFlashStep;
+        private bool _hotkeyWasDown;
 
         // === Key capture via GetAsyncKeyState polling ===
         // WndProc/ProcessCmdKey/KeyDown all fail for CapsLock because WM_KEYDOWN
@@ -172,12 +180,6 @@ namespace AngryAudio
                     screen.WorkingArea.X + (screen.WorkingArea.Width - Width) / 2,
                     screen.WorkingArea.Y + (screen.WorkingArea.Height - Height) / 2);
                 return;
-            }
-            // Hotkey test — flash key labels when user presses their assigned hotkey
-            if (m.Msg == WM_KD && !_capturingKey && !_capturingKey2 && !_capturingKey3) {
-                int vk = (int)m.WParam;
-                if (vk > 0 && (vk == _pttKeyCode || vk == _pttKeyCode2 || vk == _pttKeyCode3))
-                    FlashModeToggles();
             }
             base.WndProc(ref m);
         }
@@ -644,7 +646,7 @@ namespace AngryAudio
             };
             card.Controls.Add(_btnRemoveKey2);
             // Add hotkey button (shown when key2 is empty)
-            _btnAddKey2 = new Button{Text="+ Add Hotkey",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(100,26),ForeColor=ACC,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false,Location=Dpi.Pt(120,y)};
+            _btnAddKey2 = new Button{Text="+ Add Key",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(100,26),ForeColor=ACC,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false,Location=Dpi.Pt(120,y)};
             _btnAddKey2.FlatAppearance.BorderColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);
             _btnAddKey2.MouseEnter += (s,e) => { _btnAddKey2.BackColor=Color.FromArgb(ACC.R/5,ACC.G/5,ACC.B/5); _btnAddKey2.ForeColor=Color.FromArgb(Math.Min(255,ACC.R+50),Math.Min(255,ACC.G+50),Math.Min(255,ACC.B+50)); };
             _btnAddKey2.MouseLeave += (s,e) => { _btnAddKey2.BackColor=Color.FromArgb(20,20,20); _btnAddKey2.ForeColor=ACC; };
@@ -672,7 +674,7 @@ namespace AngryAudio
             _btnRemoveKey3.Paint += (s,e) => { PaintRemoveIcon(e.Graphics, _btnRemoveKey3.ClientRectangle, _hoverRm3); };
             _btnRemoveKey3.Click += (s,e) => { _pttKeyCode3 = 0; _settings.PushToTalkKey3 = 0; UpdateKey3Visibility(); };
             card.Controls.Add(_btnRemoveKey3);
-            _btnAddKey3 = new Button{Text="+ Add Hotkey",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(100,26),ForeColor=ACC,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false,Location=Dpi.Pt(120,y)};
+            _btnAddKey3 = new Button{Text="+ Add Key",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(100,26),ForeColor=ACC,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false,Location=Dpi.Pt(120,y)};
             _btnAddKey3.FlatAppearance.BorderColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);
             _btnAddKey3.MouseEnter += (s,e) => { _btnAddKey3.BackColor=Color.FromArgb(ACC.R/5,ACC.G/5,ACC.B/5); _btnAddKey3.ForeColor=Color.FromArgb(Math.Min(255,ACC.R+50),Math.Min(255,ACC.G+50),Math.Min(255,ACC.B+50)); };
             _btnAddKey3.MouseLeave += (s,e) => { _btnAddKey3.BackColor=Color.FromArgb(20,20,20); _btnAddKey3.ForeColor=ACC; };

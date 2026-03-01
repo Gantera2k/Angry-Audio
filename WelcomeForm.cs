@@ -208,9 +208,11 @@ namespace AngryAudio
                 _pulsePhase += 0.08f;
                 if (_pulsePhase > (float)(Math.PI * 2)) _pulsePhase -= (float)(Math.PI * 2);
                 footer.Invalidate();
-                // Guide star on card1 (only when relevant states)
+                // Guide star on cards (only when relevant states)
                 if (_guideState == GuideState.HOTKEY || _guideState == GuideState.TOGGLES)
                     _card1.Invalidate(false);
+                if (_guideState == GuideState.PAGE2 && _card2 != null)
+                    _card2.Invalidate(false);
             };
             _pulseTimer.Start();
 
@@ -414,6 +416,7 @@ namespace AngryAudio
                     if (_sliderRestoreMicTimer != null) { _sliderRestoreMicTimer.Stop(); _sliderRestoreMicTimer.Dispose(); _sliderRestoreMicTimer = null; }
                     try { Audio.SetMicVolume(_micSlider.Value); } catch { }
                     FlashApplied(true, "Mic locked at " + _micSlider.Value + "%.");
+                    _guideState = GuideState.FINISH; // Guide moves to Save button
                 } else {
                     FlashApplied(true, "Mic lock disabled.");
                     AnimateWizardSliderRestore(true);
@@ -524,6 +527,16 @@ namespace AngryAudio
                     g.DrawString("Volume Correction Alerts", f, b, Dpi.S(68), genY + Dpi.S(106));
                 using (var f = new Font("Segoe UI", 9f)) using (var b = new SolidBrush(TXT2))
                     g.DrawString("Device Change Alerts", f, b, Dpi.S(68), genY + Dpi.S(138));
+
+                // === Guide star on Page 2 — orbit around mic lock toggle ===
+                if (_guideState == GuideState.PAGE2 && _tglMicEnf != null) {
+                    var r = new Rectangle(Dpi.S(14), Dpi.S(10), Dpi.S(340), Dpi.S(100));
+                    int pad = Dpi.S(4);
+                    var saved = g.Save();
+                    g.TranslateTransform(r.X - pad, r.Y - pad);
+                    DarkTheme.PaintOrbitingStar(g, r.Width + pad * 2, r.Height + pad * 2, _pulsePhase, Dpi.S(8));
+                    g.Restore(saved);
+                }
             };
 
             var tip2 = MakeTipPanel();
@@ -743,6 +756,10 @@ namespace AngryAudio
 
         void ShowPage1() {
             _currentPage = 1;
+            // Restore guide state based on current progress
+            if (_pttKeyCode <= 0) _guideState = GuideState.HOTKEY;
+            else if (!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked) _guideState = GuideState.TOGGLES;
+            else _guideState = GuideState.NEXT;
             HidePage(_page2);
             ShowPageFill(_page1);
             _showPage1Extras?.Invoke();
