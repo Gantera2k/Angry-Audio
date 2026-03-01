@@ -664,42 +664,89 @@ namespace AngryAudio
         private Panel _tipHotkey, _tipFunCallout, _tipMicLock;
         private Timer _tipDismissTimer;
 
-        Panel MakeTipCard(string text, int w, int h) {
-            var tip = new BufferedPanel { Size = Dpi.Size(w, h), Visible = false, BackColor = Color.Transparent };
+        Panel MakeTipCard(string text, int w, int h, bool arrowUp = false) {
+            int arrowH = arrowUp ? Dpi.S(8) : 0;
+            var tip = new BufferedPanel { Size = Dpi.Size(w, h + (arrowUp ? 8 : 0)), Visible = false, BackColor = Color.Transparent };
+            float _fadeAlpha = 0f;
+            Timer _fadeIn = null;
             tip.Paint += (s, e) => {
                 var g = e.Graphics;
                 g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                 g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
                 int cr = Dpi.S(8);
-                var rect = new Rectangle(0, 0, tip.Width - 1, tip.Height - 1);
-                // Background: same as card glass tint
-                using (var path = DarkTheme.RoundedRect(rect, cr))
-                using (var b = new SolidBrush(DarkTheme.GlassTint))
+                int bodyTop = arrowH;
+                var bodyRect = new Rectangle(0, bodyTop, tip.Width - 1, tip.Height - bodyTop - 1);
+
+                // Glow shadow behind
+                using (var glowPath = DarkTheme.RoundedRect(new Rectangle(2, bodyTop + 2, tip.Width - 3, tip.Height - bodyTop - 3), cr))
+                using (var glowBrush = new SolidBrush(Color.FromArgb((int)(20 * _fadeAlpha), ACC.R, ACC.G, ACC.B)))
+                    g.FillPath(glowBrush, glowPath);
+
+                // Background fill — dark, slightly frosted
+                using (var path = DarkTheme.RoundedRect(bodyRect, cr))
+                using (var b = new SolidBrush(Color.FromArgb((int)(240 * _fadeAlpha), 16, 20, 28)))
                     g.FillPath(b, path);
-                // Border: accent-tinted, matching card borders
-                using (var path = DarkTheme.RoundedRect(rect, cr))
-                using (var p = new Pen(Color.FromArgb(80, ACC.R, ACC.G, ACC.B), 1f))
+
+                // Border — accent blue, subtle
+                using (var path = DarkTheme.RoundedRect(bodyRect, cr))
+                using (var p = new Pen(Color.FromArgb((int)(70 * _fadeAlpha), ACC.R, ACC.G, ACC.B), 1f))
                     g.DrawPath(p, path);
+
+                // Arrow pointing up (if enabled)
+                if (arrowUp) {
+                    int ax = tip.Width / 4; // offset left
+                    var arrowPts = new Point[] {
+                        new Point(ax, 0),
+                        new Point(ax - Dpi.S(6), arrowH),
+                        new Point(ax + Dpi.S(6), arrowH)
+                    };
+                    using (var b = new SolidBrush(Color.FromArgb((int)(240 * _fadeAlpha), 16, 20, 28)))
+                        g.FillPolygon(b, arrowPts);
+                    using (var p = new Pen(Color.FromArgb((int)(70 * _fadeAlpha), ACC.R, ACC.G, ACC.B), 1f)) {
+                        g.DrawLine(p, arrowPts[0], arrowPts[1]);
+                        g.DrawLine(p, arrowPts[0], arrowPts[2]);
+                    }
+                }
+
                 // Text
-                var textRect = new Rectangle(Dpi.S(12), Dpi.S(8), tip.Width - Dpi.S(24), tip.Height - Dpi.S(16));
-                TextRenderer.DrawText(g, text, DarkTheme.Small, textRect, Color.FromArgb(190, ACC.R, ACC.G, ACC.B),
-                    TextFormatFlags.Left | TextFormatFlags.WordBreak | TextFormatFlags.VerticalCenter);
+                var textRect = new Rectangle(Dpi.S(14), bodyTop + Dpi.S(8), tip.Width - Dpi.S(28), tip.Height - bodyTop - Dpi.S(16));
+                using (var tb = new SolidBrush(Color.FromArgb((int)(200 * _fadeAlpha), ACC.R, ACC.G, ACC.B)))
+                    g.DrawString(text, DarkTheme.Small, tb, new RectangleF(textRect.X, textRect.Y, textRect.Width, textRect.Height),
+                        new StringFormat { LineAlignment = StringAlignment.Center });
             };
-            tip.Click += (s, e) => tip.Visible = false;
+            tip.Click += (s, e) => { tip.Visible = false; if (_fadeIn != null) { _fadeIn.Stop(); _fadeIn.Dispose(); _fadeIn = null; } };
+            tip.VisibleChanged += (s, e) => {
+                if (tip.Visible) {
+                    _fadeAlpha = 0f;
+                    _fadeIn = new Timer { Interval = 30 };
+                    int fadeStep = 0;
+                    _fadeIn.Tick += (s2, e2) => {
+                        fadeStep++;
+                        _fadeAlpha = Math.Min(1f, fadeStep * 0.12f);
+                        tip.Invalidate();
+                        if (_fadeAlpha >= 1f) { _fadeIn.Stop(); _fadeIn.Dispose(); _fadeIn = null; }
+                    };
+                    _fadeIn.Start();
+                }
+            };
             return tip;
         }
 
         void CreateTips() {
-            _tipHotkey = MakeTipCard("Pick the same key you use for voice chat in Discord, Zoom, or your game.", 240, 44);
-            _tipHotkey.Location = Dpi.Pt(118, 208);
+            // Hotkey tip — positioned to the right side, beside hotkey label
+            // py+174=hotkey row. Place tip right of "Click to change" text
+            _tipHotkey = MakeTipCard("Pick the same key you use for voice chat in Discord, Zoom, or your game.", 190, 48, arrowUp: false);
+            _tipHotkey.Location = Dpi.Pt(198, 132);
             _card1.Controls.Add(_tipHotkey); _tipHotkey.BringToFront();
 
-            _tipFunCallout = MakeTipCard("Angry Audio shows when your mic is hot \u2014 so you don't rant about your boss with everyone listening.", 260, 48);
-            _tipFunCallout.Location = Dpi.Pt(68, 168);
+            // Fun callout — below separator, overlays AFK header area temporarily
+            _tipFunCallout = MakeTipCard("Angry Audio shows when your mic is hot \u2014 so you don't accidentally rant about your boss with everyone listening.", 340, 42, arrowUp: false);
+            _tipFunCallout.Location = Dpi.Pt(14, 250);
             _card1.Controls.Add(_tipFunCallout); _tipFunCallout.BringToFront();
 
-            _tipMicLock = MakeTipCard("Locks your mic at your chosen level so apps can't secretly turn it down.", 260, 40);
-            _tipMicLock.Location = Dpi.Pt(20, 74);
+            // Mic lock tip — below the slider on page 2, above the toggle
+            _tipMicLock = MakeTipCard("Locks your mic at your chosen level so apps can't secretly turn it down.", 300, 38, arrowUp: false);
+            _tipMicLock.Location = Dpi.Pt(20, 68);
         }
 
         void ShowTip(Panel tip) {

@@ -102,6 +102,7 @@ namespace AngryAudio
             // Twinkle timer — slowly animates card stars (150ms = ~6.6fps, gentle and efficient)
             _twinkleTimer = new Timer { Interval = 150 };
             _twinkleTimer.Tick += (s, e) => {
+                if (_isResizing) return;
                 bool isLarge = (Width * Height) > 1200000; // ~1100x1100 — freezes at maximize, not normal size
                 if (!isLarge) {
                     _stars.Tick();
@@ -1395,7 +1396,7 @@ namespace AngryAudio
             // Navigate to the PTT pane so user can see the toggles
             SwitchPane(0);
 
-            // Highlight panels for each toggle row
+            // Highlight panels for each toggle row — use BufferedPanel to prevent flicker
             var highlights = new Panel[3];
             var toggles = new ToggleSwitch[] { _tglPtt, _tglPtm, _tglPtToggle };
             Color flashColor = Color.FromArgb(60, ACC.R, ACC.G, ACC.B);
@@ -1404,14 +1405,17 @@ namespace AngryAudio
             for (int i = 0; i < 3; i++)
             {
                 var tgl = toggles[i];
-                highlights[i] = new Panel {
+                highlights[i] = new BufferedPanel {
                     Location = new Point(Dpi.S(4), tgl.Top - Dpi.S(4)),
                     Size = new Size(card.Width - Dpi.S(8), Dpi.S(42)),
                     BackColor = Color.Transparent
                 };
                 highlights[i].Paint += (s, e) => {
-                    using (var p = new Pen(flashBorder, 2f))
-                        e.Graphics.DrawRectangle(p, 1, 1, ((Panel)s).Width - 3, ((Panel)s).Height - 3);
+                    var hl = (Panel)s;
+                    if (hl.BackColor != Color.Transparent) {
+                        using (var p = new Pen(flashBorder, 2f))
+                            e.Graphics.DrawRectangle(p, 1, 1, hl.Width - 3, hl.Height - 3);
+                    }
                 };
                 highlights[i].Visible = false;
                 card.Controls.Add(highlights[i]);
@@ -1422,8 +1426,7 @@ namespace AngryAudio
                         c.BringToFront();
             }
 
-            // Animation: shake + 1-2-3, 1-2-3, then STOP.
-            // If user clicks anywhere without choosing a toggle, repeat.
+            // Animation: shake + 1-2-3, 1-2-3, then HIDE and stop.
             int step = 0;
             _enforceCard = card;
             _enforceHighlights = highlights;
@@ -1448,8 +1451,10 @@ namespace AngryAudio
                 }
                 else if (step == 6)
                 {
-                    for (int i = 0; i < 3; i++) { highlights[i].BackColor = Color.Transparent; highlights[i].Invalidate(); }
+                    // HIDE highlights — don't leave blue rectangles behind
+                    for (int i = 0; i < 3; i++) { highlights[i].Visible = false; }
                     _enforceTimer.Stop();
+                    step++;
                 }
             };
 
@@ -1823,6 +1828,21 @@ namespace AngryAudio
             return 0;
         }
 
+        // Suspend star animation during resize to prevent flicker
+        private bool _isResizing;
+        protected override void OnResizeBegin(EventArgs e) {
+            base.OnResizeBegin(e);
+            _isResizing = true;
+            _twinkleTimer?.Stop();
+        }
+        protected override void OnResizeEnd(EventArgs e) {
+            base.OnResizeEnd(e);
+            _isResizing = false;
+            _twinkleTimer?.Start();
+            Invalidate(true);
+        }
+
+        // WS_EX_COMPOSITED: forces all child controls to paint in a single composited pass.
         // Research: https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
         protected override CreateParams CreateParams {
             get {
