@@ -235,24 +235,25 @@ namespace AngryAudio
             _tglPtt = new ToggleSwitch { Location = Dpi.Pt(20, y + 44) };
             _tglPtt.CheckedChanged += (s2, e2) => {
                 if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(_tglPtt.Checked ? "ptt_on" : "ptt_off"); }
-                if (_tglPtt.Checked) { if (_tglPtm != null && _tglPtm.Checked) _tglPtm.Checked = false; if (_tglPtToggle != null && _tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _showTipHotkey = false; ShowTipFlag(ref _showTipFunCallout); }
+                if (_tglPtt.Checked) { if (_tglPtm != null && _tglPtm.Checked) _tglPtm.Checked = false; if (_tglPtToggle != null && _tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; if (_tipHotkey != null) _tipHotkey.Visible = false; ShowTip(_tipFunCallout); }
             };
             _tglPtt.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtt);
 
             _tglPtm = new ToggleSwitch { Location = Dpi.Pt(20, y + 86) };
             _tglPtm.CheckedChanged += (s2, e2) => {
                 if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(_tglPtm.Checked ? "ptm_on" : "ptm_off"); }
-                if (_tglPtm.Checked) { if (_tglPtt != null && _tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtToggle != null && _tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _showTipHotkey = false; ShowTipFlag(ref _showTipFunCallout); }
+                if (_tglPtm.Checked) { if (_tglPtt != null && _tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtToggle != null && _tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; if (_tipHotkey != null) _tipHotkey.Visible = false; ShowTip(_tipFunCallout); }
             };
             _tglPtm.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtm);
 
             _tglPtToggle = new ToggleSwitch { Location = Dpi.Pt(20, y + 128) };
             _tglPtToggle.CheckedChanged += (s2, e2) => {
                 if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(_tglPtToggle.Checked ? "ptt_toggle_on" : "ptt_toggle_off"); }
-                if (_tglPtToggle.Checked) { if (_tglPtt != null && _tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtm != null && _tglPtm.Checked) _tglPtm.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _showTipHotkey = false; ShowTipFlag(ref _showTipFunCallout); }
+                if (_tglPtToggle.Checked) { if (_tglPtt != null && _tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtm != null && _tglPtm.Checked) _tglPtm.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; if (_tipHotkey != null) _tipHotkey.Visible = false; ShowTip(_tipFunCallout); }
             };
             _tglPtToggle.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtToggle);
             UpdatePttTogglesEnabled(); // Disable until hotkey is set
+            CreateTips();
 
             // Hotkey row — below all 3 toggles, matching Options panel style
             _lblPttKey = new Label { Text = "Add Key", Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), ForeColor = ACC, BackColor = INPUT_BG, Size = Dpi.Size(80, 26), TextAlign = ContentAlignment.MiddleCenter, Location = Dpi.Pt(118, y + 174) };
@@ -357,18 +358,6 @@ namespace AngryAudio
                     g.DrawString("seconds", f, b, Dpi.S(266), ay + Dpi.S(103));
                 using (var f = new Font("Segoe UI", 8f)) using (var b = new SolidBrush(DarkTheme.Txt4))
                     g.DrawString("Angry Audio gradually fades your audio back when you return.", f, b, Dpi.S(20), ay + Dpi.S(132));
-
-                // === Inline tip text — same style as other card text ===
-                if (_showTipHotkey) {
-                    using (var f = new Font("Segoe UI", 7.5f, FontStyle.Italic))
-                    using (var b = new SolidBrush(Color.FromArgb(120, ACC.R, ACC.G, ACC.B)))
-                        g.DrawString("Pick the same key you use for voice chat in Discord, Zoom, or your game.", f, b, Dpi.S(20), py + Dpi.S(198));
-                }
-                if (_showTipFunCallout) {
-                    using (var f = new Font("Segoe UI", 7f, FontStyle.Italic))
-                    using (var b = new SolidBrush(Color.FromArgb(90, ACC.R, ACC.G, ACC.B)))
-                        g.DrawString("Shows when your mic is hot \u2014 so you don't rant about your boss with everyone listening.", f, b, Dpi.S(20), py + Dpi.S(198));
-                }
             };
 
             var tip1 = MakeTipPanel();
@@ -442,6 +431,8 @@ namespace AngryAudio
             _tglNotifyDev = new ToggleSwitch { Location = Dpi.Pt(20, gy + 136), Checked = true };
             _tglNotifyDev.CheckedChanged += (s2, e2) => { if (_onToggle != null) _onToggle(_tglNotifyDev.Checked ? "notify_dev_on" : "notify_dev_off"); };
             _tglNotifyDev.PaintParentBg = PaintCardBg; _card2.Controls.Add(_tglNotifyDev);
+            // Mic lock tip added to card2 after all controls
+            if (_tipMicLock != null) { _card2.Controls.Add(_tipMicLock); _tipMicLock.BringToFront(); }
 
             // ALL text painted — zero Labels, shooting star visible everywhere
             _card2.Paint += (s, e) => {
@@ -500,13 +491,6 @@ namespace AngryAudio
                     g.DrawString("Volume Correction Alerts", f, b, Dpi.S(68), genY + Dpi.S(106));
                 using (var f = new Font("Segoe UI", 9f)) using (var b = new SolidBrush(TXT2))
                     g.DrawString("Device Change Alerts", f, b, Dpi.S(68), genY + Dpi.S(138));
-
-                // === Inline tip text — same style as other card text ===
-                if (_showTipMicLock) {
-                    using (var f = new Font("Segoe UI", 7f, FontStyle.Italic))
-                    using (var b = new SolidBrush(Color.FromArgb(90, ACC.R, ACC.G, ACC.B)))
-                        g.DrawString("Locks your mic at 100% so you never have to yell because some app turned your volume down.", f, b, Dpi.S(20), py + Dpi.S(68));
-                }
             };
 
             var tip2 = MakeTipPanel();
@@ -652,7 +636,7 @@ namespace AngryAudio
                 }
             }
         }
-        void OnKeyCapture(object s, KeyEventArgs e) { if (!_capturingKey) return; if (e.KeyCode == Keys.Escape) { _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; Logger.Info("Welcome: key capture cancelled"); return; } _pttKeyCode = (int)e.KeyCode; _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; Logger.Info("Welcome: captured key vk=" + _pttKeyCode + " (" + KeyName(_pttKeyCode) + ")"); UpdatePttTogglesEnabled(); FlashToggles(); ShowTipFlag(ref _showTipHotkey); }
+        void OnKeyCapture(object s, KeyEventArgs e) { if (!_capturingKey) return; if (e.KeyCode == Keys.Escape) { _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; Logger.Info("Welcome: key capture cancelled"); return; } _pttKeyCode = (int)e.KeyCode; _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; Logger.Info("Welcome: captured key vk=" + _pttKeyCode + " (" + KeyName(_pttKeyCode) + ")"); UpdatePttTogglesEnabled(); FlashToggles(); ShowTip(_tipHotkey); }
         void UpdatePttTogglesEnabled() { bool hasKey = _pttKeyCode > 0; if (_tglPtt != null) _tglPtt.Enabled = hasKey; if (_tglPtm != null) _tglPtm.Enabled = hasKey; if (_tglPtToggle != null) _tglPtToggle.Enabled = hasKey; }
 
         // --- Toggle flicker animation (draws attention to mode selection) ---
@@ -676,17 +660,60 @@ namespace AngryAudio
             _flashTimer.Start();
         }
 
-        // --- Tip visibility flags (painted in card Paint handlers, not floating Labels) ---
-        private bool _showTipHotkey, _showTipFunCallout, _showTipMicLock;
+        // --- Tip panels — styled as mini-cards matching the app's visual language ---
+        private Panel _tipHotkey, _tipFunCallout, _tipMicLock;
         private Timer _tipDismissTimer;
-        void ShowTipFlag(ref bool flag) {
-            flag = true;
-            if (_card1 != null) _card1.Invalidate(false);
-            if (_card2 != null) _card2.Invalidate(false);
-            // Auto-dismiss after 10 seconds
+
+        Panel MakeTipCard(string text, int w, int h) {
+            var tip = new BufferedPanel { Size = Dpi.Size(w, h), Visible = false, BackColor = Color.Transparent };
+            tip.Paint += (s, e) => {
+                var g = e.Graphics;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                int cr = Dpi.S(8);
+                var rect = new Rectangle(0, 0, tip.Width - 1, tip.Height - 1);
+                // Background: same as card glass tint
+                using (var path = DarkTheme.RoundedRect(rect, cr))
+                using (var b = new SolidBrush(DarkTheme.GlassTint))
+                    g.FillPath(b, path);
+                // Border: accent-tinted, matching card borders
+                using (var path = DarkTheme.RoundedRect(rect, cr))
+                using (var p = new Pen(Color.FromArgb(80, ACC.R, ACC.G, ACC.B), 1f))
+                    g.DrawPath(p, path);
+                // Text
+                var textRect = new Rectangle(Dpi.S(12), Dpi.S(8), tip.Width - Dpi.S(24), tip.Height - Dpi.S(16));
+                TextRenderer.DrawText(g, text, DarkTheme.Small, textRect, Color.FromArgb(190, ACC.R, ACC.G, ACC.B),
+                    TextFormatFlags.Left | TextFormatFlags.WordBreak | TextFormatFlags.VerticalCenter);
+            };
+            tip.Click += (s, e) => tip.Visible = false;
+            return tip;
+        }
+
+        void CreateTips() {
+            _tipHotkey = MakeTipCard("Pick the same key you use for voice chat in Discord, Zoom, or your game.", 240, 44);
+            _tipHotkey.Location = Dpi.Pt(118, 208);
+            _card1.Controls.Add(_tipHotkey); _tipHotkey.BringToFront();
+
+            _tipFunCallout = MakeTipCard("Angry Audio shows when your mic is hot \u2014 so you don't rant about your boss with everyone listening.", 260, 48);
+            _tipFunCallout.Location = Dpi.Pt(68, 168);
+            _card1.Controls.Add(_tipFunCallout); _tipFunCallout.BringToFront();
+
+            _tipMicLock = MakeTipCard("Locks your mic at your chosen level so apps can't secretly turn it down.", 260, 40);
+            _tipMicLock.Location = Dpi.Pt(20, 74);
+        }
+
+        void ShowTip(Panel tip) {
+            if (tip == null) return;
+            tip.Visible = true;
+            // Reset auto-dismiss
             if (_tipDismissTimer != null) { _tipDismissTimer.Stop(); _tipDismissTimer.Dispose(); }
-            _tipDismissTimer = new Timer { Interval = 10000 };
-            _tipDismissTimer.Tick += (s, e) => { _showTipHotkey = false; _showTipFunCallout = false; _showTipMicLock = false; _tipDismissTimer.Stop(); if (_card1 != null) _card1.Invalidate(false); if (_card2 != null) _card2.Invalidate(false); };
+            _tipDismissTimer = new Timer { Interval = 12000 };
+            _tipDismissTimer.Tick += (s, e) => {
+                if (_tipHotkey != null) _tipHotkey.Visible = false;
+                if (_tipFunCallout != null) _tipFunCallout.Visible = false;
+                if (_tipMicLock != null) _tipMicLock.Visible = false;
+                _tipDismissTimer.Stop();
+            };
             _tipDismissTimer.Start();
         }
         string KeyName(int c) { return PushToTalk.GetKeyName(c); }
@@ -715,7 +742,7 @@ namespace AngryAudio
             HidePage(_page1);
             ShowPageFill(_page2);
             _showPage2Extras?.Invoke();
-            ShowTipFlag(ref _showTipMicLock);
+            ShowTip(_tipMicLock);
             Invalidate(true);
         }
         private bool _saved;
