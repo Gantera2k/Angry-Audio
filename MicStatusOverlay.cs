@@ -232,7 +232,7 @@ namespace AngryAudio
         void Position() {
             if (_userPositioned) return;
             var scr = Screen.PrimaryScreen;
-            Location = new Point(Math.Max(0, scr.WorkingArea.Right - Width - Dpi.S(8)), Math.Max(0, scr.WorkingArea.Top + Dpi.S(8)));
+            Location = new Point(Math.Max(0, scr.WorkingArea.Right - Width - Dpi.S(8)), Math.Max(0, scr.WorkingArea.Top + Dpi.S(48)));
         }
 
         void ApplyPillRegion() {
