@@ -215,17 +215,8 @@ namespace AngryAudioInstaller
             try { Icon = ExtractEmbeddedIcon(); } catch { }
 
             var rng = new Random(42);
-            _starX = new float[120];
-            _starY = new float[120];
-            _starA = new float[120];
-            _starPhase = new float[120];
-            for (int i = 0; i < 120; i++)
-            {
-                _starX[i] = (float)rng.NextDouble();
-                _starY[i] = (float)rng.NextDouble();
-                _starA[i] = 0.15f + (float)rng.NextDouble() * 0.5f;
-                _starPhase[i] = (float)(rng.NextDouble() * Math.PI * 2);
-            }
+            // Stars now use DarkTheme.PaintCardStars for consistency with Options/Welcome
+            _starX = new float[0]; _starY = new float[0]; _starA = new float[0]; _starPhase = new float[0];
 
             _shootingStar = new ShootingStar(() => { try { if (!IsDisposed) Invalidate(); } catch { } });
             _shootingStar.Start();
@@ -652,16 +643,8 @@ namespace AngryAudioInstaller
 
             int w = ClientSize.Width, h = ClientSize.Height;
 
-            // Stars with twinkling
-            for (int i = 0; i < _starX.Length; i++)
-            {
-                int sx = (int)(_starX[i] * w), sy = (int)(_starY[i] * h);
-                float twinkle = 0.7f + 0.3f * (float)Math.Sin(_starPhase[i] + _twinkleTick * 0.04f * (0.8f + (_starPhase[i] % 1f) * 0.4f));
-                int a = (int)(_starA[i] * twinkle * 255);
-                float sz = S(1) + _starA[i] * S(1) * twinkle;
-                using (var sb = new SolidBrush(Color.FromArgb(Math.Min(255, a), 200, 210, 230)))
-                    g.FillEllipse(sb, sx - sz * 0.5f, sy - sz * 0.5f, sz, sz);
-            }
+            // Stars — unified system matching Options/Welcome
+            DarkTheme.PaintCardStars(g, w, h, 42, 0, 1.0f);
 
             // Shooting stars
             if (_shootingStar != null)
@@ -787,11 +770,22 @@ namespace AngryAudioInstaller
             int maxCardBottom = h - S(36);
             if (cy + ch > maxCardBottom) ch = maxCardBottom - cy;
 
-            // Draw card with premium accents
+            // Draw card with frosted glass matching Options/Welcome
             using (var path = RoundRectPath(new Rectangle(cx, cy, cw, ch), S(10)))
             {
-                using (var brush = new SolidBrush(Color.FromArgb(210, CARD.R, CARD.G, CARD.B)))
+                // Base: fill with BG so stars show through
+                using (var brush = new SolidBrush(BG))
                     g.FillPath(brush, path);
+                // Stars inside card (full brightness, clipped)
+                var oldClip = g.Clip;
+                g.SetClip(path);
+                DarkTheme.PaintCardStars(g, w, h, 42, 0, 1.0f);
+                // Glass tint
+                using (var tint = new SolidBrush(Color.FromArgb(200, CARD.R, CARD.G, CARD.B)))
+                    g.FillRectangle(tint, cx, cy, cw, ch);
+                // Dimmed stars on top
+                DarkTheme.PaintCardStars(g, w, h, 42, 0, 0.25f);
+                g.Clip = oldClip;
                 using (var pen = new Pen(BDR))
                     g.DrawPath(pen, path);
             }

@@ -846,10 +846,14 @@ namespace AngryAudio
             _lblKey2Hint = new Label{Text="Click to change \u00B7 Esc cancels",Font=new Font("Segoe UI",7.5f),ForeColor=TXT4,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(216,y+5)};
             card.Controls.Add(_lblKey2Hint);
             // Remove button (small X)
-            _btnRemoveKey2 = new Button{Text="\u00D7",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(24,24),ForeColor=Color.FromArgb(140,60,60),BackColor=Color.Transparent,Font=new Font("Segoe UI",10f),TabStop=false,Location=Dpi.Pt(500,y+1)};
+            _btnRemoveKey2 = new Button{Text="",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(24,24),BackColor=Color.Transparent,TabStop=false,Location=Dpi.Pt(500,y+1)};
             _btnRemoveKey2.FlatAppearance.BorderSize=0;
-            _btnRemoveKey2.MouseEnter += (s,e) => _btnRemoveKey2.ForeColor = Color.FromArgb(220,60,60);
-            _btnRemoveKey2.MouseLeave += (s,e) => _btnRemoveKey2.ForeColor = Color.FromArgb(140,60,60);
+            _btnRemoveKey2.FlatAppearance.MouseOverBackColor=Color.Transparent;
+            _btnRemoveKey2.FlatAppearance.MouseDownBackColor=Color.Transparent;
+            bool _hoverRm2 = false;
+            _btnRemoveKey2.MouseEnter += (s,e) => { _hoverRm2=true; _btnRemoveKey2.Invalidate(); };
+            _btnRemoveKey2.MouseLeave += (s,e) => { _hoverRm2=false; _btnRemoveKey2.Invalidate(); };
+            _btnRemoveKey2.Paint += (s,e) => { PaintRemoveIcon(e.Graphics, _btnRemoveKey2.ClientRectangle, _hoverRm2); };
             _btnRemoveKey2.Click += (s,e) => {
                 if (_pttKeyCode3 > 0) {
                     // Shift key 3 down to key 2
@@ -885,10 +889,14 @@ namespace AngryAudio
             _chkKey3Overlay = MakeOverlayCheck(y, card, _key3ShowOverlay, (v) => { _key3ShowOverlay = v; _settings.PttKey3ShowOverlay = v; if(!_loading && _onToggle!=null)_onToggle("eye3"); });
             _lblKey3Hint = new Label{Text="Click to change \u00B7 Esc cancels",Font=new Font("Segoe UI",7.5f),ForeColor=TXT4,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(216,y+5)};
             card.Controls.Add(_lblKey3Hint);
-            _btnRemoveKey3 = new Button{Text="\u00D7",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(24,24),ForeColor=Color.FromArgb(140,60,60),BackColor=Color.Transparent,Font=new Font("Segoe UI",10f),TabStop=false,Location=Dpi.Pt(500,y+1)};
+            _btnRemoveKey3 = new Button{Text="",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(24,24),BackColor=Color.Transparent,TabStop=false,Location=Dpi.Pt(500,y+1)};
             _btnRemoveKey3.FlatAppearance.BorderSize=0;
-            _btnRemoveKey3.MouseEnter += (s,e) => _btnRemoveKey3.ForeColor = Color.FromArgb(220,60,60);
-            _btnRemoveKey3.MouseLeave += (s,e) => _btnRemoveKey3.ForeColor = Color.FromArgb(140,60,60);
+            _btnRemoveKey3.FlatAppearance.MouseOverBackColor=Color.Transparent;
+            _btnRemoveKey3.FlatAppearance.MouseDownBackColor=Color.Transparent;
+            bool _hoverRm3 = false;
+            _btnRemoveKey3.MouseEnter += (s,e) => { _hoverRm3=true; _btnRemoveKey3.Invalidate(); };
+            _btnRemoveKey3.MouseLeave += (s,e) => { _hoverRm3=false; _btnRemoveKey3.Invalidate(); };
+            _btnRemoveKey3.Paint += (s,e) => { PaintRemoveIcon(e.Graphics, _btnRemoveKey3.ClientRectangle, _hoverRm3); };
             _btnRemoveKey3.Click += (s,e) => { _pttKeyCode3 = 0; _settings.PushToTalkKey3 = 0; UpdateKey3Visibility(); };
             card.Controls.Add(_btnRemoveKey3);
             _btnAddKey3 = new Button{Text="+ Add Hotkey",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(100,26),ForeColor=ACC,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false,Location=Dpi.Pt(120,y)};
@@ -1420,7 +1428,9 @@ namespace AngryAudio
         }
 
         void StartKeyCapture(){_capturingKey=true;_lblPttKey.Text="Press...";_lblPttKey.BackColor=ACC;_lblPttKey.ForeColor=Color.White;KeyPreview=true;KeyDown+=OnKeyCapture;}
-        void StartKeyCapture2(){_capturingKey2=true;_lblPttKey2.Text="Press...";_lblPttKey2.BackColor=ACC;_lblPttKey2.ForeColor=Color.White;_btnAddKey2.Visible=false;_lblPttKey2.Visible=true;_lblKey2Label.Visible=true;_lblKey2Hint.Visible=true;KeyPreview=true;KeyDown+=OnKeyCapture2;}
+        void StartKeyCapture2(){
+            if(!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked){EnforceToggleSelection();return;}
+            _capturingKey2=true;_lblPttKey2.Text="Press...";_lblPttKey2.BackColor=ACC;_lblPttKey2.ForeColor=Color.White;_btnAddKey2.Visible=false;_lblPttKey2.Visible=true;_lblKey2Label.Visible=true;_lblKey2Hint.Visible=true;KeyPreview=true;KeyDown+=OnKeyCapture2;}
         void OnKeyCapture2(object s,KeyEventArgs e){if(!_capturingKey2)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){if(_pttKeyCode2==0){UpdateKey2Visibility();}else{_lblPttKey2.Text=KeyName(_pttKeyCode2);}_lblPttKey2.BackColor=INPUT_BG;_lblPttKey2.ForeColor=ACC;_capturingKey2=false;KeyPreview=false;KeyDown-=OnKeyCapture2;return;}
             int vk=(int)e.KeyCode;
             if (vk == 0x10) vk = IsKeyDown(0xA1) ? 0xA1 : 0xA0;
@@ -1432,7 +1442,9 @@ namespace AngryAudio
             if(vk==_pttKeyCode || (_pttKeyCode3>0 && vk==_pttKeyCode3)){_capturingKey2=false;KeyPreview=false;KeyDown-=OnKeyCapture2;_pttKeyCode2=0;_settings.PushToTalkKey2=0;ShakeReject(_lblPttKey2, ()=>{UpdateKey2Visibility();});return;}
             _lblPttKey2.Text=KeyName(_pttKeyCode2);_lblPttKey2.BackColor=INPUT_BG;_lblPttKey2.ForeColor=ACC;_capturingKey2=false;KeyPreview=false;KeyDown-=OnKeyCapture2;_settings.PushToTalkKey2=_pttKeyCode2;_key2ShowOverlay=true;_settings.PttKey2ShowOverlay=true;if(_chkKey2Overlay!=null)_chkKey2Overlay.Checked=true;UpdateKey2Visibility();if(_onToggle!=null)_onToggle("ptt_key2:"+_pttKeyCode2);
             EnforceToggleSelection();}
-        void StartKeyCapture3(){_capturingKey3=true;_lblPttKey3.Text="Press...";_lblPttKey3.BackColor=ACC;_lblPttKey3.ForeColor=Color.White;_btnAddKey3.Visible=false;_lblPttKey3.Visible=true;_lblKey3Label.Visible=true;_lblKey3Hint.Visible=true;KeyPreview=true;KeyDown+=OnKeyCapture3;}
+        void StartKeyCapture3(){
+            if(!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked){EnforceToggleSelection();return;}
+            _capturingKey3=true;_lblPttKey3.Text="Press...";_lblPttKey3.BackColor=ACC;_lblPttKey3.ForeColor=Color.White;_btnAddKey3.Visible=false;_lblPttKey3.Visible=true;_lblKey3Label.Visible=true;_lblKey3Hint.Visible=true;KeyPreview=true;KeyDown+=OnKeyCapture3;}
         void OnKeyCapture3(object s,KeyEventArgs e){if(!_capturingKey3)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){if(_pttKeyCode3==0){UpdateKey3Visibility();}else{_lblPttKey3.Text=KeyName(_pttKeyCode3);}_lblPttKey3.BackColor=INPUT_BG;_lblPttKey3.ForeColor=ACC;_capturingKey3=false;KeyPreview=false;KeyDown-=OnKeyCapture3;return;}
             int vk=(int)e.KeyCode;
             if (vk == 0x10) vk = IsKeyDown(0xA1) ? 0xA1 : 0xA0;
@@ -1613,6 +1625,28 @@ namespace AngryAudio
             };
             _enforceTimer.Start();
             ShakeReject(_lblPttKey);
+        }
+
+        /// <summary>Paint a premium circle-X remove icon with anti-aliased lines.</summary>
+        void PaintRemoveIcon(Graphics g, Rectangle r, bool hover)
+        {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            int cx = r.X + r.Width / 2, cy = r.Y + r.Height / 2;
+            int rad = Dpi.S(9);
+            Color circleColor = hover ? Color.FromArgb(50, 220, 60, 60) : Color.FromArgb(30, 140, 60, 60);
+            Color xColor = hover ? Color.FromArgb(230, 70, 70) : Color.FromArgb(140, 60, 60);
+            using (var b = new SolidBrush(circleColor))
+                g.FillEllipse(b, cx - rad, cy - rad, rad * 2, rad * 2);
+            using (var p = new Pen(hover ? Color.FromArgb(80, 220, 60, 60) : Color.FromArgb(40, 140, 60, 60), 1f))
+                g.DrawEllipse(p, cx - rad, cy - rad, rad * 2, rad * 2);
+            int arm = Dpi.S(4);
+            using (var p = new Pen(xColor, Dpi.S(2)))
+            {
+                p.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                p.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                g.DrawLine(p, cx - arm, cy - arm, cx + arm, cy + arm);
+                g.DrawLine(p, cx + arm, cy - arm, cx - arm, cy + arm);
+            }
         }
 
         void ScanApps(){
