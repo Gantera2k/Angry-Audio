@@ -329,9 +329,9 @@ namespace AngryAudio
         void PaintCardBg(Graphics g, Control child) {
             using (var b = new SolidBrush(BG)) g.FillRectangle(b, 0, 0, child.Width, child.Height);
             PaintUnifiedStars(g, child, 1.0f, false); // static stars only — no shooting star
-            using (var tint = new SolidBrush(Color.FromArgb(200, DarkTheme.CardBG.R, DarkTheme.CardBG.G, DarkTheme.CardBG.B)))
+            using (var tint = new SolidBrush(Color.FromArgb(170, DarkTheme.CardBG.R, DarkTheme.CardBG.G, DarkTheme.CardBG.B)))
                 g.FillRectangle(tint, 0, 0, child.Width, child.Height);
-            PaintUnifiedStars(g, child, 0.25f, false);
+            PaintUnifiedStars(g, child, 0.35f, false);
         }
 
         public WelcomeForm(Action<string> onToggle = null)
@@ -813,7 +813,7 @@ namespace AngryAudio
 
                 // 2) Frosted glass — visible grey tint for premium card look
                 var cardRect = new Rectangle(0, 0, c.Width - 1, c.Height - 1);
-                using (var tint = new SolidBrush(Color.FromArgb(200, DarkTheme.CardBG.R, DarkTheme.CardBG.G, DarkTheme.CardBG.B)))
+                using (var tint = new SolidBrush(Color.FromArgb(170, DarkTheme.CardBG.R, DarkTheme.CardBG.G, DarkTheme.CardBG.B)))
                     g.FillRectangle(tint, cardRect);
                 PaintUnifiedStars(g, c, 0.25f, false);
 

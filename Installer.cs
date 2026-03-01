@@ -488,6 +488,14 @@ namespace AngryAudioInstaller
                         }
                     }
                     catch { }
+
+                    // Reset FirstRunComplete so welcome wizard shows after fresh install
+                    try
+                    {
+                        using (var key = Registry.CurrentUser.CreateSubKey(@"Software\AngryAudio"))
+                            key.SetValue("firstRunComplete", "false");
+                    }
+                    catch { }
                     System.Threading.Thread.Sleep(200);
 
                     Report(worker, 1.0f, "Installation complete!");
@@ -775,10 +783,10 @@ namespace AngryAudioInstaller
                 g.SetClip(path);
                 DarkTheme.PaintCardStars(g, w, h, 42, 0, 1.0f);
                 // Glass tint
-                using (var tint = new SolidBrush(Color.FromArgb(200, CARD.R, CARD.G, CARD.B)))
+                using (var tint = new SolidBrush(Color.FromArgb(170, CARD.R, CARD.G, CARD.B)))
                     g.FillRectangle(tint, cx, cy, cw, ch);
                 // Dimmed stars on top
-                DarkTheme.PaintCardStars(g, w, h, 42, 0, 0.25f);
+                DarkTheme.PaintCardStars(g, w, h, 42, 0, 0.35f);
                 g.Clip = oldClip;
                 using (var pen = new Pen(BDR))
                     g.DrawPath(pen, path);
