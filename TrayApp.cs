@@ -873,7 +873,7 @@ namespace AngryAudio
                         {
                             overlay.FadeOutAndClose();
                             // ExitThread after a delay to let fade complete
-                            var exitTimer = new System.Threading.Timer(_ => { try { Application.ExitThread(); } catch { } }, null, 500, System.Threading.Timeout.Infinite);
+                            _ = new System.Threading.Timer(_ => { try { Application.ExitThread(); } catch { } }, null, 500, System.Threading.Timeout.Infinite);
                         }
                         catch { }
                         Logger.Info("FadeOverlay disposed.");

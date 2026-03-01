@@ -253,6 +253,7 @@ namespace AngryAudio
             };
             _tglPtToggle.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtToggle);
             UpdatePttTogglesEnabled(); // Disable until hotkey is set
+            CreateTips(); // Tip bubbles for guided experience
 
             // Hotkey row — below all 3 toggles, matching Options panel style
             _lblPttKey = new Label { Text = "Add Key", Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), ForeColor = ACC, BackColor = INPUT_BG, Size = Dpi.Size(80, 26), TextAlign = ContentAlignment.MiddleCenter, Location = Dpi.Pt(118, y + 174) };
@@ -632,8 +633,58 @@ namespace AngryAudio
                 }
             }
         }
-        void OnKeyCapture(object s, KeyEventArgs e) { if (!_capturingKey) return; if (e.KeyCode == Keys.Escape) { _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; return; } _pttKeyCode = (int)e.KeyCode; _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; UpdatePttTogglesEnabled(); }
+        void OnKeyCapture(object s, KeyEventArgs e) { if (!_capturingKey) return; if (e.KeyCode == Keys.Escape) { _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; return; } _pttKeyCode = (int)e.KeyCode; _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; UpdatePttTogglesEnabled(); FlashToggles(); ShowTip(_tipHotkey); }
         void UpdatePttTogglesEnabled() { bool hasKey = _pttKeyCode > 0; if (_tglPtt != null) _tglPtt.Enabled = hasKey; if (_tglPtm != null) _tglPtm.Enabled = hasKey; if (_tglPtToggle != null) _tglPtToggle.Enabled = hasKey; }
+
+        // --- Toggle flicker animation (draws attention to mode selection) ---
+        private Timer _flashTimer;
+        private int _flashStep;
+        void FlashToggles() {
+            if (_flashTimer != null && _flashTimer.Enabled) return;
+            _flashStep = 0;
+            if (_flashTimer == null) {
+                _flashTimer = new Timer { Interval = 120 };
+                _flashTimer.Tick += (s2, e2) => {
+                    _flashStep++;
+                    var on = Color.FromArgb(74, 158, 204);
+                    var off = Color.FromArgb(60, 60, 60);
+                    if (_flashStep == 1) { if (_tglPtt != null) _tglPtt.BackColor = on; }
+                    else if (_flashStep == 2) { if (_tglPtt != null) _tglPtt.BackColor = off; if (_tglPtm != null) _tglPtm.BackColor = on; }
+                    else if (_flashStep == 3) { if (_tglPtm != null) _tglPtm.BackColor = off; if (_tglPtToggle != null) _tglPtToggle.BackColor = on; }
+                    else { if (_tglPtToggle != null) _tglPtToggle.BackColor = off; _flashTimer.Stop(); }
+                };
+            }
+            _flashTimer.Start();
+        }
+
+        // --- Tip bubbles ---
+        private Label _tipHotkey, _tipMicLock;
+        void CreateTips() {
+            _tipHotkey = MakeTip("Pick the same key you use for voice chat\nin Discord, Zoom, or your game!");
+            _tipHotkey.Location = Dpi.Pt(210, 174);
+            _tipHotkey.Visible = false;
+            _card1.Controls.Add(_tipHotkey);
+            _tipHotkey.BringToFront();
+        }
+        Label MakeTip(string text) {
+            var lbl = new Label {
+                Text = text, AutoSize = false, Size = Dpi.Size(200, 48),
+                Font = new Font("Segoe UI", 8.5f), ForeColor = Color.FromArgb(220, 220, 220),
+                BackColor = Color.FromArgb(40, 44, 52), TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(Dpi.S(8), Dpi.S(4), Dpi.S(8), Dpi.S(4))
+            };
+            lbl.Paint += (s, e) => {
+                using (var p = new Pen(Color.FromArgb(74, 158, 204), Dpi.S(1)))
+                    e.Graphics.DrawRectangle(p, 0, 0, lbl.Width - 1, lbl.Height - 1);
+            };
+            lbl.Click += (s, e) => lbl.Visible = false;
+            // Auto-dismiss after 8 seconds
+            var dismiss = new Timer { Interval = 8000 };
+            dismiss.Tick += (s, e) => { lbl.Visible = false; dismiss.Stop(); dismiss.Dispose(); };
+            lbl.VisibleChanged += (s, e) => { if (lbl.Visible) dismiss.Start(); else try { dismiss.Stop(); } catch {} };
+            return lbl;
+        }
+        void ShowTip(Label tip) { if (tip != null) tip.Visible = true; }
         string KeyName(int c) { return PushToTalk.GetKeyName(c); }
 
         void HidePage(Panel p) {

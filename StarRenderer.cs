@@ -1582,7 +1582,6 @@ namespace AngryAudio
         {
             int a = (int)(fade * 180);
             int cars = (int)ev.Param1;
-            float facing = ev.DirX > 0 ? 1 : -1;
             for (int c = 0; c < cars; c++) {
                 float delay = c * 0.06f;
                 float ct = t - delay;
