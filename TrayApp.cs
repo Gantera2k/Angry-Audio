@@ -569,11 +569,16 @@ namespace AngryAudio
                     Logger.Info("Mic enforced: " + (int)currentVol + "% → " + (int)targetVol + "%");
                 }
 
-                // Also ensure not muted (unless AFK or PTT is holding mic muted)
-                if (_micAfkState == AfkState.Active && !pttMuting && Audio.GetMicMute())
+                // Always clear mute flag when enforcing (unless AFK/PTT is intentionally muting)
+                // Bug fix: GetMicMute() checks mute AND volume, so after SetMicVolume(100%)
+                // it returns false even when the mute FLAG is still set. Use IsMicMuteFlagSet() instead.
+                if (!pttMuting && Audio.IsMicMuteFlagSet())
                 {
-                    Audio.SetMicMute(false);
-                    Logger.Info("Mic was muted by another app. Unmuted.");
+                    if (_micAfkState != AfkState.AfkMuted && _micAfkState != AfkState.FadingOut)
+                    {
+                        Audio.SetMicMute(false);
+                        Logger.Info("Mic mute flag was set by another app. Cleared.");
+                    }
                 }
             }
             catch (Exception ex) { Logger.Error("EnforceMic failed.", ex); }
@@ -601,10 +606,14 @@ namespace AngryAudio
                     Logger.Info("Speaker enforced: " + (int)currentVol + "% → " + (int)targetVol + "%");
                 }
 
-                if (_speakerAfkState == AfkState.Active && Audio.GetSpeakerMute())
+                // Clear mute flag when enforcing (unless AFK is intentionally muting)
+                if (Audio.GetSpeakerMute())
                 {
-                    Audio.SetSpeakerMute(false);
-                    Logger.Info("Speakers were muted by another app. Unmuted.");
+                    if (_speakerAfkState != AfkState.AfkMuted && _speakerAfkState != AfkState.FadingOut)
+                    {
+                        Audio.SetSpeakerMute(false);
+                        Logger.Info("Speaker mute flag was set by another app. Cleared.");
+                    }
                 }
             }
             catch (Exception ex) { Logger.Error("EnforceSpeaker failed.", ex); }

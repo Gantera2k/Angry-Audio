@@ -736,6 +736,38 @@ namespace AngryAudio
         }
 
         /// <summary>
+        /// Returns true if the default mic's mute FLAG is set, regardless of volume level.
+        /// Use this for enforcement — we need to know if the flag is set even if volume is non-zero.
+        /// GetMicMute() checks both mute AND volume, which causes false negatives after SetMicVolume.
+        /// </summary>
+        public static bool IsMicMuteFlagSet()
+        {
+            IMMDeviceEnumerator enumerator = null;
+            IMMDevice device = null;
+            IAudioEndpointVolume vol = null;
+            try
+            {
+                enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorClass();
+                int hr = enumerator.GetDefaultAudioEndpoint(EDataFlow.eCapture, ERole.eCommunications, out device);
+                if (hr != 0 || device == null) return false;
+                object iface;
+                hr = device.Activate(IID_IAudioEndpointVolume, 1, IntPtr.Zero, out iface);
+                if (hr != 0 || iface == null) return false;
+                vol = (IAudioEndpointVolume)iface;
+                bool muted;
+                vol.GetMute(out muted);
+                return muted;
+            }
+            catch { return false; }
+            finally
+            {
+                if (vol != null && Marshal.IsComObject(vol)) Marshal.ReleaseComObject(vol);
+                if (device != null && Marshal.IsComObject(device)) Marshal.ReleaseComObject(device);
+                if (enumerator != null && Marshal.IsComObject(enumerator)) Marshal.ReleaseComObject(enumerator);
+            }
+        }
+
+        /// <summary>
         /// Returns true only if ALL active capture devices are muted AND at zero volume.
         /// If any mic is unmuted or has volume, returns false.
         /// </summary>
