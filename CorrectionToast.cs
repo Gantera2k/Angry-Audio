@@ -24,6 +24,7 @@ namespace AngryAudio
         }
 
         private string _message;
+        private string _title, _body;
         private Timer _fadeInTimer, _holdTimer, _fadeOutTimer, _tickTimer;
         private bool _micEnf, _spkEnf;
         private Rectangle _micBtnRect, _spkBtnRect;
@@ -37,7 +38,7 @@ namespace AngryAudio
         static readonly Color ACC = DarkTheme.Accent;
         static readonly Color AMBER = DarkTheme.Amber;
         static readonly Color TXT = Color.FromArgb(230, 230, 230);
-        static readonly Color TXT2 = Color.FromArgb(100, 100, 100);
+        static readonly Color TXT2 = Color.FromArgb(130, 130, 130);
         static readonly Color BTN_BG = Color.FromArgb(34, 34, 34);
         static readonly Color BTN_HOVER = Color.FromArgb(48, 48, 48);
         static readonly Color BTN_BDR = Color.FromArgb(60, 60, 60);
@@ -46,20 +47,39 @@ namespace AngryAudio
         {
             _message = message; _micEnf = micEnf; _spkEnf = spkEnf;
             _createdAt = DateTime.UtcNow;
+
+            // Split on em-dash for title/subtitle layout
+            int dashIdx = message.IndexOf('\u2014');
+            if (dashIdx > 0) {
+                _title = message.Substring(0, dashIdx).Trim();
+                _body = message.Substring(dashIdx + 1).Trim();
+            } else {
+                _title = message;
+                _body = null;
+            }
+
             FormBorderStyle = FormBorderStyle.None; ShowInTaskbar = false; TopMost = true;
             StartPosition = FormStartPosition.Manual; BackColor = BG;
             DoubleBuffered = true; AutoScaleMode = AutoScaleMode.None;
 
             bool hasButtons = _micEnf || _spkEnf;
-            int baseH = hasButtons ? 100 : 70;
-            if (!hasButtons)
+            int baseH = hasButtons ? 106 : (_body != null ? 80 : 70);
+            // Auto-size for long text
+            using (var tmp = Graphics.FromHwnd(IntPtr.Zero))
             {
-                using (var f = new Font("Segoe UI", 9f, FontStyle.Bold))
-                using (var tmp = Graphics.FromHwnd(IntPtr.Zero))
+                int textW = Dpi.S(300) - Dpi.S(10) - Dpi.S(32) - Dpi.S(8) - Dpi.S(10);
+                using (var fTitle = new Font("Segoe UI", 9f, FontStyle.Bold))
                 {
-                    int textW = Dpi.S(300) - Dpi.S(10) - Dpi.S(32) - Dpi.S(8) - Dpi.S(10);
-                    var sz = tmp.MeasureString(_message, f, textW);
-                    if (sz.Height > Dpi.S(20)) baseH = 88; // needs two lines
+                    var tsz = tmp.MeasureString(_title, fTitle, textW);
+                    if (tsz.Height > Dpi.S(18)) baseH = Math.Max(baseH, hasButtons ? 118 : (_body != null ? 92 : 88));
+                }
+                if (_body != null)
+                {
+                    using (var fBody = new Font("Segoe UI", 7.5f))
+                    {
+                        var bsz = tmp.MeasureString(_body, fBody, textW);
+                        if (bsz.Height > Dpi.S(18)) baseH = Math.Max(baseH, hasButtons ? 118 : 92);
+                    }
                 }
             }
             ClientSize = Dpi.Size(300, baseH); Opacity = 0;
@@ -135,7 +155,7 @@ namespace AngryAudio
 
             var rr = DarkTheme.RoundedRect(new Rectangle(0, 0, w - 1, h - 1), Dpi.S(10));
             using (var b = new SolidBrush(BG)) g.FillPath(b, rr);
-            DarkTheme.PaintStars(g, w, h, 77);
+            DarkTheme.PaintStars(g, w, h, 88);
             using (var p = new Pen(BDR)) g.DrawPath(p, rr);
             rr.Dispose();
 
@@ -143,7 +163,7 @@ namespace AngryAudio
 
             using (var b = new SolidBrush(accentColor))
                 g.FillRectangle(b, 0, Dpi.S(6), Dpi.S(3), h - Dpi.S(12));
-            using (var p = new Pen(Color.FromArgb(30, accentColor.R, accentColor.G, accentColor.B)))
+            using (var p = new Pen(Color.FromArgb(20, accentColor.R, accentColor.G, accentColor.B)))
                 g.DrawLine(p, Dpi.S(10), 0, w - Dpi.S(10), 0);
 
             int mascotSz = Dpi.S(32);
@@ -151,17 +171,30 @@ namespace AngryAudio
             Mascot.DrawMascot(g, mascotX, Dpi.S(8), mascotSz);
 
             int textX = mascotX + mascotSz + Dpi.S(8);
+
+            // Title line — bold, bright
             using (var f = new Font("Segoe UI", 9f, FontStyle.Bold))
             using (var b = new SolidBrush(TXT))
             {
-                var rect = new RectangleF(textX, Dpi.S(8), w - textX - Dpi.S(10), Dpi.S(44));
-                g.DrawString(_message, f, b, rect);
+                var rect = new RectangleF(textX, Dpi.S(8), w - textX - Dpi.S(10), Dpi.S(24));
+                g.DrawString(_title, f, b, rect, new StringFormat { Trimming = StringTrimming.EllipsisCharacter });
+            }
+
+            // Subtitle line — smaller, grey (if present)
+            if (_body != null)
+            {
+                using (var f = new Font("Segoe UI", 7.5f))
+                using (var b = new SolidBrush(TXT2))
+                {
+                    var rect = new RectangleF(textX, Dpi.S(28), w - textX - Dpi.S(10), Dpi.S(34));
+                    g.DrawString(_body, f, b, rect);
+                }
             }
 
             if (_micEnf || _spkEnf)
             {
                 int btnMargin = Dpi.S(10);
-                int btnY = Dpi.S(48);
+                int btnY = _body != null ? Dpi.S(52) : Dpi.S(48);
                 int btnH = Dpi.S(22);
                 int btnAreaW = w - btnMargin * 2;
                 int gap = Dpi.S(6);

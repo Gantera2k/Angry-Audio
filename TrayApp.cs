@@ -563,7 +563,7 @@ namespace AngryAudio
 
                     if (!isStartup && _settings.NotifyOnCorrection && CanNotify(ref _lastMicCorrectionNotify))
                     {
-                        ShowCorrectionToast("Mic Volume Locked at " + (int)targetVol + "%");
+                        ShowCorrectionToast("Mic Volume Locked at " + (int)targetVol + "%" + " \u2014 Another app tried to change it");
                     }
 
                     Logger.Info("Mic enforced: " + (int)currentVol + "% → " + (int)targetVol + "%");
@@ -595,7 +595,7 @@ namespace AngryAudio
 
                     if (!isStartup && _settings.NotifyOnCorrection && CanNotify(ref _lastSpeakerCorrectionNotify))
                     {
-                        ShowCorrectionToast("Speaker Volume Locked at " + (int)targetVol + "%");
+                        ShowCorrectionToast("Speaker Volume Locked at " + (int)targetVol + "%" + " \u2014 Another app tried to change it");
                     }
 
                     Logger.Info("Speaker enforced: " + (int)currentVol + "% → " + (int)targetVol + "%");
@@ -1393,7 +1393,7 @@ namespace AngryAudio
                         _settings.MicEnforceEnabled = true;
                         EnforceMic(false);
                         DismissMicWarning();
-                        ShowCorrectionToast("Mic Volume Locked at " + _settings.MicVolumePercent + "%", true);
+                        ShowCorrectionToast("Mic Volume Locked at " + _settings.MicVolumePercent + "%" + " \u2014 Volume enforcement is active", true);
                         Logger.Info("Mic lock ON (snapshot: " + _micPreLockVol + "%)");
                         break;
                     case "mic_lock_off":
@@ -1409,7 +1409,7 @@ namespace AngryAudio
                         if (_restoreSpkTimer != null) { _restoreSpkTimer.Dispose(); _restoreSpkTimer = null; }
                         _settings.SpeakerEnforceEnabled = true;
                         EnforceSpeaker(false);
-                        ShowCorrectionToast("Speaker Volume Locked at " + _settings.SpeakerVolumePercent + "%", true);
+                        ShowCorrectionToast("Speaker Volume Locked at " + _settings.SpeakerVolumePercent + "%" + " \u2014 Volume enforcement is active", true);
                         Logger.Info("Speaker lock ON (snapshot: " + _spkPreLockVol + "%)");
                         break;
                     case "spk_lock_off":
