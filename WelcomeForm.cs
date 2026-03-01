@@ -783,26 +783,36 @@ namespace AngryAudio
         }
 
         Panel MakeRoundCard() {
-            var c = new BufferedPanel { BackColor = BG, Padding = Dpi.Pad(0, 0, 0, 0) };
+            var c = new BufferedPanel { BackColor = Color.Transparent, Padding = Dpi.Pad(0, 0, 0, 0) };
             c.Paint += (s, e) => {
                 var g = e.Graphics;
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
                 int rad = Dpi.S(6);
 
-                // 1) Full unified starfield WITH shooting star — seamless across entire form
+                // 1) Full unified starfield — seamless across form
                 PaintUnifiedStars(g, c);
 
-                // 2) Frosted glass — visible grey tint for premium card look
+                // 2) Frosted glass — tint + dim stars (same pattern as Options MakeCard)
                 var cardRect = new Rectangle(0, 0, c.Width - 1, c.Height - 1);
+                var clipPath = new GraphicsPath();
+                int d = rad * 2;
+                clipPath.AddArc(0, 0, d, d, 180, 90);
+                clipPath.AddArc(cardRect.Right - d, 0, d, d, 270, 90);
+                clipPath.AddArc(cardRect.Right - d, cardRect.Bottom - d, d, d, 0, 90);
+                clipPath.AddArc(0, cardRect.Bottom - d, d, d, 90, 90);
+                clipPath.CloseFigure();
                 using (var tint = new SolidBrush(DarkTheme.GlassTint))
-                    g.FillRectangle(tint, cardRect);
+                    g.FillPath(tint, clipPath);
+                var oldClip = g.Clip;
+                g.SetClip(clipPath, CombineMode.Replace);
                 PaintUnifiedStars(g, c, 0.35f, false);
+                g.Clip = oldClip;
+                clipPath.Dispose();
 
                 // 3) Card border
                 using (var pen = new Pen(CARD_BDR)) {
-                    var rr = new System.Drawing.Drawing2D.GraphicsPath();
-                    int d = rad * 2;
+                    var rr = new GraphicsPath();
                     rr.AddArc(0, 0, d, d, 180, 90);
                     rr.AddArc(cardRect.Right - d, 0, d, d, 270, 90);
                     rr.AddArc(cardRect.Right - d, cardRect.Bottom - d, d, d, 0, 90);
