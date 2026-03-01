@@ -1363,40 +1363,60 @@ namespace AngryAudio
 
         void BuildFooter() {
             _footer = new BufferedPanel{Dock=DockStyle.Bottom,Height=Dpi.S(50),BackColor=BG};
+            Rectangle _optSaveRect = Rectangle.Empty, _optCancelRect = Rectangle.Empty;
+            bool _optSaveHover = false, _optCancelHover = false;
             _footer.Paint += (s,e) => {
-                PaintUnifiedStars(e.Graphics, _footer);
-                using(var p=new Pen(BDR)) e.Graphics.DrawLine(p,0,0,_footer.Width,0);
+                var g = e.Graphics;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                PaintUnifiedStars(g, _footer);
+                using(var p=new Pen(BDR)) g.DrawLine(p,0,0,_footer.Width,0);
+                int cr = Dpi.S(6);
+                // Save button
+                _optSaveRect = new Rectangle(_footer.Width - Dpi.S(96), Dpi.S(10), Dpi.S(80), Dpi.S(30));
+                float pulse = (float)((Math.Sin(_saveOrbitPhase * 0.8) + 1.0) / 2.0);
+                int pr = (int)(20 + (180 - 20) * pulse), pg = (int)(50 + (240 - 50) * pulse), pb = (int)(80 + (255 - 80) * pulse);
+                Color sbg = _optSaveHover ? Color.FromArgb(140, 220, 255) : Color.FromArgb(pr, pg, pb);
+                using (var path = DarkTheme.RoundedRect(_optSaveRect, cr))
+                using (var b = new SolidBrush(sbg)) g.FillPath(b, path);
+                TextRenderer.DrawText(g, "Save", new Font("Segoe UI", 9.5f, FontStyle.Bold), _optSaveRect, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                var saved = g.Save();
+                g.TranslateTransform(_optSaveRect.X, _optSaveRect.Y);
+                DarkTheme.PaintOrbitingStar(g, _optSaveRect.Width, _optSaveRect.Height, _saveOrbitPhase, cr);
+                g.Restore(saved);
+                // Cancel button
+                _optCancelRect = new Rectangle(_optSaveRect.Left - Dpi.S(90), Dpi.S(10), Dpi.S(80), Dpi.S(30));
+                Color cbg = _optCancelHover ? Color.FromArgb(45, 45, 45) : Color.FromArgb(28, 28, 28);
+                using (var path = DarkTheme.RoundedRect(_optCancelRect, cr))
+                using (var b = new SolidBrush(cbg)) g.FillPath(b, path);
+                using (var path = DarkTheme.RoundedRect(_optCancelRect, cr))
+                using (var p = new Pen(Color.FromArgb(50, 50, 50))) g.DrawPath(p, path);
+                TextRenderer.DrawText(g, "Cancel", new Font("Segoe UI", 9.5f), _optCancelRect, Color.FromArgb(170, 170, 170), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            };
+            _footer.MouseMove += (s, e) => {
+                bool sh = _optSaveRect.Contains(e.Location);
+                bool ch = _optCancelRect.Contains(e.Location);
+                if (sh != _optSaveHover || ch != _optCancelHover) {
+                    _optSaveHover = sh; _optCancelHover = ch;
+                    _footer.Cursor = (sh || ch) ? Cursors.Hand : Cursors.Default;
+                    _footer.Invalidate();
+                }
+            };
+            _footer.MouseLeave += (s, e) => { _optSaveHover = _optCancelHover = false; _footer.Cursor = Cursors.Default; _footer.Invalidate(); };
+            _footer.MouseClick += (s, e) => {
+                if (_optSaveRect.Contains(e.Location)) DoSave();
+                else if (_optCancelRect.Contains(e.Location)) Close();
             };
             Controls.Add(_footer);
-            var bs = new Button{Text="Save",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(80,30),ForeColor=Color.White,BackColor=ACC,Font=new Font("Segoe UI",9.5f,FontStyle.Bold),Anchor=AnchorStyles.Top|AnchorStyles.Right,TabStop=false};
-            _saveBtn = bs;
-            bs.FlatAppearance.BorderSize=0; bs.Click+=(s,e)=>DoSave();
-            bs.MouseEnter+=(s,e)=>bs.BackColor=Color.FromArgb(140,220,255);
-            bs.MouseLeave+=(s,e)=>bs.BackColor=ACC;
-            bs.Paint += (s, e) => { DarkTheme.PaintOrbitingStar(e.Graphics, bs.Width, bs.Height, _saveOrbitPhase, Dpi.S(6)); };
-            _footer.Controls.Add(bs);
 
             _saveOrbitPhase = 0f;
             _saveOrbitTimer = new Timer { Interval = 30 };
             _saveOrbitTimer.Tick += (s, e) => {
                 _saveOrbitPhase += 0.08f;
                 if (_saveOrbitPhase > (float)(Math.PI * 2)) _saveOrbitPhase -= (float)(Math.PI * 2);
-                float pulse = (float)((Math.Sin(_saveOrbitPhase * 0.8) + 1.0) / 2.0);
-                int r = (int)(20 + (180 - 20) * pulse);
-                int gb = (int)(50 + (240 - 50) * pulse);
-                int bl = (int)(80 + (255 - 80) * pulse);
-                if (!bs.ClientRectangle.Contains(bs.PointToClient(Cursor.Position)))
-                    bs.BackColor = Color.FromArgb(r, gb, bl);
-                bs.Invalidate();
+                _footer.Invalidate();
             };
             _saveOrbitTimer.Start();
-            var bc = new Button{Text="Cancel",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(80,30),ForeColor=TXT2,BackColor=Color.FromArgb(28,28,28),Anchor=AnchorStyles.Top|AnchorStyles.Right,TabStop=false};
-            bc.FlatAppearance.BorderColor=INPUT_BDR; bc.Click+=(s,e)=>{DialogResult=DialogResult.Cancel;Close();};
-            bc.MouseEnter+=(s,e)=>{bc.BackColor=Color.FromArgb(55,55,55);bc.ForeColor=TXT;};
-            bc.MouseLeave+=(s,e)=>{bc.BackColor=Color.FromArgb(28,28,28);bc.ForeColor=TXT2;};
-            _footer.Controls.Add(bc);
-            bs.Location = new Point(ClientSize.Width - bs.Width - Dpi.S(16), Dpi.S(10));
-            bc.Location = new Point(bs.Left - bc.Width - Dpi.S(10), Dpi.S(10));
         }
 
         void StartKeyCapture(){_capturingKey=true;_lblPttKey.Text="Press...";_lblPttKey.BackColor=ACC;_lblPttKey.ForeColor=Color.White;KeyPreview=true;KeyDown+=OnKeyCapture;}
@@ -1675,7 +1695,7 @@ namespace AngryAudio
         private Timer _updateShimmerTimer;
         private Timer _saveOrbitTimer;
         private float _saveOrbitPhase;
-        private Button _saveBtn;
+        // Footer buttons are owner-drawn (no child controls)
         private float _updateShimmerX;
         private Button _updateBtn;
         private bool _updateShimmering;

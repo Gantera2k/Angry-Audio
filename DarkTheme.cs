@@ -2836,17 +2836,14 @@ namespace AngryAudio
                 using(var b=new SolidBrush(Color.FromArgb(pa,160,140,200))) g.FillEllipse(b,px-1,py-1,2,2);}
         }
 
-        /// <summary>Paints a shooting star orbiting inside a button's perimeter.
-        /// Designed to stay within bounds — no clipping. Rainbow trail, white head.</summary>
+        /// <summary>Paints a shooting star orbiting a button's rounded-rect perimeter.
+        /// Meant to be painted on the PARENT surface so glow extends freely.</summary>
         public static void PaintOrbitingStar(Graphics g, int w, int h, float phase, int cornerRadius)
         {
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            // Inset 2px so nothing touches the edge
-            int inset = 2;
-            int iw = w - inset * 2, ih = h - inset * 2;
-            int radius = Math.Max(1, cornerRadius - inset);
-            float straightW = iw - 1 - 2 * radius;
-            float straightH = ih - 1 - 2 * radius;
+            int radius = cornerRadius;
+            float straightW = w - 1 - 2 * radius;
+            float straightH = h - 1 - 2 * radius;
             float cornerArc = (float)(Math.PI * radius / 2.0);
             float perimeter = 2 * straightW + 2 * straightH + 4 * cornerArc;
 
@@ -2859,25 +2856,23 @@ namespace AngryAudio
             {
                 float tt = t - i * trailSpacing;
                 if (tt < 0) tt += 1.0f;
-                PointF pt = OrbitPoint(tt, iw, ih, radius, straightW, straightH, cornerArc, perimeter);
-                // Offset by inset
-                pt = new PointF(pt.X + inset, pt.Y + inset);
+                PointF pt = OrbitPoint(tt, w, h, radius, straightW, straightH, cornerArc, perimeter);
 
                 if (i == 0)
                 {
-                    // Star head — white, contained glow
-                    for (int glow = 3; glow >= 0; glow--)
+                    // Star head — brilliant white with visible glow
+                    for (int glow = 5; glow >= 0; glow--)
                     {
-                        float sz = 4 + glow * 3;
-                        int alpha = glow == 0 ? 255 : glow == 1 ? 200 : Math.Max(20, (int)(140.0 / (glow + 1)));
+                        float sz = 6 + glow * 4;
+                        int alpha = glow == 0 ? 255 : glow == 1 ? 210 : Math.Max(12, (int)(160.0 / (glow + 1)));
                         using (var brush = new SolidBrush(Color.FromArgb(alpha, 255, 255, 255)))
                             g.FillEllipse(brush, pt.X - sz / 2, pt.Y - sz / 2, sz, sz);
                     }
 
-                    // Cross sparkle — short arms that stay in bounds
+                    // Cross sparkle — visible arms
                     int sparkAlpha = (int)(230 + 25 * Math.Sin(phase * 4));
-                    float armLen = 6 + 2 * (float)Math.Sin(phase * 3);
-                    using (var pen = new Pen(Color.FromArgb(sparkAlpha, 255, 255, 255), 1.5f))
+                    float armLen = 12 + 4 * (float)Math.Sin(phase * 3);
+                    using (var pen = new Pen(Color.FromArgb(sparkAlpha, 255, 255, 255), 2f))
                     {
                         g.DrawLine(pen, pt.X - armLen, pt.Y, pt.X + armLen, pt.Y);
                         g.DrawLine(pen, pt.X, pt.Y - armLen, pt.X, pt.Y + armLen);
@@ -2892,26 +2887,44 @@ namespace AngryAudio
                 else
                 {
                     float fade = 1.0f - (float)i / trailCount;
-                    float sz = 5f * fade;
+                    float sz = 6f * fade;
                     int alpha = (int)(230 * fade * fade);
                     if (alpha < 5) continue;
 
-                    // Rainbow trail
+                    // Rainbow trail via HSV rotation
                     float hue = ((float)i / trailCount * 360 + phase * 60) % 360;
                     Color rainbow = HsvToColor(hue, 0.85f, 1.0f, alpha);
                     using (var brush = new SolidBrush(rainbow))
                         g.FillEllipse(brush, pt.X - sz / 2, pt.Y - sz / 2, sz, sz);
 
-                    // Subtle white glow
-                    if (fade > 0.5f)
+                    // White glow halo
+                    if (fade > 0.4f)
                     {
-                        float glowSz = sz * 1.8f;
-                        int glowA = (int)(35 * fade);
+                        float glowSz = sz * 2.2f;
+                        int glowA = (int)(45 * fade);
                         using (var brush = new SolidBrush(Color.FromArgb(glowA, 255, 255, 255)))
                             g.FillEllipse(brush, pt.X - glowSz / 2, pt.Y - glowSz / 2, glowSz, glowSz);
                     }
+
+                    // Rainbow micro-sparkles
+                    if (fade > 0.3f && i % 3 == 0)
+                    {
+                        float ox = (float)(Math.Sin(i * 7.3 + phase * 2.5) * 6);
+                        float oy = (float)(Math.Cos(i * 5.1 + phase * 2.5) * 6);
+                        float msz = 3f * fade;
+                        int mAlpha = (int)(120 * fade);
+                        float mHue = ((float)(i + 15) / trailCount * 360 + phase * 80) % 360;
+                        Color mColor = HsvToColor(mHue, 0.9f, 1.0f, mAlpha);
+                        using (var brush = new SolidBrush(mColor))
+                            g.FillEllipse(brush, pt.X + ox - msz / 2, pt.Y + oy - msz / 2, msz, msz);
+                    }
                 }
             }
+
+            // Soft white border glow
+            using (var pen = new Pen(Color.FromArgb(50, 255, 255, 255), 1.5f))
+            using (var path = RoundedRect(new Rectangle(0, 0, w - 1, h - 1), radius))
+                g.DrawPath(pen, path);
         }
 
         /// <summary>HSV to ARGB color with specified alpha.</summary>

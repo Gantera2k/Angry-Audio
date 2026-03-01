@@ -268,7 +268,7 @@ namespace AngryAudio
         private Timer _micFlashTimer, _spkFlashTimer;
         private int _pttKeyCode = 0x14;
         private bool _capturingKey;
-        private Button _btnNext, _btnBack, _btnSave;
+        private Action _showPage1Extras, _showPage2Extras;
         private int _currentPage = 1;
         private Timer _pulseTimer;
         private float _pulsePhase; // 0 to 2*PI, drives the glow animation
@@ -353,65 +353,94 @@ namespace AngryAudio
 
             // Footer
             var footer = new BufferedPanel { Dock = DockStyle.Bottom, Height = Dpi.S(48), BackColor = BG };
+            // Owner-drawn "buttons" — no child controls, no clipping issues
+            Rectangle _nextRect = Rectangle.Empty, _saveRect = Rectangle.Empty, _backRect = Rectangle.Empty;
+            bool _nextHover = false, _saveHover = false, _backHover = false;
+            bool _nextVisible = true, _saveVisible = false, _backVisible = false;
+
             footer.Paint += (s, e) => {
                 var g = e.Graphics;
-                PaintUnifiedStars(g, footer);
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                 g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                PaintUnifiedStars(g, footer);
                 using (var p = new Pen(Color.FromArgb(30, 30, 30))) g.DrawLine(p, Dpi.S(16), 0, footer.Width - Dpi.S(32), 0);
-                // Step indicator dots (2 pages)
-                int dotY = Dpi.S(20);
-                int cx = footer.Width / 2;
+                // Step indicator dots
+                int dotY = Dpi.S(20); int cx = footer.Width / 2;
                 for (int i = 1; i <= 2; i++) {
                     int dx = cx + (i - 2) * Dpi.S(16) + Dpi.S(4);
                     Color dc = (i == _currentPage) ? ACC : Color.FromArgb(50, 50, 50);
                     using (var b = new SolidBrush(dc)) g.FillEllipse(b, dx, dotY, Dpi.S(8), Dpi.S(8));
                 }
+                int cr = Dpi.S(6);
+                // Back button
+                if (_backVisible) {
+                    _backRect = new Rectangle(Dpi.S(16), Dpi.S(10), Dpi.S(92), Dpi.S(30));
+                    Color bbg = _backHover ? Color.FromArgb(45, 45, 45) : Color.FromArgb(28, 28, 28);
+                    using (var path = DarkTheme.RoundedRect(_backRect, cr))
+                    using (var b = new SolidBrush(bbg)) g.FillPath(b, path);
+                    using (var path = DarkTheme.RoundedRect(_backRect, cr))
+                    using (var p = new Pen(Color.FromArgb(50, 50, 50))) g.DrawPath(p, path);
+                    TextRenderer.DrawText(g, "\u2190 Back", new Font("Segoe UI", 9.5f), _backRect, Color.FromArgb(170, 170, 170), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                }
+                // Next button
+                if (_nextVisible) {
+                    _nextRect = new Rectangle(footer.Width - Dpi.S(108), Dpi.S(10), Dpi.S(92), Dpi.S(30));
+                    float pulse = (float)((Math.Sin(_pulsePhase * 0.8) + 1.0) / 2.0);
+                    int pr = (int)(20 + (180 - 20) * pulse), pg = (int)(50 + (240 - 50) * pulse), pb = (int)(80 + (255 - 80) * pulse);
+                    Color nbg = _nextHover ? Color.FromArgb(140, 220, 255) : Color.FromArgb(pr, pg, pb);
+                    using (var path = DarkTheme.RoundedRect(_nextRect, cr))
+                    using (var b = new SolidBrush(nbg)) g.FillPath(b, path);
+                    TextRenderer.DrawText(g, "Next \u2192", new Font("Segoe UI", 9.5f, FontStyle.Bold), _nextRect, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                    // Star — painted on same surface, extends freely beyond the "button" rect
+                    var saved = g.Save();
+                    g.TranslateTransform(_nextRect.X, _nextRect.Y);
+                    DarkTheme.PaintOrbitingStar(g, _nextRect.Width, _nextRect.Height, _pulsePhase, cr);
+                    g.Restore(saved);
+                }
+                // Save button
+                if (_saveVisible) {
+                    _saveRect = new Rectangle(footer.Width - Dpi.S(121), Dpi.S(10), Dpi.S(105), Dpi.S(30));
+                    float pulse = (float)((Math.Sin(_pulsePhase * 0.8) + 1.0) / 2.0);
+                    int pr = (int)(20 + (180 - 20) * pulse), pg = (int)(50 + (240 - 50) * pulse), pb = (int)(80 + (255 - 80) * pulse);
+                    Color sbg = _saveHover ? Color.FromArgb(140, 220, 255) : Color.FromArgb(pr, pg, pb);
+                    using (var path = DarkTheme.RoundedRect(_saveRect, cr))
+                    using (var b = new SolidBrush(sbg)) g.FillPath(b, path);
+                    TextRenderer.DrawText(g, "Save", new Font("Segoe UI", 9.5f, FontStyle.Bold), _saveRect, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                    var saved = g.Save();
+                    g.TranslateTransform(_saveRect.X, _saveRect.Y);
+                    DarkTheme.PaintOrbitingStar(g, _saveRect.Width, _saveRect.Height, _pulsePhase, cr);
+                    g.Restore(saved);
+                }
             };
+            footer.MouseMove += (s, e) => {
+                bool nh = _nextVisible && _nextRect.Contains(e.Location);
+                bool sh = _saveVisible && _saveRect.Contains(e.Location);
+                bool bh = _backVisible && _backRect.Contains(e.Location);
+                if (nh != _nextHover || sh != _saveHover || bh != _backHover) {
+                    _nextHover = nh; _saveHover = sh; _backHover = bh;
+                    footer.Cursor = (nh || sh || bh) ? Cursors.Hand : Cursors.Default;
+                    footer.Invalidate();
+                }
+            };
+            footer.MouseLeave += (s, e) => { _nextHover = _saveHover = _backHover = false; footer.Cursor = Cursors.Default; footer.Invalidate(); };
+            footer.MouseClick += (s, e) => {
+                if (_nextVisible && _nextRect.Contains(e.Location)) { if (_currentPage == 1) ShowPage2(); }
+                else if (_saveVisible && _saveRect.Contains(e.Location)) DoSave();
+                else if (_backVisible && _backRect.Contains(e.Location)) { if (_currentPage == 2) ShowPage1(); }
+            };
+            // Wire up visibility controls for page switching
+            _showPage1Extras = () => { _nextVisible = true; _saveVisible = false; _backVisible = false; footer.Invalidate(); };
+            _showPage2Extras = () => { _nextVisible = false; _saveVisible = true; _backVisible = true; footer.Invalidate(); };
             _wizFooter = footer;
             Controls.Add(footer);
 
-            _btnBack = MakeBtn("\u2190 Back", TXT2, Color.FromArgb(28, 28, 28), false);
-            _btnBack.Location = Dpi.Pt(16, 10); _btnBack.Visible = false;
-            _btnBack.FlatAppearance.BorderColor = INPUT_BDR;
-            _btnBack.Click += (s, e) => { if (_currentPage == 2) ShowPage1(); };
-            footer.Controls.Add(_btnBack);
-
-            _btnNext = MakeBtn("Next \u2192", Color.White, ACC, true);
-            _btnNext.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            _btnNext.Location = new Point(ClientSize.Width - Dpi.S(108), Dpi.S(10));
-            _btnNext.Click += (s, e) => { if (_currentPage == 1) ShowPage2(); };
-            footer.Controls.Add(_btnNext);
-
-            _btnSave = MakeBtn("Save", Color.White, ACC, true);
-            _btnSave.Size = Dpi.Size(105, 30);
-            _btnSave.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            _btnSave.Location = new Point(ClientSize.Width - Dpi.S(121), Dpi.S(10));
-            _btnSave.Visible = false;
-            _btnSave.Click += (s, e) => DoSave();
-            footer.Controls.Add(_btnSave);
-
-            // Star painted directly on buttons
-            _btnNext.Paint += PaintButtonStar;
-            _btnSave.Paint += PaintButtonStar;
-
-            // Pulse glow animation
+            // Pulse animation — only invalidates the single footer panel
             _pulsePhase = 0f;
             _pulseTimer = new Timer { Interval = 30 };
             _pulseTimer.Tick += (s, e) => {
                 _pulsePhase += 0.08f;
                 if (_pulsePhase > (float)(Math.PI * 2)) _pulsePhase -= (float)(Math.PI * 2);
-                // Dramatic flash — button goes from very dark to nearly white
-                float pulse = (float)((Math.Sin(_pulsePhase * 0.8) + 1.0) / 2.0);
-                int r = (int)(20 + (180 - 20) * pulse);
-                int gb = (int)(50 + (240 - 50) * pulse);
-                int bl = (int)(80 + (255 - 80) * pulse);
-                Color pulseBg = Color.FromArgb(r, gb, bl);
-                if (_btnNext.Visible && !_btnNext.ClientRectangle.Contains(_btnNext.PointToClient(Cursor.Position)))
-                    _btnNext.BackColor = pulseBg;
-                if (_btnSave.Visible && !_btnSave.ClientRectangle.Contains(_btnSave.PointToClient(Cursor.Position)))
-                    _btnSave.BackColor = pulseBg;
-                if (_btnNext.Visible) _btnNext.Invalidate();
-                if (_btnSave.Visible) _btnSave.Invalidate();
+                footer.Invalidate();
             };
             _pulseTimer.Start();
 
@@ -747,13 +776,6 @@ namespace AngryAudio
             return b;
         }
 
-        void PaintButtonStar(object sender, PaintEventArgs e)
-        {
-            var btn = (Button)sender;
-            if (!btn.Visible) return;
-            DarkTheme.PaintOrbitingStar(e.Graphics, btn.Width, btn.Height, _pulsePhase, Dpi.S(6));
-        }
-
         void PaintHeader(object sender, PaintEventArgs e) {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -848,14 +870,14 @@ namespace AngryAudio
             _currentPage = 1;
             HidePage(_page2);
             ShowPageFill(_page1);
-            _btnNext.Visible = true; _btnSave.Visible = false; _btnBack.Visible = false;
+            _showPage1Extras?.Invoke();
             Invalidate(true);
         }
         void ShowPage2() {
             _currentPage = 2;
             HidePage(_page1);
             ShowPageFill(_page2);
-            _btnNext.Visible = false; _btnSave.Visible = true; _btnBack.Visible = true;
+            _showPage2Extras?.Invoke();
             Invalidate(true);
         }
         void DoSave() {
