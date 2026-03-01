@@ -2860,18 +2860,18 @@ namespace AngryAudio
 
                 if (i == 0)
                 {
-                    // Star head — pure white, tight glow that won't clip
-                    for (int glow = 4; glow >= 0; glow--)
+                    // Star head — pure white, visible glow
+                    for (int glow = 5; glow >= 0; glow--)
                     {
-                        float sz = 5 + glow * 3;
-                        int alpha = glow == 0 ? 255 : glow == 1 ? 200 : Math.Max(15, (int)(140.0 / (glow + 1)));
+                        float sz = 6 + glow * 4;
+                        int alpha = glow == 0 ? 255 : glow == 1 ? 210 : Math.Max(12, (int)(160.0 / (glow + 1)));
                         using (var brush = new SolidBrush(Color.FromArgb(alpha, 255, 255, 255)))
                             g.FillEllipse(brush, pt.X - sz / 2, pt.Y - sz / 2, sz, sz);
                     }
 
-                    // Cross sparkle — pure white, tight arms
+                    // Cross sparkle
                     int sparkAlpha = (int)(230 + 25 * Math.Sin(phase * 4));
-                    float armLen = 8 + 3 * (float)Math.Sin(phase * 3);
+                    float armLen = 12 + 4 * (float)Math.Sin(phase * 3);
                     using (var pen = new Pen(Color.FromArgb(sparkAlpha, 255, 255, 255), 2f))
                     {
                         g.DrawLine(pen, pt.X - armLen, pt.Y, pt.X + armLen, pt.Y);
@@ -2887,7 +2887,7 @@ namespace AngryAudio
                 else
                 {
                     float fade = 1.0f - (float)i / trailCount;
-                    float sz = 5f * fade;
+                    float sz = 6f * fade;
                     int alpha = (int)(230 * fade * fade);
                     if (alpha < 5) continue;
 
@@ -2898,20 +2898,20 @@ namespace AngryAudio
                     using (var brush = new SolidBrush(rainbow))
                         g.FillEllipse(brush, pt.X - sz / 2, pt.Y - sz / 2, sz, sz);
 
-                    // Small white glow — tight, won't extend far
+                    // White glow halo
                     if (fade > 0.4f)
                     {
-                        float glowSz = sz * 2f;
-                        int glowA = (int)(40 * fade);
+                        float glowSz = sz * 2.2f;
+                        int glowA = (int)(45 * fade);
                         using (var brush = new SolidBrush(Color.FromArgb(glowA, 255, 255, 255)))
                             g.FillEllipse(brush, pt.X - glowSz / 2, pt.Y - glowSz / 2, glowSz, glowSz);
                     }
 
-                    // Rainbow micro-sparkles — close to trail, not flying far out
+                    // Rainbow micro-sparkles
                     if (fade > 0.3f && i % 3 == 0)
                     {
-                        float ox = (float)(Math.Sin(i * 7.3 + phase * 2.5) * 5);
-                        float oy = (float)(Math.Cos(i * 5.1 + phase * 2.5) * 5);
+                        float ox = (float)(Math.Sin(i * 7.3 + phase * 2.5) * 6);
+                        float oy = (float)(Math.Cos(i * 5.1 + phase * 2.5) * 6);
                         float msz = 3f * fade;
                         int mAlpha = (int)(120 * fade);
                         float mHue = ((float)(i + 15) / trailCount * 360 + phase * 80) % 360;
@@ -2983,6 +2983,80 @@ namespace AngryAudio
                 return new PointF(radius + (float)Math.Cos(angle) * radius, radius + (float)Math.Sin(angle) * radius);
             }
             return new PointF(radius, 0);
+        }
+    }
+
+    /// <summary>Transparent click-through overlay that paints the orbiting star ON TOP of a button.
+    /// Uses WS_EX_TRANSPARENT so clicks pass through to the button underneath.</summary>
+    class StarOverlay : Control
+    {
+        private Control _target;
+        private Timer _timer;
+        private float _phase;
+
+        public StarOverlay(Control target, Control parent)
+        {
+            _target = target;
+            SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint |
+                     ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            BackColor = Color.Transparent;
+            Enabled = false; // clicks pass through
+
+            // Position: surround the target button with padding for glow
+            int pad = 20;
+            UpdateBounds(pad);
+
+            // Track target visibility and position
+            target.VisibleChanged += (s, e) => { this.Visible = target.Visible; };
+            target.LocationChanged += (s, e) => UpdateBounds(pad);
+            target.Resize += (s, e) => UpdateBounds(pad);
+            this.Visible = target.Visible;
+
+            parent.Controls.Add(this);
+            this.BringToFront();
+
+            _phase = 0f;
+            _timer = new Timer { Interval = 30 };
+            _timer.Tick += (s, e) => {
+                _phase += 0.08f;
+                if (_phase > (float)(Math.PI * 2)) _phase -= (float)(Math.PI * 2);
+                this.Invalidate();
+            };
+            _timer.Start();
+        }
+
+        private void UpdateBounds(int pad)
+        {
+            this.Bounds = new Rectangle(
+                _target.Left - pad, _target.Top - pad,
+                _target.Width + pad * 2, _target.Height + pad * 2);
+        }
+
+        protected override CreateParams CreateParams
+        {
+            get {
+                var cp = base.CreateParams;
+                cp.ExStyle |= 0x20; // WS_EX_TRANSPARENT
+                return cp;
+            }
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e) { /* don't paint background */ }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            // Translate so (0,0) = button's top-left within our padded bounds
+            int pad = (this.Width - _target.Width) / 2;
+            g.TranslateTransform(pad, pad);
+            DarkTheme.PaintOrbitingStar(g, _target.Width, _target.Height, _phase, 6);
+        }
+
+        public void Cleanup()
+        {
+            _timer?.Stop();
+            _timer?.Dispose();
         }
     }
 }

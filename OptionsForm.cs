@@ -1366,14 +1366,6 @@ namespace AngryAudio
             _footer.Paint += (s,e) => {
                 PaintUnifiedStars(e.Graphics, _footer);
                 using(var p=new Pen(BDR)) e.Graphics.DrawLine(p,0,0,_footer.Width,0);
-                // Orbiting star — painted on PARENT so glow extends beyond button bounds
-                if (_saveBtn != null)
-                {
-                    var saved = e.Graphics.Save();
-                    e.Graphics.TranslateTransform(_saveBtn.Left, _saveBtn.Top);
-                    DarkTheme.PaintOrbitingStar(e.Graphics, _saveBtn.Width, _saveBtn.Height, _saveOrbitPhase, Dpi.S(6));
-                    e.Graphics.Restore(saved);
-                }
             };
             Controls.Add(_footer);
             var bs = new Button{Text="Save",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(80,30),ForeColor=Color.White,BackColor=ACC,Font=new Font("Segoe UI",9.5f,FontStyle.Bold),Anchor=AnchorStyles.Top|AnchorStyles.Right,TabStop=false};
@@ -1381,6 +1373,11 @@ namespace AngryAudio
             bs.FlatAppearance.BorderSize=0; bs.Click+=(s,e)=>DoSave();
             bs.MouseEnter+=(s,e)=>bs.BackColor=Color.FromArgb(140,220,255);
             bs.MouseLeave+=(s,e)=>bs.BackColor=ACC;
+            _footer.Controls.Add(bs);
+
+            // Star overlay on Save button
+            var _saveStarOv = new StarOverlay(bs, _footer);
+
             _saveOrbitPhase = 0f;
             _saveOrbitTimer = new Timer { Interval = 30 };
             _saveOrbitTimer.Tick += (s, e) => {
@@ -1392,11 +1389,8 @@ namespace AngryAudio
                 int bl = (int)(80 + (255 - 80) * pulse);
                 if (!bs.ClientRectangle.Contains(bs.PointToClient(Cursor.Position)))
                     bs.BackColor = Color.FromArgb(r, gb, bl);
-                bs.Invalidate();
-                _footer.Invalidate();
             };
             _saveOrbitTimer.Start();
-            _footer.Controls.Add(bs);
             var bc = new Button{Text="Cancel",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(80,30),ForeColor=TXT2,BackColor=Color.FromArgb(28,28,28),Anchor=AnchorStyles.Top|AnchorStyles.Right,TabStop=false};
             bc.FlatAppearance.BorderColor=INPUT_BDR; bc.Click+=(s,e)=>{DialogResult=DialogResult.Cancel;Close();};
             bc.MouseEnter+=(s,e)=>{bc.BackColor=Color.FromArgb(55,55,55);bc.ForeColor=TXT;};

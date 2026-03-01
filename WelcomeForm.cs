@@ -366,15 +366,6 @@ namespace AngryAudio
                     Color dc = (i == _currentPage) ? ACC : Color.FromArgb(50, 50, 50);
                     using (var b = new SolidBrush(dc)) g.FillEllipse(b, dx, dotY, Dpi.S(8), Dpi.S(8));
                 }
-                // Orbiting star — painted on PARENT so glow extends beyond button bounds
-                Button activeBtn = _btnNext.Visible ? _btnNext : (_btnSave.Visible ? _btnSave : null);
-                if (activeBtn != null)
-                {
-                    var saved = g.Save();
-                    g.TranslateTransform(activeBtn.Left, activeBtn.Top);
-                    DarkTheme.PaintOrbitingStar(g, activeBtn.Width, activeBtn.Height, _pulsePhase, Dpi.S(6));
-                    g.Restore(saved);
-                }
             };
             _wizFooter = footer;
             Controls.Add(footer);
@@ -399,6 +390,10 @@ namespace AngryAudio
             _btnSave.Click += (s, e) => DoSave();
             footer.Controls.Add(_btnSave);
 
+            // Star overlays — transparent, paint ON TOP of buttons, clicks pass through
+            var _nextStarOverlay = new StarOverlay(_btnNext, footer);
+            var _saveStarOverlay = new StarOverlay(_btnSave, footer);
+
             // Pulse glow animation — impossible to miss
             _pulsePhase = 0f;
             _pulseTimer = new Timer { Interval = 30 };
@@ -416,9 +411,6 @@ namespace AngryAudio
                     _btnNext.BackColor = pulseBg;
                 if (_btnSave.Visible && !_btnSave.ClientRectangle.Contains(_btnSave.PointToClient(Cursor.Position)))
                     _btnSave.BackColor = pulseBg;
-                if (_btnNext.Visible) _btnNext.Invalidate();
-                if (_btnSave.Visible) _btnSave.Invalidate();
-                if (_wizFooter != null) _wizFooter.Invalidate();
             };
             _pulseTimer.Start();
 
