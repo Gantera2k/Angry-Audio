@@ -362,7 +362,7 @@ namespace AngryAudio
             _shootingStar.Start();
             _celestialEvents = new CelestialEvents(() => { InvalidateCards(); });
             _celestialEvents.Start();
-            FormClosing += (s, e) => { _pollTimer?.Stop(); _pollTimer?.Dispose(); _twinkleTimer?.Stop(); _twinkleTimer?.Dispose(); _shootingStar?.Stop(); _shootingStar?.Dispose(); _celestialEvents?.Stop(); _celestialEvents?.Dispose(); _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _updateShimmerTimer?.Stop(); _updateShimmerTimer?.Dispose(); _saveOrbitTimer?.Stop(); _saveOrbitTimer?.Dispose(); _starCache?.Dispose(); _starCacheDim?.Dispose(); };
+            FormClosing += (s, e) => { _enforceTimer?.Stop(); _enforceTimer?.Dispose(); _pollTimer?.Stop(); _pollTimer?.Dispose(); _twinkleTimer?.Stop(); _twinkleTimer?.Dispose(); _shootingStar?.Stop(); _shootingStar?.Dispose(); _celestialEvents?.Stop(); _celestialEvents?.Dispose(); _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _updateShimmerTimer?.Stop(); _updateShimmerTimer?.Dispose(); _saveOrbitTimer?.Stop(); _saveOrbitTimer?.Dispose(); _starCache?.Dispose(); _starCacheDim?.Dispose(); };
         }
 
         private Size _defaultSize;
