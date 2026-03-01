@@ -28,7 +28,7 @@ namespace AngryAudio
         static readonly Color ACC = DarkTheme.Accent;
         static readonly Color AMBER = DarkTheme.Amber;
         static readonly Color TXT = Color.FromArgb(230, 230, 230);
-        static readonly Color TXT2 = Color.FromArgb(100, 100, 100);
+        static readonly Color TXT2 = Color.FromArgb(130, 130, 130);
         static readonly Color GREEN = DarkTheme.Green;
 
         public FadeOverlay()
@@ -92,6 +92,20 @@ namespace AngryAudio
             if (_isClosing) return;
             _fadeInTimer.Stop();
             _fadeOutTimer.Start();
+        }
+
+        /// <summary>Fast dismiss — matches CorrectionToast/InfoToast pattern.</summary>
+        public void Dismiss()
+        {
+            if (_isClosing) return;
+            _isClosing = true;
+            _fadeInTimer.Stop(); _fadeOutTimer.Stop(); _tickTimer.Stop();
+            var fastFade = new Timer { Interval = 16 };
+            fastFade.Tick += (s, e) => {
+                try { Opacity -= 0.15; } catch { }
+                if (Opacity <= 0.05) { fastFade.Stop(); fastFade.Dispose(); try { Close(); } catch { } }
+            };
+            fastFade.Start();
         }
 
         protected override void OnPaint(PaintEventArgs e)

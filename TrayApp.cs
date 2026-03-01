@@ -697,7 +697,7 @@ namespace AngryAudio
 
                             if (_settings.NotifyOnCorrection && CanNotify(ref _lastAppCorrectionNotify))
                             {
-                                ShowBalloon(session.ProcessName + " Reset to " + targetVol + "%");
+                                ShowBalloon("App Volume Corrected", session.ProcessName + " reset to " + targetVol + "%.");
                             }
 
                             Logger.Info("App enforced: " + session.ProcessName + " " + (int)session.Volume + "% → " + targetVol + "%");
@@ -725,13 +725,13 @@ namespace AngryAudio
             if (_lastMicDeviceId != null && micId != null && micId != _lastMicDeviceId)
             {
                 Logger.Info("Default mic device changed: " + micId);
-                ShowBalloon("New Default Microphone Detected");
+                ShowBalloon("New Default Microphone Detected", "Audio routing updated automatically.");
             }
 
             if (_lastSpeakerDeviceId != null && speakerId != null && speakerId != _lastSpeakerDeviceId)
             {
                 Logger.Info("Default speaker device changed: " + speakerId);
-                ShowBalloon("New Default Speaker Detected");
+                ShowBalloon("New Default Speaker Detected", "Audio routing updated automatically.");
             }
 
             _lastMicDeviceId = micId;
@@ -1688,7 +1688,7 @@ namespace AngryAudio
                 }
                 else
                 {
-                    ShowBalloon("Log File Not Found");
+                    ShowBalloon("Log File Not Found", "No log file exists yet for this session.");
                 }
             }
             catch (Exception ex)
