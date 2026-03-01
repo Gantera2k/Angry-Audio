@@ -39,13 +39,28 @@ namespace AngryAudio
     /// </summary>
     public class StarBackground : IDisposable
     {
-        Bitmap _cache, _cacheDim;
-        int _cacheW, _cacheH, _cacheTick = -1;
+        // Static base — built once on resize, never on tick
+        Bitmap _base, _baseDim;
+        // Twinkle overlay — repainted each tick (only twinkling stars)
+        Bitmap _twinkleOverlay, _twinkleOverlayDim;
+        int _cacheW, _cacheH;
+        int _twinkleTick;
+        bool _twinkleDirty = true;
         public ShootingStar Shooting;
         public CelestialEvents Celestial;
-        int _twinkleTick;
         const int SEED = 42;
         static readonly Color TINT = DarkTheme.GlassTint;
+
+        // Pre-computed star data — computed once on resize
+        struct StarData {
+            public int X, Y;
+            public float Radius;
+            public int BaseAlpha;
+            public byte R, G, B;
+            public bool Twinkles;
+            public double Phase, Speed;
+        }
+        StarData[] _starsNorm, _starsDim;
 
         public StarBackground(Action invalidate)
         {
@@ -55,34 +70,104 @@ namespace AngryAudio
             Celestial.Start();
         }
 
-        public void Tick() { _twinkleTick++; }
+        public void Tick() { _twinkleTick++; _twinkleDirty = true; }
 
-        void EnsureCache(int w, int h)
+        StarData[] ComputeStars(int w, int h, float alphaMul)
         {
-            if (w <= 0 || h <= 0) return;
-            if (_cache != null && _cacheW == w && _cacheH == h && _cacheTick == _twinkleTick) return;
-            _cacheW = w; _cacheH = h; _cacheTick = _twinkleTick;
-            if (_cache != null) _cache.Dispose();
-            if (_cacheDim != null) _cacheDim.Dispose();
-            _cache = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
-            _cacheDim = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
-            using (var sg = Graphics.FromImage(_cache)) {
-                sg.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                DarkTheme.PaintCardStars(sg, w, h, SEED, _twinkleTick, 1.0f);
+            var rng = new Random(SEED);
+            int count = Math.Max(12, Math.Min(150, (w * h) / 2000));
+            var arr = new StarData[count];
+            for (int i = 0; i < count; i++) {
+                arr[i].X = rng.Next(w);
+                arr[i].Y = rng.Next(h);
+                int tier = rng.Next(100);
+                if (tier < 50) {
+                    arr[i].Radius = 0.6f + (float)(rng.NextDouble() * 0.5);
+                    arr[i].BaseAlpha = (int)((55 + rng.Next(35)) * alphaMul);
+                    arr[i].R = arr[i].G = arr[i].B = 255;
+                } else if (tier < 82) {
+                    arr[i].Radius = 0.8f + (float)(rng.NextDouble() * 0.7);
+                    arr[i].BaseAlpha = (int)((70 + rng.Next(50)) * alphaMul);
+                    arr[i].R = arr[i].G = arr[i].B = 255;
+                } else {
+                    arr[i].Radius = 1.0f + (float)(rng.NextDouble() * 0.8);
+                    arr[i].BaseAlpha = (int)((65 + rng.Next(55)) * alphaMul);
+                    arr[i].R = DarkTheme.Accent.R; arr[i].G = DarkTheme.Accent.G; arr[i].B = DarkTheme.Accent.B;
+                }
+                arr[i].Twinkles = rng.Next(100) < 45;
+                arr[i].Phase = rng.NextDouble() * Math.PI * 2;
+                arr[i].Speed = 0.06 + rng.NextDouble() * 0.08;
             }
-            using (var sg = Graphics.FromImage(_cacheDim)) {
-                sg.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                DarkTheme.PaintCardStars(sg, w, h, SEED, _twinkleTick, 0.35f);
+            return arr;
+        }
+
+        void RenderStars(Bitmap bmp, StarData[] stars, bool twinkleOnly, int tick)
+        {
+            using (var g = Graphics.FromImage(bmp)) {
+                g.Clear(Color.Transparent);
+                for (int i = 0; i < stars.Length; i++) {
+                    var s = stars[i];
+                    if (twinkleOnly && !s.Twinkles) continue;
+                    if (!twinkleOnly && s.Twinkles) continue;
+
+                    int alpha = s.BaseAlpha;
+                    if (s.Twinkles && tick > 0) {
+                        double wave = Math.Sin(tick * s.Speed + s.Phase);
+                        alpha = (int)(s.BaseAlpha * (0.4 + 0.8 * (wave * 0.5 + 0.5)) * 2.0);
+                        alpha = Math.Max(15, Math.Min(220, alpha));
+                    }
+                    if (alpha <= 0) continue;
+
+                    using (var b = new SolidBrush(Color.FromArgb(alpha, s.R, s.G, s.B))) {
+                        if (s.Radius <= 0.9f)
+                            g.FillRectangle(b, s.X, s.Y, 1, 1);
+                        else
+                            g.FillEllipse(b, s.X - s.Radius, s.Y - s.Radius, s.Radius * 2, s.Radius * 2);
+                    }
+                }
             }
         }
 
-        /// <summary>Paint starfield. Optionally at offset, optionally dim, optionally with shooting stars.</summary>
+        void EnsureBase(int w, int h)
+        {
+            if (w <= 0 || h <= 0) return;
+            if (_base != null && _cacheW == w && _cacheH == h) return;
+            _cacheW = w; _cacheH = h;
+
+            _base?.Dispose(); _baseDim?.Dispose();
+            _twinkleOverlay?.Dispose(); _twinkleOverlayDim?.Dispose();
+
+            _starsNorm = ComputeStars(w, h, 1.0f);
+            _starsDim = ComputeStars(w, h, 0.35f);
+
+            _base = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            _baseDim = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            _twinkleOverlay = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            _twinkleOverlayDim = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+
+            RenderStars(_base, _starsNorm, false, 0);      // static stars only
+            RenderStars(_baseDim, _starsDim, false, 0);
+            _twinkleDirty = true;
+        }
+
+        void EnsureTwinkle()
+        {
+            if (!_twinkleDirty) return;
+            _twinkleDirty = false;
+            if (_twinkleOverlay == null || _starsNorm == null) return;
+            RenderStars(_twinkleOverlay, _starsNorm, true, _twinkleTick);
+            RenderStars(_twinkleOverlayDim, _starsDim, true, _twinkleTick);
+        }
+
         public void Paint(Graphics g, int w, int h, int ox = 0, int oy = 0, bool dim = false, bool shootingStar = true)
         {
             try {
-                EnsureCache(w, h);
-                var src = dim ? _cacheDim : _cache;
-                if (src != null) g.DrawImage(src, -ox, -oy);
+                EnsureBase(w, h);
+                EnsureTwinkle();
+                var b = dim ? _baseDim : _base;
+                var t = dim ? _twinkleOverlayDim : _twinkleOverlay;
+                if (b != null) g.DrawImage(b, -ox, -oy);
+                if (t != null) g.DrawImage(t, -ox, -oy);
                 if (shootingStar) {
                     g.TranslateTransform(-ox, -oy);
                     if (Shooting != null) DarkTheme.PaintShootingStar(g, w, h, Shooting);
@@ -92,37 +177,39 @@ namespace AngryAudio
             } catch { try { g.ResetTransform(); } catch { } }
         }
 
-        /// <summary>Paint frosted glass tint over a card area (call after Paint for background).
-        /// For single-surface forms (Installer): stars already visible, just tint + dim overlay.</summary>
         public void PaintGlassTint(Graphics g, int w, int h, System.Drawing.Drawing2D.GraphicsPath path)
         {
-            EnsureCache(w, h);
+            EnsureBase(w, h);
+            EnsureTwinkle();
             using (var tint = new SolidBrush(TINT))
                 g.FillPath(tint, path);
             var oldClip = g.Clip;
             g.SetClip(path);
-            if (_cacheDim != null) g.DrawImage(_cacheDim, 0, 0);
+            if (_baseDim != null) g.DrawImage(_baseDim, 0, 0);
+            if (_twinkleOverlayDim != null) g.DrawImage(_twinkleOverlayDim, 0, 0);
             g.Clip = oldClip;
         }
 
-        /// <summary>Paint frosted glass card at offset (for child Panel paint handlers).
-        /// Pattern: BG fill → full stars → tint → dim stars.</summary>
         public void PaintChildBg(Graphics g, int w, int h, int ox, int oy, int childW, int childH)
         {
-            EnsureCache(w, h);
-            using (var b = new SolidBrush(DarkTheme.BG))
-                g.FillRectangle(b, 0, 0, childW, childH);
-            if (_cache != null) g.DrawImage(_cache, -ox, -oy);
+            EnsureBase(w, h);
+            EnsureTwinkle();
+            using (var bg = new SolidBrush(DarkTheme.BG))
+                g.FillRectangle(bg, 0, 0, childW, childH);
+            if (_base != null) g.DrawImage(_base, -ox, -oy);
+            if (_twinkleOverlay != null) g.DrawImage(_twinkleOverlay, -ox, -oy);
             using (var tint = new SolidBrush(TINT))
                 g.FillRectangle(tint, 0, 0, childW, childH);
-            if (_cacheDim != null) g.DrawImage(_cacheDim, -ox, -oy);
+            if (_baseDim != null) g.DrawImage(_baseDim, -ox, -oy);
+            if (_twinkleOverlayDim != null) g.DrawImage(_twinkleOverlayDim, -ox, -oy);
         }
 
         public void Dispose()
         {
             Shooting?.Stop(); Shooting?.Dispose();
             Celestial?.Stop(); Celestial?.Dispose();
-            _cache?.Dispose(); _cacheDim?.Dispose();
+            _base?.Dispose(); _baseDim?.Dispose();
+            _twinkleOverlay?.Dispose(); _twinkleOverlayDim?.Dispose();
         }
     }
 
