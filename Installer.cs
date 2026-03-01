@@ -490,10 +490,13 @@ namespace AngryAudioInstaller
                     catch { }
 
                     // Reset FirstRunComplete so welcome wizard shows after fresh install
+                    // Settings are stored in %AppData%/Angry Audio/settings.json, not registry
                     try
                     {
-                        using (var key = Registry.CurrentUser.CreateSubKey(@"Software\AngryAudio"))
-                            key.SetValue("firstRunComplete", "false");
+                        string settingsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Angry Audio");
+                        string settingsFile = Path.Combine(settingsDir, "settings.json");
+                        if (File.Exists(settingsFile))
+                            File.Delete(settingsFile);
                     }
                     catch { }
                     System.Threading.Thread.Sleep(200);
@@ -649,7 +652,7 @@ namespace AngryAudioInstaller
             int w = ClientSize.Width, h = ClientSize.Height;
 
             // Stars — unified system matching Options/Welcome
-            DarkTheme.PaintCardStars(g, w, h, 42, 0, 1.0f);
+            DarkTheme.PaintCardStars(g, w, h, 42, _twinkleTick, 1.0f);
 
             // Shooting stars painted AFTER measuring card so they pass behind it
             // (deferred below after card is drawn)
@@ -781,12 +784,12 @@ namespace AngryAudioInstaller
                 // Stars inside card (full brightness, clipped)
                 var oldClip = g.Clip;
                 g.SetClip(path);
-                DarkTheme.PaintCardStars(g, w, h, 42, 0, 1.0f);
+                DarkTheme.PaintCardStars(g, w, h, 42, _twinkleTick, 1.0f);
                 // Glass tint
                 using (var tint = new SolidBrush(Color.FromArgb(170, CARD.R, CARD.G, CARD.B)))
                     g.FillRectangle(tint, cx, cy, cw, ch);
                 // Dimmed stars on top
-                DarkTheme.PaintCardStars(g, w, h, 42, 0, 0.35f);
+                DarkTheme.PaintCardStars(g, w, h, 42, _twinkleTick, 0.35f);
                 g.Clip = oldClip;
                 using (var pen = new Pen(BDR))
                     g.DrawPath(pen, path);

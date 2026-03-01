@@ -815,7 +815,7 @@ namespace AngryAudio
                 var cardRect = new Rectangle(0, 0, c.Width - 1, c.Height - 1);
                 using (var tint = new SolidBrush(Color.FromArgb(170, DarkTheme.CardBG.R, DarkTheme.CardBG.G, DarkTheme.CardBG.B)))
                     g.FillRectangle(tint, cardRect);
-                PaintUnifiedStars(g, c, 0.25f, false);
+                PaintUnifiedStars(g, c, 0.35f, false);
 
                 // 3) Card border
                 using (var pen = new Pen(CARD_BDR)) {

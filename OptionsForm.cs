@@ -627,12 +627,12 @@ namespace AngryAudio
                 clipPath.AddArc(cardRect.X, cardRect.Bottom - d, d, d, 90, 90);
                 clipPath.CloseFigure();
                 // Dark tint over card area — visible grey for premium look
-                using (var tint = new SolidBrush(Color.FromArgb(200, DarkTheme.CardBG.R, DarkTheme.CardBG.G, DarkTheme.CardBG.B)))
+                using (var tint = new SolidBrush(Color.FromArgb(170, DarkTheme.CardBG.R, DarkTheme.CardBG.G, DarkTheme.CardBG.B)))
                     g.FillPath(tint, clipPath);
                 // Dimmed unified stars through the glass
                 var oldClip = g.Clip;
                 g.SetClip(clipPath, CombineMode.Replace);
-                PaintUnifiedStars(g, c, 0.25f, false);
+                PaintUnifiedStars(g, c, 0.35f, false);
                 g.Clip = oldClip;
                 clipPath.Dispose();
 
@@ -727,7 +727,7 @@ namespace AngryAudio
             }
             using (var sg = Graphics.FromImage(_starCacheDim)) {
                 sg.SmoothingMode = SmoothingMode.AntiAlias;
-                DarkTheme.PaintCardStars(sg, cw, ch, STAR_SEED, _twinkleTick, 0.25f);
+                DarkTheme.PaintCardStars(sg, cw, ch, STAR_SEED, _twinkleTick, 0.35f);
             }
         }
 
@@ -1563,7 +1563,7 @@ namespace AngryAudio
         void EnforceToggleSelection()
         {
             if (_tglPtt.Checked || _tglPtm.Checked || _tglPtToggle.Checked) return;
-            if (_enforceTimer != null) return;
+            if (_enforceTimer != null) { ShakeReject(_lblPttKey); return; }
 
             var card = _tglPtt.Parent;
             if (card == null) return;
@@ -1605,6 +1605,8 @@ namespace AngryAudio
                 {
                     _enforceTimer.Stop(); _enforceTimer.Dispose(); _enforceTimer = null;
                     foreach (var h in highlights) { try { card.Controls.Remove(h); h.Dispose(); } catch { } }
+                    // Reset hotkey label colors back to normal
+                    _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC;
                     return;
                 }
 
@@ -1621,16 +1623,11 @@ namespace AngryAudio
                 else if (step == 3)
                 {
                     for (int i = 0; i < 3; i++) { highlights[i].BackColor = Color.Transparent; highlights[i].Invalidate(); }
-                    step++;
-                }
-                else
-                {
-                    ShakeReject(_lblPttKey);
-                    step = 0;
+                    step = 0; // loop the flash, but do NOT re-shake
                 }
             };
             _enforceTimer.Start();
-            ShakeReject(_lblPttKey);
+            ShakeReject(_lblPttKey); // shake once at start only
         }
 
         /// <summary>Paint a premium circle-X remove icon with anti-aliased lines.</summary>
