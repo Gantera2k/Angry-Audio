@@ -1835,20 +1835,6 @@ namespace AngryAudio
                 dismissAction();
         }
 
-        /// <summary>Dismiss ALL toasts except MicStatusOverlay. Used when mic warning takes priority.</summary>
-        private void DismissAllToasts()
-        {
-            DismissActiveToast();
-            // Dismiss info toast (PTT Active, etc.)
-            Action dismissInfo = () => {
-                try { if (_activeInfoToast != null && !_activeInfoToast.IsDisposed) _activeInfoToast.Dismiss(); } catch { }
-            };
-            if (_contextMenu != null && _contextMenu.IsHandleCreated)
-                try { _contextMenu.BeginInvoke(dismissInfo); } catch { dismissInfo(); }
-            else
-                dismissInfo();
-        }
-
         // --- Mic Unprotected Warning ---
 
         private MicWarningToast _micWarningToast;

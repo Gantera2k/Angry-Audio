@@ -100,8 +100,9 @@ namespace AngryAudio
         public void Dismiss()
         {
             if (_isClosing) return;
-            _holdTimer.Stop();
-            _fadeOutTimer.Start();
+            _isClosing = true;
+            _holdTimer.Stop(); _fadeOutTimer.Stop(); _fadeInTimer.Stop();
+            Close();
         }
 
         private void StartFadeOut()
@@ -352,8 +353,9 @@ namespace AngryAudio
         public void Dismiss()
         {
             if (_isClosing) return;
-            _holdTimer.Stop(); _fadeInTimer.Stop();
-            _fadeOutTimer.Start();
+            _isClosing = true;
+            _holdTimer.Stop(); _fadeOutTimer.Stop(); _fadeInTimer.Stop(); _tickTimer.Stop();
+            Close();
         }
 
         public void ShowNoFocus()
