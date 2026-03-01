@@ -352,7 +352,7 @@ namespace AngryAudio
             try { Icon = Mascot.CreateIcon(); } catch { }
 
             // Footer
-            var footer = new GlowPanel { Dock = DockStyle.Bottom, Height = Dpi.S(48), BackColor = BG };
+            var footer = new BufferedPanel { Dock = DockStyle.Bottom, Height = Dpi.S(48), BackColor = BG };
             footer.Paint += (s, e) => {
                 var g = e.Graphics;
                 PaintUnifiedStars(g, footer);
@@ -390,19 +390,11 @@ namespace AngryAudio
             _btnSave.Click += (s, e) => DoSave();
             footer.Controls.Add(_btnSave);
 
-            // Star glow — painted ON TOP of buttons via GlowPanel (no WS_CLIPCHILDREN)
-            footer.PaintGlow = (g) => {
-                Button activeBtn = _btnNext.Visible ? _btnNext : (_btnSave.Visible ? _btnSave : null);
-                if (activeBtn != null)
-                {
-                    var saved = g.Save();
-                    g.TranslateTransform(activeBtn.Left, activeBtn.Top);
-                    DarkTheme.PaintOrbitingStar(g, activeBtn.Width, activeBtn.Height, _pulsePhase, Dpi.S(6));
-                    g.Restore(saved);
-                }
-            };
+            // Star painted directly on buttons
+            _btnNext.Paint += PaintButtonStar;
+            _btnSave.Paint += PaintButtonStar;
 
-            // Pulse glow animation — impossible to miss
+            // Pulse glow animation
             _pulsePhase = 0f;
             _pulseTimer = new Timer { Interval = 30 };
             _pulseTimer.Tick += (s, e) => {
@@ -410,7 +402,6 @@ namespace AngryAudio
                 if (_pulsePhase > (float)(Math.PI * 2)) _pulsePhase -= (float)(Math.PI * 2);
                 // Dramatic flash — button goes from very dark to nearly white
                 float pulse = (float)((Math.Sin(_pulsePhase * 0.8) + 1.0) / 2.0);
-                // Dark phase: near black (20, 50, 80). Bright phase: near white (180, 240, 255)
                 int r = (int)(20 + (180 - 20) * pulse);
                 int gb = (int)(50 + (240 - 50) * pulse);
                 int bl = (int)(80 + (255 - 80) * pulse);
@@ -419,7 +410,8 @@ namespace AngryAudio
                     _btnNext.BackColor = pulseBg;
                 if (_btnSave.Visible && !_btnSave.ClientRectangle.Contains(_btnSave.PointToClient(Cursor.Position)))
                     _btnSave.BackColor = pulseBg;
-                footer.Invalidate();
+                if (_btnNext.Visible) _btnNext.Invalidate();
+                if (_btnSave.Visible) _btnSave.Invalidate();
             };
             _pulseTimer.Start();
 
@@ -753,6 +745,13 @@ namespace AngryAudio
             b.MouseEnter += (s, e) => b.BackColor = bold ? Color.FromArgb(120, 200, 240) : Color.FromArgb(38, 38, 38);
             b.MouseLeave += (s, e) => b.BackColor = origBg;
             return b;
+        }
+
+        void PaintButtonStar(object sender, PaintEventArgs e)
+        {
+            var btn = (Button)sender;
+            if (!btn.Visible) return;
+            DarkTheme.PaintOrbitingStar(e.Graphics, btn.Width, btn.Height, _pulsePhase, Dpi.S(6));
         }
 
         void PaintHeader(object sender, PaintEventArgs e) {

@@ -1362,19 +1362,10 @@ namespace AngryAudio
         }
 
         void BuildFooter() {
-            _footer = new GlowPanel{Dock=DockStyle.Bottom,Height=Dpi.S(50),BackColor=BG};
+            _footer = new BufferedPanel{Dock=DockStyle.Bottom,Height=Dpi.S(50),BackColor=BG};
             _footer.Paint += (s,e) => {
                 PaintUnifiedStars(e.Graphics, _footer);
                 using(var p=new Pen(BDR)) e.Graphics.DrawLine(p,0,0,_footer.Width,0);
-            };
-            ((GlowPanel)_footer).PaintGlow = (g) => {
-                if (_saveBtn != null)
-                {
-                    var saved = g.Save();
-                    g.TranslateTransform(_saveBtn.Left, _saveBtn.Top);
-                    DarkTheme.PaintOrbitingStar(g, _saveBtn.Width, _saveBtn.Height, _saveOrbitPhase, Dpi.S(6));
-                    g.Restore(saved);
-                }
             };
             Controls.Add(_footer);
             var bs = new Button{Text="Save",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(80,30),ForeColor=Color.White,BackColor=ACC,Font=new Font("Segoe UI",9.5f,FontStyle.Bold),Anchor=AnchorStyles.Top|AnchorStyles.Right,TabStop=false};
@@ -1382,6 +1373,7 @@ namespace AngryAudio
             bs.FlatAppearance.BorderSize=0; bs.Click+=(s,e)=>DoSave();
             bs.MouseEnter+=(s,e)=>bs.BackColor=Color.FromArgb(140,220,255);
             bs.MouseLeave+=(s,e)=>bs.BackColor=ACC;
+            bs.Paint += (s, e) => { DarkTheme.PaintOrbitingStar(e.Graphics, bs.Width, bs.Height, _saveOrbitPhase, Dpi.S(6)); };
             _footer.Controls.Add(bs);
 
             _saveOrbitPhase = 0f;
@@ -1395,7 +1387,7 @@ namespace AngryAudio
                 int bl = (int)(80 + (255 - 80) * pulse);
                 if (!bs.ClientRectangle.Contains(bs.PointToClient(Cursor.Position)))
                     bs.BackColor = Color.FromArgb(r, gb, bl);
-                _footer.Invalidate();
+                bs.Invalidate();
             };
             _saveOrbitTimer.Start();
             var bc = new Button{Text="Cancel",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(80,30),ForeColor=TXT2,BackColor=Color.FromArgb(28,28,28),Anchor=AnchorStyles.Top|AnchorStyles.Right,TabStop=false};
