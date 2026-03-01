@@ -49,10 +49,6 @@ namespace AngryAudio
         private int _currentPage = 1;
         private Timer _pulseTimer;
         private float _pulsePhase; // 0 to 2*PI, drives the glow animation
-
-        // Guide star state machine — guides user through wizard steps
-        private enum GuideState { HOTKEY, TOGGLES, NEXT, PAGE2, FINISH, DONE }
-        private GuideState _guideState = GuideState.HOTKEY;
         private StarBackground _stars;
 
         // Dynamic painted text (no Labels — shooting stars pass through)
@@ -203,20 +199,11 @@ namespace AngryAudio
 
             // Pulse animation — only invalidates the single footer panel
             _pulsePhase = 0f;
-            int _guideFrameSkip = 0;
             _pulseTimer = new Timer { Interval = 30 };
             _pulseTimer.Tick += (s, e) => {
                 _pulsePhase += 0.08f;
                 if (_pulsePhase > (float)(Math.PI * 2)) _pulsePhase -= (float)(Math.PI * 2);
                 footer.Invalidate();
-                // Guide star on cards — throttle to every other frame (15fps) to reduce stutter
-                _guideFrameSkip++;
-                if (_guideFrameSkip % 2 == 0) {
-                    if ((_guideState == GuideState.HOTKEY || _guideState == GuideState.TOGGLES) && _card1 != null && _card1.Visible)
-                        _card1.Invalidate(false);
-                    if (_guideState == GuideState.PAGE2 && _card2 != null && _card2.Visible)
-                        _card2.Invalidate(false);
-                }
             };
             _pulseTimer.Start();
 
@@ -248,25 +235,24 @@ namespace AngryAudio
             _tglPtt = new ToggleSwitch { Location = Dpi.Pt(20, y + 44) };
             _tglPtt.CheckedChanged += (s2, e2) => {
                 if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(_tglPtt.Checked ? "ptt_on" : "ptt_off"); }
-                if (_tglPtt.Checked) { if (_tglPtm != null && _tglPtm.Checked) _tglPtm.Checked = false; if (_tglPtToggle != null && _tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _guideState = GuideState.NEXT; ShowTip(_tipFunCallout); if (_tipHotkey != null) _tipHotkey.Visible = false; }
+                if (_tglPtt.Checked) { if (_tglPtm != null && _tglPtm.Checked) _tglPtm.Checked = false; if (_tglPtToggle != null && _tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _showTipHotkey = false; ShowTipFlag(ref _showTipFunCallout); }
             };
             _tglPtt.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtt);
 
             _tglPtm = new ToggleSwitch { Location = Dpi.Pt(20, y + 86) };
             _tglPtm.CheckedChanged += (s2, e2) => {
                 if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(_tglPtm.Checked ? "ptm_on" : "ptm_off"); }
-                if (_tglPtm.Checked) { if (_tglPtt != null && _tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtToggle != null && _tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _guideState = GuideState.NEXT; ShowTip(_tipFunCallout); if (_tipHotkey != null) _tipHotkey.Visible = false; }
+                if (_tglPtm.Checked) { if (_tglPtt != null && _tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtToggle != null && _tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _showTipHotkey = false; ShowTipFlag(ref _showTipFunCallout); }
             };
             _tglPtm.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtm);
 
             _tglPtToggle = new ToggleSwitch { Location = Dpi.Pt(20, y + 128) };
             _tglPtToggle.CheckedChanged += (s2, e2) => {
                 if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(_tglPtToggle.Checked ? "ptt_toggle_on" : "ptt_toggle_off"); }
-                if (_tglPtToggle.Checked) { if (_tglPtt != null && _tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtm != null && _tglPtm.Checked) _tglPtm.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _guideState = GuideState.NEXT; ShowTip(_tipFunCallout); if (_tipHotkey != null) _tipHotkey.Visible = false; }
+                if (_tglPtToggle.Checked) { if (_tglPtt != null && _tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtm != null && _tglPtm.Checked) _tglPtm.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _showTipHotkey = false; ShowTipFlag(ref _showTipFunCallout); }
             };
             _tglPtToggle.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtToggle);
             UpdatePttTogglesEnabled(); // Disable until hotkey is set
-            CreateTips(); // Tip bubbles for guided experience
 
             // Hotkey row — below all 3 toggles, matching Options panel style
             _lblPttKey = new Label { Text = "Add Key", Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), ForeColor = ACC, BackColor = INPUT_BG, Size = Dpi.Size(80, 26), TextAlign = ContentAlignment.MiddleCenter, Location = Dpi.Pt(118, y + 174) };
@@ -372,25 +358,16 @@ namespace AngryAudio
                 using (var f = new Font("Segoe UI", 8f)) using (var b = new SolidBrush(DarkTheme.Txt4))
                     g.DrawString("Angry Audio gradually fades your audio back when you return.", f, b, Dpi.S(20), ay + Dpi.S(132));
 
-                // === Guide star — orbits around current guided element ===
-                if (_guideState == GuideState.HOTKEY && _lblPttKey != null) {
-                    // Orbit around the "Add Key" label
-                    var r = _lblPttKey.Bounds;
-                    int pad = Dpi.S(6);
-                    var saved = g.Save();
-                    g.TranslateTransform(r.X - pad, r.Y - pad);
-                    DarkTheme.PaintOrbitingStar(g, r.Width + pad * 2, r.Height + pad * 2, _pulsePhase, Dpi.S(4));
-                    g.Restore(saved);
-                } else if (_guideState == GuideState.TOGGLES) {
-                    // Orbit around the toggle section (all 3 toggles)
-                    int ty = py + Dpi.S(40);
-                    int tw = Dpi.S(280);
-                    int th = Dpi.S(120);
-                    int pad = Dpi.S(4);
-                    var saved = g.Save();
-                    g.TranslateTransform(Dpi.S(14) - pad, ty - pad);
-                    DarkTheme.PaintOrbitingStar(g, tw + pad * 2, th + pad * 2, _pulsePhase, Dpi.S(8));
-                    g.Restore(saved);
+                // === Inline tip text — same style as other card text ===
+                if (_showTipHotkey) {
+                    using (var f = new Font("Segoe UI", 7.5f, FontStyle.Italic))
+                    using (var b = new SolidBrush(Color.FromArgb(120, ACC.R, ACC.G, ACC.B)))
+                        g.DrawString("Pick the same key you use for voice chat in Discord, Zoom, or your game.", f, b, Dpi.S(20), py + Dpi.S(198));
+                }
+                if (_showTipFunCallout) {
+                    using (var f = new Font("Segoe UI", 7f, FontStyle.Italic))
+                    using (var b = new SolidBrush(Color.FromArgb(90, ACC.R, ACC.G, ACC.B)))
+                        g.DrawString("Shows when your mic is hot \u2014 so you don't rant about your boss with everyone listening.", f, b, Dpi.S(20), py + Dpi.S(198));
                 }
             };
 
@@ -420,7 +397,7 @@ namespace AngryAudio
                     if (_sliderRestoreMicTimer != null) { _sliderRestoreMicTimer.Stop(); _sliderRestoreMicTimer.Dispose(); _sliderRestoreMicTimer = null; }
                     try { Audio.SetMicVolume(_micSlider.Value); } catch { }
                     FlashApplied(true, "Mic locked at " + _micSlider.Value + "%.");
-                    _guideState = GuideState.FINISH; // Guide moves to Save button
+                   
                 } else {
                     FlashApplied(true, "Mic lock disabled.");
                     AnimateWizardSliderRestore(true);
@@ -465,14 +442,6 @@ namespace AngryAudio
             _tglNotifyDev = new ToggleSwitch { Location = Dpi.Pt(20, gy + 136), Checked = true };
             _tglNotifyDev.CheckedChanged += (s2, e2) => { if (_onToggle != null) _onToggle(_tglNotifyDev.Checked ? "notify_dev_on" : "notify_dev_off"); };
             _tglNotifyDev.PaintParentBg = PaintCardBg; _card2.Controls.Add(_tglNotifyDev);
-
-            // Mic lock tip for Page 2
-            _tipMicLock = MakeTip("\ud83d\udd12 Locks your mic at 100% so you never\nhave to yell because some app turned\nyour volume down!");
-            _tipMicLock.Size = Dpi.Size(230, 56);
-            _tipMicLock.Location = Dpi.Pt(170, 82);
-            _tipMicLock.Visible = false;
-            _card2.Controls.Add(_tipMicLock);
-            _tipMicLock.BringToFront();
 
             // ALL text painted — zero Labels, shooting star visible everywhere
             _card2.Paint += (s, e) => {
@@ -532,14 +501,11 @@ namespace AngryAudio
                 using (var f = new Font("Segoe UI", 9f)) using (var b = new SolidBrush(TXT2))
                     g.DrawString("Device Change Alerts", f, b, Dpi.S(68), genY + Dpi.S(138));
 
-                // === Guide star on Page 2 — orbit around mic lock toggle ===
-                if (_guideState == GuideState.PAGE2 && _tglMicEnf != null) {
-                    var r = new Rectangle(Dpi.S(14), Dpi.S(10), Dpi.S(340), Dpi.S(100));
-                    int pad = Dpi.S(4);
-                    var saved = g.Save();
-                    g.TranslateTransform(r.X - pad, r.Y - pad);
-                    DarkTheme.PaintOrbitingStar(g, r.Width + pad * 2, r.Height + pad * 2, _pulsePhase, Dpi.S(8));
-                    g.Restore(saved);
+                // === Inline tip text — same style as other card text ===
+                if (_showTipMicLock) {
+                    using (var f = new Font("Segoe UI", 7f, FontStyle.Italic))
+                    using (var b = new SolidBrush(Color.FromArgb(90, ACC.R, ACC.G, ACC.B)))
+                        g.DrawString("Locks your mic at 100% so you never have to yell because some app turned your volume down.", f, b, Dpi.S(20), py + Dpi.S(68));
                 }
             };
 
@@ -686,7 +652,7 @@ namespace AngryAudio
                 }
             }
         }
-        void OnKeyCapture(object s, KeyEventArgs e) { if (!_capturingKey) return; if (e.KeyCode == Keys.Escape) { _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; return; } _pttKeyCode = (int)e.KeyCode; _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; UpdatePttTogglesEnabled(); _guideState = GuideState.TOGGLES; FlashToggles(); ShowTip(_tipHotkey); }
+        void OnKeyCapture(object s, KeyEventArgs e) { if (!_capturingKey) return; if (e.KeyCode == Keys.Escape) { _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; return; } _pttKeyCode = (int)e.KeyCode; _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; UpdatePttTogglesEnabled(); FlashToggles(); ShowTipFlag(ref _showTipHotkey); }
         void UpdatePttTogglesEnabled() { bool hasKey = _pttKeyCode > 0; if (_tglPtt != null) _tglPtt.Enabled = hasKey; if (_tglPtm != null) _tglPtm.Enabled = hasKey; if (_tglPtToggle != null) _tglPtToggle.Enabled = hasKey; }
 
         // --- Toggle flicker animation (draws attention to mode selection) ---
@@ -710,55 +676,19 @@ namespace AngryAudio
             _flashTimer.Start();
         }
 
-        // --- Tip bubbles ---
-        private Label _tipHotkey, _tipMicLock, _tipFunCallout;
-        void CreateTips() {
-            _tipHotkey = MakeTip("\u2B50 Pick the same key you use for voice chat\nin Discord, Zoom, or your game!");
-            _tipHotkey.Location = Dpi.Pt(210, 174);
-            _tipHotkey.Visible = false;
-            _card1.Controls.Add(_tipHotkey);
-            _tipHotkey.BringToFront();
-
-            _tipFunCallout = MakeTip("\ud83c\udfa4 Angry Audio silently shows when your mic\nis hot \u2014 so you don't rant about your boss\nwith everyone listening!");
-            _tipFunCallout.Size = Dpi.Size(230, 56);
-            _tipFunCallout.Location = Dpi.Pt(120, 38);
-            _tipFunCallout.Visible = false;
-            _card1.Controls.Add(_tipFunCallout);
-            _tipFunCallout.BringToFront();
+        // --- Tip visibility flags (painted in card Paint handlers, not floating Labels) ---
+        private bool _showTipHotkey, _showTipFunCallout, _showTipMicLock;
+        private Timer _tipDismissTimer;
+        void ShowTipFlag(ref bool flag) {
+            flag = true;
+            if (_card1 != null) _card1.Invalidate(false);
+            if (_card2 != null) _card2.Invalidate(false);
+            // Auto-dismiss after 10 seconds
+            if (_tipDismissTimer != null) { _tipDismissTimer.Stop(); _tipDismissTimer.Dispose(); }
+            _tipDismissTimer = new Timer { Interval = 10000 };
+            _tipDismissTimer.Tick += (s, e) => { _showTipHotkey = false; _showTipFunCallout = false; _showTipMicLock = false; _tipDismissTimer.Stop(); if (_card1 != null) _card1.Invalidate(false); if (_card2 != null) _card2.Invalidate(false); };
+            _tipDismissTimer.Start();
         }
-        Label MakeTip(string text) {
-            var lbl = new Label {
-                Text = text, AutoSize = false, Size = Dpi.Size(210, 52),
-                Font = new Font("Segoe UI", 8f), ForeColor = Color.FromArgb(200, 210, 220),
-                BackColor = Color.FromArgb(22, 26, 34), TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(Dpi.S(10), Dpi.S(6), Dpi.S(10), Dpi.S(6))
-            };
-            lbl.Paint += (s, e) => {
-                var g = e.Graphics;
-                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                int r = Dpi.S(6);
-                // Dark fill with subtle gradient
-                using (var path = DarkTheme.RoundedRect(new Rectangle(1, 1, lbl.Width - 3, lbl.Height - 3), r))
-                using (var b = new System.Drawing.Drawing2D.LinearGradientBrush(
-                    new Point(0, 0), new Point(0, lbl.Height),
-                    Color.FromArgb(28, 34, 44), Color.FromArgb(18, 22, 30)))
-                    g.FillPath(b, path);
-                // Accent border
-                using (var path = DarkTheme.RoundedRect(new Rectangle(0, 0, lbl.Width - 1, lbl.Height - 1), r))
-                using (var p = new Pen(Color.FromArgb(100, ACC.R, ACC.G, ACC.B), 1.2f))
-                    g.DrawPath(p, path);
-                // Text
-                var tf = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak;
-                var textRect = new Rectangle(Dpi.S(10), Dpi.S(4), lbl.Width - Dpi.S(20), lbl.Height - Dpi.S(8));
-                TextRenderer.DrawText(g, lbl.Text, lbl.Font, textRect, lbl.ForeColor, tf);
-            };
-            lbl.Click += (s, e) => lbl.Visible = false;
-            var dismiss = new Timer { Interval = 8000 };
-            dismiss.Tick += (s, e) => { lbl.Visible = false; dismiss.Stop(); dismiss.Dispose(); };
-            lbl.VisibleChanged += (s, e) => { if (lbl.Visible) dismiss.Start(); else try { dismiss.Stop(); } catch {} };
-            return lbl;
-        }
-        void ShowTip(Label tip) { if (tip != null) tip.Visible = true; }
         string KeyName(int c) { return PushToTalk.GetKeyName(c); }
 
         void HidePage(Panel p) {
@@ -774,10 +704,6 @@ namespace AngryAudio
 
         void ShowPage1() {
             _currentPage = 1;
-            // Restore guide state based on current progress
-            if (_pttKeyCode <= 0) _guideState = GuideState.HOTKEY;
-            else if (!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked) _guideState = GuideState.TOGGLES;
-            else _guideState = GuideState.NEXT;
             HidePage(_page2);
             ShowPageFill(_page1);
             _showPage1Extras?.Invoke();
@@ -785,11 +711,11 @@ namespace AngryAudio
         }
         void ShowPage2() {
             _currentPage = 2;
-            _guideState = GuideState.PAGE2;
+            
             HidePage(_page1);
             ShowPageFill(_page2);
             _showPage2Extras?.Invoke();
-            ShowTip(_tipMicLock);
+            ShowTipFlag(ref _showTipMicLock);
             Invalidate(true);
         }
         void DoSave() {
@@ -876,6 +802,7 @@ namespace AngryAudio
             _pollTimer?.Stop(); _pollTimer?.Dispose();
             _captureTimer?.Stop(); _captureTimer?.Dispose();
             _flashTimer?.Stop(); _flashTimer?.Dispose();
+            _tipDismissTimer?.Stop(); _tipDismissTimer?.Dispose();
             _micFlashTimer?.Stop(); _micFlashTimer?.Dispose();
             _spkFlashTimer?.Stop(); _spkFlashTimer?.Dispose();
             _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose();
