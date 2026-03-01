@@ -1854,6 +1854,9 @@ namespace AngryAudio
             Logger.Info("CheckMicUnprotected: unprotected=" + unprotected + " micEnf=" + _settings.MicEnforceEnabled + " afkMic=" + _settings.AfkMicMuteEnabled + " ptt=" + _settings.PushToTalkEnabled + " ptm=" + _settings.PushToMuteEnabled + " ptToggle=" + _settings.PushToToggleEnabled);
             if (!unprotected) return;
 
+            // Dismiss any active correction/info toasts so the warning stands alone
+            DismissActiveToast();
+
             Action showWarning = () =>
             {
                 try
