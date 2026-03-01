@@ -1380,9 +1380,9 @@ namespace AngryAudio
                 _saveOrbitPhase += 0.08f;
                 if (_saveOrbitPhase > (float)(Math.PI * 2)) _saveOrbitPhase -= (float)(Math.PI * 2);
                 float pulse = (float)((Math.Sin(_saveOrbitPhase * 0.6) + 1.0) / 2.0);
-                int r = (int)(ACC.R + (180 - ACC.R) * pulse);
-                int gb = (int)(ACC.G + (240 - ACC.G) * pulse);
-                int bl = (int)(ACC.B + (255 - ACC.B) * pulse);
+                int r = (int)(40 + (140 - 40) * pulse);
+                int gb = (int)(100 + (220 - 100) * pulse);
+                int bl = (int)(140 + (255 - 140) * pulse);
                 if (!bs.ClientRectangle.Contains(bs.PointToClient(Cursor.Position)))
                     bs.BackColor = Color.FromArgb(r, gb, bl);
                 bs.Invalidate();

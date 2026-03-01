@@ -394,11 +394,12 @@ namespace AngryAudio
             _pulseTimer.Tick += (s, e) => {
                 _pulsePhase += 0.08f;
                 if (_pulsePhase > (float)(Math.PI * 2)) _pulsePhase -= (float)(Math.PI * 2);
-                // Slow background pulse — button glows bright then dim
+                // Strong background pulse — button goes from dark blue to bright white-blue
                 float pulse = (float)((Math.Sin(_pulsePhase * 0.6) + 1.0) / 2.0); // 0 to 1, slow
-                int r = (int)(ACC.R + (180 - ACC.R) * pulse);
-                int gb = (int)(ACC.G + (240 - ACC.G) * pulse);
-                int bl = (int)(ACC.B + (255 - ACC.B) * pulse);
+                // Dark phase: deep blue (40, 100, 140). Bright phase: vivid light (140, 220, 255)
+                int r = (int)(40 + (140 - 40) * pulse);
+                int gb = (int)(100 + (220 - 100) * pulse);
+                int bl = (int)(140 + (255 - 140) * pulse);
                 Color pulseBg = Color.FromArgb(r, gb, bl);
                 if (_btnNext.Visible && !_btnNext.ClientRectangle.Contains(_btnNext.PointToClient(Cursor.Position)))
                     _btnNext.BackColor = pulseBg;
