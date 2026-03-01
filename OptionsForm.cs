@@ -1825,7 +1825,15 @@ namespace AngryAudio
         static int Clamp(int v,int min,int max){return v<min?min:v>max?max:v;}
         public void OnRunWizard(){DialogResult=DialogResult.Retry;Close();}
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData) {
-            if (keyData == Keys.Space && !_capturingKey) return true;
+            // During key capture, intercept ALL keys including CapsLock, Space, etc.
+            if (_capturingKey || _capturingKey2 || _capturingKey3) {
+                var e = new KeyEventArgs(keyData & Keys.KeyCode);
+                if (_capturingKey) OnKeyCapture(this, e);
+                else if (_capturingKey2) OnKeyCapture2(this, e);
+                else if (_capturingKey3) OnKeyCapture3(this, e);
+                return true; // consume the key
+            }
+            if (keyData == Keys.Space) return true;
             return base.ProcessCmdKey(ref msg, keyData);
         }
         // WS_EX_COMPOSITED: forces all child controls to paint in a single composited pass.

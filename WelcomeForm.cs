@@ -272,8 +272,7 @@ namespace AngryAudio
         private int _currentPage = 1;
         private Timer _pulseTimer;
         private float _pulsePhase; // 0 to 2*PI, drives the glow animation
-        private ShootingStar _shootingStar;
-        private CelestialEvents _celestialEvents;
+        private StarBackground _stars;
 
         // Dynamic painted text (no Labels — shooting stars pass through)
         private string _micNameText = "Detecting...", _spkNameText = "Detecting...";
@@ -303,7 +302,7 @@ namespace AngryAudio
             "without your permission.";
 
         private Action<string> _onToggle;
-        const int STAR_SEED = 42;
+        // Star rendering now handled by shared StarBackground class
 
         Point FormOffset(Control c) {
             int x = 0, y = 0;
@@ -316,11 +315,15 @@ namespace AngryAudio
             try {
                 var off = FormOffset(c);
                 g.TranslateTransform(-off.X, -off.Y);
-                DarkTheme.PaintCardStars(g, ClientSize.Width, ClientSize.Height, STAR_SEED, 0, alphaMul);
-                if (shootingStar && _shootingStar != null)
-                    DarkTheme.PaintShootingStar(g, ClientSize.Width, ClientSize.Height, _shootingStar);
-                if (shootingStar && _celestialEvents != null)
-                    DarkTheme.PaintCelestialEvent(g, ClientSize.Width, ClientSize.Height, _celestialEvents);
+                int w = ClientSize.Width, h = ClientSize.Height;
+                if (alphaMul < 0.5f)
+                    _stars.PaintDimStars(g, w, h);
+                else
+                    _stars.PaintFullStars(g, w, h);
+                if (shootingStar) {
+                    if (_stars.Shooting != null) DarkTheme.PaintShootingStar(g, w, h, _stars.Shooting);
+                    if (_stars.Celestial != null) DarkTheme.PaintCelestialEvent(g, w, h, _stars.Celestial);
+                }
                 g.ResetTransform();
             } catch { try { g.ResetTransform(); } catch { } }
         }
@@ -451,20 +454,13 @@ namespace AngryAudio
             _page1.Paint += (s, e) => { PaintUnifiedStars(e.Graphics, _page1); };
             _page2 = new BufferedPanel { Dock = DockStyle.Fill, AutoScroll = false, Padding = Dpi.Pad(16, 4, 16, 4), BackColor = BG, Visible = false };
             _page2.Paint += (s, e) => { PaintUnifiedStars(e.Graphics, _page2); };
-            // Shooting star animation
-            _shootingStar = new ShootingStar(() => { try {
-                var p = _currentPage == 1 ? _page1 : _page2;
-                if (p.Visible) p.Invalidate();
-                _headerPanel.Invalidate();
-            } catch { } });
-            _shootingStar.Start();
-            _celestialEvents = new CelestialEvents(() => { try {
+            // Shooting star animation — shared StarBackground system
+            _stars = new StarBackground(() => { try {
                 var p = _currentPage == 1 ? _page1 : _page2;
                 if (p.Visible) p.Invalidate();
                 _headerPanel.Invalidate();
                 footer.Invalidate();
             } catch { } });
-            _celestialEvents.Start();
 
             // ============================================================
             // Page 1: Single card — PTT + AFK (free features)
@@ -953,8 +949,7 @@ namespace AngryAudio
             _spkFlashTimer?.Stop(); _spkFlashTimer?.Dispose();
             _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose();
             _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose();
-            _shootingStar?.Dispose();
-            _celestialEvents?.Stop(); _celestialEvents?.Dispose();
+            _stars?.Dispose();
             if (DialogResult != DialogResult.OK) { ProtectMic = false; ProtectSpeakers = false; }
             base.OnFormClosing(e);
         }
