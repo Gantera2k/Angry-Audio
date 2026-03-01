@@ -454,14 +454,14 @@ namespace AngryAudio
             // Shooting star animation
             _shootingStar = new ShootingStar(() => { try {
                 var p = _currentPage == 1 ? _page1 : _page2;
-                if (p.Visible) p.Invalidate();
+                if (p.Visible) { foreach (Control ch in p.Controls) ch.Invalidate(); p.Invalidate(); }
                 _headerPanel.Invalidate();
                 footer.Invalidate();
             } catch { } });
             _shootingStar.Start();
             _celestialEvents = new CelestialEvents(() => { try {
                 var p = _currentPage == 1 ? _page1 : _page2;
-                if (p.Visible) p.Invalidate();
+                if (p.Visible) { foreach (Control ch in p.Controls) ch.Invalidate(); p.Invalidate(); }
                 _headerPanel.Invalidate();
                 footer.Invalidate();
             } catch { } });
