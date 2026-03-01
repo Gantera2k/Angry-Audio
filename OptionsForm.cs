@@ -34,7 +34,7 @@ namespace AngryAudio
         private CheckBox _chkKey1Overlay, _chkKey2Overlay, _chkKey3Overlay;
         private bool _key1ShowOverlay = true, _key2ShowOverlay = true, _key3ShowOverlay = true;
         private Timer _pollTimer;
-        private int _pttKeyCode = 0x14, _pttKeyCode2 = 0, _pttKeyCode3 = 0; private bool _capturingKey, _capturingKey2, _capturingKey3, _loading;
+        private int _pttKeyCode = 0, _pttKeyCode2 = 0, _pttKeyCode3 = 0; private bool _capturingKey, _capturingKey2, _capturingKey3, _loading;
         public bool IsCapturingKey { get { return _capturingKey || _capturingKey2 || _capturingKey3; } }
         private SlickSlider _trkMicVol, _trkSpkVol, _sysVolSlider;
         private Label _lblSysVolPct;
@@ -99,7 +99,7 @@ namespace AngryAudio
             _twinkleTimer.Start();
             // Shooting star animation — occasional streaks across card backgrounds
             _stars = new StarBackground(() => { InvalidateCards(); });
-            FormClosing += (s, e) => { CleanupEnforcement(); _pollTimer?.Stop(); _pollTimer?.Dispose(); _twinkleTimer?.Stop(); _twinkleTimer?.Dispose(); _stars?.Dispose(); _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _updateShimmerTimer?.Stop(); _updateShimmerTimer?.Dispose(); _saveOrbitTimer?.Stop(); _saveOrbitTimer?.Dispose(); };
+            FormClosing += (s, e) => { RemoveCaptureHook(); CleanupEnforcement(); _pollTimer?.Stop(); _pollTimer?.Dispose(); _twinkleTimer?.Stop(); _twinkleTimer?.Dispose(); _stars?.Dispose(); _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _updateShimmerTimer?.Stop(); _updateShimmerTimer?.Dispose(); _saveOrbitTimer?.Stop(); _saveOrbitTimer?.Dispose(); };
         }
 
         private Size _defaultSize;
@@ -524,7 +524,7 @@ namespace AngryAudio
             } };
             y += 48;
             AddText(card, "Hotkey 1:", 20, y+3, 9f, TXT2);
-            _lblPttKey = new Label{Text=PushToTalk.GetKeyName(0x14),Font=new Font("Segoe UI",9.5f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(90,26),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(120,y)};
+            _lblPttKey = new Label{Text=_pttKeyCode > 0 ? PushToTalk.GetKeyName(_pttKeyCode) : "Add Key",Font=new Font("Segoe UI",9.5f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(90,26),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(120,y)};
             _lblPttKey.Paint += (s,e) => { using(var p=new Pen(INPUT_BDR)) e.Graphics.DrawRectangle(p,0,0,_lblPttKey.Width-1,_lblPttKey.Height-1); };
             _lblPttKey.MouseEnter += (s,e) => { if(!_capturingKey) _lblPttKey.BackColor = Color.FromArgb(28, 28, 28); };
             _lblPttKey.MouseLeave += (s,e) => { if(!_capturingKey) _lblPttKey.BackColor = INPUT_BG; };
@@ -1129,12 +1129,48 @@ namespace AngryAudio
             _saveOrbitTimer.Start();
         }
 
-        void StartKeyCapture(){if(_capturingKey2||_capturingKey3)return;_capturingKey=true;_lblPttKey.Text="Press...";_lblPttKey.BackColor=ACC;_lblPttKey.ForeColor=Color.White;KeyPreview=true;KeyDown+=OnKeyCapture;}
+        // === Low-level keyboard hook for key capture mode ===
+        // ProcessCmdKey doesn't reliably catch CapsLock/NumLock/ScrollLock on all systems.
+        // This temp hook fires for EVERY key at the OS level. Installed only during capture.
+        private const int WH_KEYBOARD_LL = 13;
+        private const int WM_KEYDOWN = 0x0100;
+        private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll")] private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
+        [DllImport("user32.dll")] private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+        [DllImport("user32.dll")] private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+        [DllImport("kernel32.dll")] private static extern IntPtr GetModuleHandle(string lpModuleName);
+        private IntPtr _captureHookId = IntPtr.Zero;
+        private LowLevelKeyboardProc _captureHookProc; // prevent GC
+
+        void InstallCaptureHook() {
+            if (_captureHookId != IntPtr.Zero) return;
+            _captureHookProc = CaptureHookCallback;
+            using (var proc = System.Diagnostics.Process.GetCurrentProcess())
+            using (var mod = proc.MainModule)
+                _captureHookId = SetWindowsHookEx(WH_KEYBOARD_LL, _captureHookProc, GetModuleHandle(mod.ModuleName), 0);
+        }
+
+        void RemoveCaptureHook() {
+            if (_captureHookId != IntPtr.Zero) { UnhookWindowsHookEx(_captureHookId); _captureHookId = IntPtr.Zero; }
+        }
+
+        IntPtr CaptureHookCallback(int nCode, IntPtr wParam, IntPtr lParam) {
+            if (nCode >= 0 && (int)wParam == WM_KEYDOWN && (_capturingKey || _capturingKey2 || _capturingKey3)) {
+                int vk = Marshal.ReadInt32(lParam);
+                var e = new KeyEventArgs((Keys)vk);
+                if (_capturingKey) { BeginInvoke((Action)(() => OnKeyCapture(this, e))); return (IntPtr)1; }
+                else if (_capturingKey2) { BeginInvoke((Action)(() => OnKeyCapture2(this, e))); return (IntPtr)1; }
+                else if (_capturingKey3) { BeginInvoke((Action)(() => OnKeyCapture3(this, e))); return (IntPtr)1; }
+            }
+            return CallNextHookEx(_captureHookId, nCode, wParam, lParam);
+        }
+
+        void StartKeyCapture(){if(_capturingKey2||_capturingKey3)return;_capturingKey=true;_lblPttKey.Text="Press...";_lblPttKey.BackColor=ACC;_lblPttKey.ForeColor=Color.White;KeyPreview=true;KeyDown+=OnKeyCapture;InstallCaptureHook();}
         void StartKeyCapture2(){
             if(!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked){EnforceToggleSelection();return;}
             if(_capturingKey || _capturingKey3){return;}
-            _capturingKey2=true;_lblPttKey2.Text="Press...";_lblPttKey2.BackColor=ACC;_lblPttKey2.ForeColor=Color.White;_btnAddKey2.Visible=false;_lblPttKey2.Visible=true;_lblKey2Label.Visible=true;_lblKey2Hint.Visible=true;KeyPreview=true;KeyDown+=OnKeyCapture2;}
-        void OnKeyCapture2(object s,KeyEventArgs e){if(!_capturingKey2)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){if(_pttKeyCode2==0){UpdateKey2Visibility();}else{_lblPttKey2.Text=KeyName(_pttKeyCode2);}_lblPttKey2.BackColor=INPUT_BG;_lblPttKey2.ForeColor=ACC;_capturingKey2=false;KeyPreview=false;KeyDown-=OnKeyCapture2;return;}
+            _capturingKey2=true;_lblPttKey2.Text="Press...";_lblPttKey2.BackColor=ACC;_lblPttKey2.ForeColor=Color.White;_btnAddKey2.Visible=false;_lblPttKey2.Visible=true;_lblKey2Label.Visible=true;_lblKey2Hint.Visible=true;KeyPreview=true;KeyDown+=OnKeyCapture2;InstallCaptureHook();}
+        void OnKeyCapture2(object s,KeyEventArgs e){if(!_capturingKey2)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){if(_pttKeyCode2==0){UpdateKey2Visibility();}else{_lblPttKey2.Text=KeyName(_pttKeyCode2);}_lblPttKey2.BackColor=INPUT_BG;_lblPttKey2.ForeColor=ACC;_capturingKey2=false;KeyPreview=false;KeyDown-=OnKeyCapture2;RemoveCaptureHook();return;}
             int vk=(int)e.KeyCode;
             if (vk == 0x10) vk = IsKeyDown(0xA1) ? 0xA1 : 0xA0;
             if (vk == 0x11) vk = IsKeyDown(0xA3) ? 0xA3 : 0xA2;
@@ -1142,13 +1178,13 @@ namespace AngryAudio
             if(vk>=0xA0&&vk<=0xA5){try{if((GetAsyncKeyState(0xA1)&0x8000)!=0)vk=0xA1;else if((GetAsyncKeyState(0xA0)&0x8000)!=0)vk=0xA0;else if((GetAsyncKeyState(0xA3)&0x8000)!=0)vk=0xA3;else if((GetAsyncKeyState(0xA2)&0x8000)!=0)vk=0xA2;else if((GetAsyncKeyState(0xA5)&0x8000)!=0)vk=0xA5;else if((GetAsyncKeyState(0xA4)&0x8000)!=0)vk=0xA4;}catch{}}
             _pttKeyCode2=vk;
             // Duplicate check
-            if(vk==_pttKeyCode || (_pttKeyCode3>0 && vk==_pttKeyCode3)){_capturingKey2=false;KeyPreview=false;KeyDown-=OnKeyCapture2;_pttKeyCode2=0;_settings.PushToTalkKey2=0;ShakeReject(_lblPttKey2, ()=>{UpdateKey2Visibility();});return;}
-            _lblPttKey2.Text=KeyName(_pttKeyCode2);_lblPttKey2.BackColor=INPUT_BG;_lblPttKey2.ForeColor=ACC;_capturingKey2=false;KeyPreview=false;KeyDown-=OnKeyCapture2;_settings.PushToTalkKey2=_pttKeyCode2;_key2ShowOverlay=true;_settings.PttKey2ShowOverlay=true;if(_chkKey2Overlay!=null)_chkKey2Overlay.Checked=true;UpdateKey2Visibility();if(_onToggle!=null)_onToggle("ptt_key2:"+_pttKeyCode2);}
+            if(vk==_pttKeyCode || (_pttKeyCode3>0 && vk==_pttKeyCode3)){_capturingKey2=false;KeyPreview=false;KeyDown-=OnKeyCapture2;RemoveCaptureHook();_pttKeyCode2=0;_settings.PushToTalkKey2=0;ShakeReject(_lblPttKey2, ()=>{UpdateKey2Visibility();});return;}
+            _lblPttKey2.Text=KeyName(_pttKeyCode2);_lblPttKey2.BackColor=INPUT_BG;_lblPttKey2.ForeColor=ACC;_capturingKey2=false;KeyPreview=false;KeyDown-=OnKeyCapture2;RemoveCaptureHook();_settings.PushToTalkKey2=_pttKeyCode2;_key2ShowOverlay=true;_settings.PttKey2ShowOverlay=true;if(_chkKey2Overlay!=null)_chkKey2Overlay.Checked=true;UpdateKey2Visibility();if(_onToggle!=null)_onToggle("ptt_key2:"+_pttKeyCode2);}
         void StartKeyCapture3(){
             if(!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked){EnforceToggleSelection();return;}
             if(_capturingKey || _capturingKey2){return;}
-            _capturingKey3=true;_lblPttKey3.Text="Press...";_lblPttKey3.BackColor=ACC;_lblPttKey3.ForeColor=Color.White;_btnAddKey3.Visible=false;_lblPttKey3.Visible=true;_lblKey3Label.Visible=true;_lblKey3Hint.Visible=true;KeyPreview=true;KeyDown+=OnKeyCapture3;}
-        void OnKeyCapture3(object s,KeyEventArgs e){if(!_capturingKey3)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){if(_pttKeyCode3==0){UpdateKey3Visibility();}else{_lblPttKey3.Text=KeyName(_pttKeyCode3);}_lblPttKey3.BackColor=INPUT_BG;_lblPttKey3.ForeColor=ACC;_capturingKey3=false;KeyPreview=false;KeyDown-=OnKeyCapture3;return;}
+            _capturingKey3=true;_lblPttKey3.Text="Press...";_lblPttKey3.BackColor=ACC;_lblPttKey3.ForeColor=Color.White;_btnAddKey3.Visible=false;_lblPttKey3.Visible=true;_lblKey3Label.Visible=true;_lblKey3Hint.Visible=true;KeyPreview=true;KeyDown+=OnKeyCapture3;InstallCaptureHook();}
+        void OnKeyCapture3(object s,KeyEventArgs e){if(!_capturingKey3)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){if(_pttKeyCode3==0){UpdateKey3Visibility();}else{_lblPttKey3.Text=KeyName(_pttKeyCode3);}_lblPttKey3.BackColor=INPUT_BG;_lblPttKey3.ForeColor=ACC;_capturingKey3=false;KeyPreview=false;KeyDown-=OnKeyCapture3;RemoveCaptureHook();return;}
             int vk=(int)e.KeyCode;
             if (vk == 0x10) vk = IsKeyDown(0xA1) ? 0xA1 : 0xA0;
             if (vk == 0x11) vk = IsKeyDown(0xA3) ? 0xA3 : 0xA2;
@@ -1156,8 +1192,8 @@ namespace AngryAudio
             if(vk>=0xA0&&vk<=0xA5){try{if((GetAsyncKeyState(0xA1)&0x8000)!=0)vk=0xA1;else if((GetAsyncKeyState(0xA0)&0x8000)!=0)vk=0xA0;else if((GetAsyncKeyState(0xA3)&0x8000)!=0)vk=0xA3;else if((GetAsyncKeyState(0xA2)&0x8000)!=0)vk=0xA2;else if((GetAsyncKeyState(0xA5)&0x8000)!=0)vk=0xA5;else if((GetAsyncKeyState(0xA4)&0x8000)!=0)vk=0xA4;}catch{}}
             _pttKeyCode3=vk;
             // Duplicate check
-            if(vk==_pttKeyCode || (_pttKeyCode2>0 && vk==_pttKeyCode2)){_capturingKey3=false;KeyPreview=false;KeyDown-=OnKeyCapture3;_pttKeyCode3=0;_settings.PushToTalkKey3=0;ShakeReject(_lblPttKey3, ()=>{UpdateKey3Visibility();});return;}
-            _lblPttKey3.Text=KeyName(_pttKeyCode3);_lblPttKey3.BackColor=INPUT_BG;_lblPttKey3.ForeColor=ACC;_capturingKey3=false;KeyPreview=false;KeyDown-=OnKeyCapture3;_settings.PushToTalkKey3=_pttKeyCode3;_key3ShowOverlay=true;_settings.PttKey3ShowOverlay=true;if(_chkKey3Overlay!=null)_chkKey3Overlay.Checked=true;UpdateKey3Visibility();if(_onToggle!=null)_onToggle("ptt_key3:"+_pttKeyCode3);}
+            if(vk==_pttKeyCode || (_pttKeyCode2>0 && vk==_pttKeyCode2)){_capturingKey3=false;KeyPreview=false;KeyDown-=OnKeyCapture3;RemoveCaptureHook();_pttKeyCode3=0;_settings.PushToTalkKey3=0;ShakeReject(_lblPttKey3, ()=>{UpdateKey3Visibility();});return;}
+            _lblPttKey3.Text=KeyName(_pttKeyCode3);_lblPttKey3.BackColor=INPUT_BG;_lblPttKey3.ForeColor=ACC;_capturingKey3=false;KeyPreview=false;KeyDown-=OnKeyCapture3;RemoveCaptureHook();_settings.PushToTalkKey3=_pttKeyCode3;_key3ShowOverlay=true;_settings.PttKey3ShowOverlay=true;if(_chkKey3Overlay!=null)_chkKey3Overlay.Checked=true;UpdateKey3Visibility();if(_onToggle!=null)_onToggle("ptt_key3:"+_pttKeyCode3);}
         void UpdateKey3Visibility(){bool hasKey3=_pttKeyCode3>0;_lblPttKey3.Visible=hasKey3;_lblKey3Label.Visible=hasKey3;_lblKey3Hint.Visible=hasKey3;_btnRemoveKey3.Visible=hasKey3;_btnAddKey3.Visible=!hasKey3 && _pttKeyCode2 > 0;if(_chkKey3Overlay!=null)_chkKey3Overlay.Visible=hasKey3;}
         CheckBox MakeOverlayCheck(int y, Panel card, bool initialOn, Action<bool> onChange) {
             // Custom eye toggle — owner-drawn, no text
@@ -1209,7 +1245,7 @@ namespace AngryAudio
             return eye;
         }
         void UpdateKey2Visibility(){bool hasKey2=_pttKeyCode2>0;_lblPttKey2.Visible=hasKey2;_lblKey2Label.Visible=hasKey2;_lblKey2Hint.Visible=hasKey2;_btnRemoveKey2.Visible=hasKey2;_btnAddKey2.Visible=!hasKey2;if(_chkKey2Overlay!=null)_chkKey2Overlay.Visible=hasKey2;if(_btnAddKey3!=null)UpdateKey3Visibility();}
-        void OnKeyCapture(object s,KeyEventArgs e){if(!_capturingKey)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){_lblPttKey.Text=KeyName(_pttKeyCode);_lblPttKey.BackColor=INPUT_BG;_lblPttKey.ForeColor=ACC;_capturingKey=false;KeyPreview=false;KeyDown-=OnKeyCapture;return;}
+        void OnKeyCapture(object s,KeyEventArgs e){if(!_capturingKey)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){_lblPttKey.Text=KeyName(_pttKeyCode);_lblPttKey.BackColor=INPUT_BG;_lblPttKey.ForeColor=ACC;_capturingKey=false;KeyPreview=false;KeyDown-=OnKeyCapture;RemoveCaptureHook();return;}
             // WinForms gives generic modifier VK codes (0x10=Shift, 0x11=Ctrl, 0x12=Alt)
             // but the low-level keyboard hook sees specific left/right codes (0xA0/0xA1, 0xA2/0xA3, 0xA4/0xA5).
             // Translate generic → left-specific so the hook can match.
@@ -1219,8 +1255,8 @@ namespace AngryAudio
             if (vk == 0x12) vk = IsKeyDown(0xA5) ? 0xA5 : 0xA4; // Menu → LAlt or RAlt
             _pttKeyCode=vk;
             // Duplicate check
-            if((_pttKeyCode2>0 && vk==_pttKeyCode2)||(_pttKeyCode3>0 && vk==_pttKeyCode3)){_capturingKey=false;KeyPreview=false;KeyDown-=OnKeyCapture;_pttKeyCode=_settings.PushToTalkKey;_lblPttKey.Text=KeyName(_pttKeyCode);ShakeReject(_lblPttKey);return;}
-            _lblPttKey.Text=KeyName(_pttKeyCode);_lblPttKey.BackColor=INPUT_BG;_lblPttKey.ForeColor=ACC;_capturingKey=false;KeyPreview=false;KeyDown-=OnKeyCapture;_settings.PushToTalkKey=_pttKeyCode;if(_onToggle!=null)_onToggle("ptt_key:"+_pttKeyCode);}
+            if((_pttKeyCode2>0 && vk==_pttKeyCode2)||(_pttKeyCode3>0 && vk==_pttKeyCode3)){_capturingKey=false;KeyPreview=false;KeyDown-=OnKeyCapture;RemoveCaptureHook();_pttKeyCode=_settings.PushToTalkKey;_lblPttKey.Text=KeyName(_pttKeyCode);ShakeReject(_lblPttKey);return;}
+            _lblPttKey.Text=KeyName(_pttKeyCode);_lblPttKey.BackColor=INPUT_BG;_lblPttKey.ForeColor=ACC;_capturingKey=false;KeyPreview=false;KeyDown-=OnKeyCapture;RemoveCaptureHook();_settings.PushToTalkKey=_pttKeyCode;if(_onToggle!=null)_onToggle("ptt_key:"+_pttKeyCode);}
         [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vKey);
         static bool IsKeyDown(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
         string KeyName(int c){return PushToTalk.GetKeyName(c);}

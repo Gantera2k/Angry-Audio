@@ -338,6 +338,7 @@ namespace AngryAudio
         {
             switch (vk)
             {
+                case 0: return "Add Key";
                 case 0x08: return "Backspace";
                 case 0x09: return "Tab";
                 case 0x0D: return "Enter";

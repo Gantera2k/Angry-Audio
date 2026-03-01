@@ -29,7 +29,7 @@ namespace AngryAudio
         public bool PttEnabled { get; private set; }
         public bool PtMuteEnabled { get; private set; }
         public bool PtToggleEnabled { get; private set; }
-        public int PttKey { get; private set; } = 0x14;
+        public int PttKey { get; private set; } = 0;
         public bool StartupEnabled { get; private set; } = true;
         public bool NotifyCorrEnabled { get; private set; } = true;
         public bool NotifyDevEnabled { get; private set; } = true;
@@ -43,7 +43,7 @@ namespace AngryAudio
         private Label _lblPttKey;
         private Timer _pollTimer;
         private Timer _micFlashTimer, _spkFlashTimer;
-        private int _pttKeyCode = 0x14;
+        private int _pttKeyCode = 0;
         private bool _capturingKey;
         private Action _showPage1Extras, _showPage2Extras;
         private int _currentPage = 1;
@@ -254,7 +254,7 @@ namespace AngryAudio
             _tglPtToggle.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtToggle);
 
             // Hotkey row — below all 3 toggles, matching Options panel style
-            _lblPttKey = new Label { Text = "Caps Lock", Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), ForeColor = ACC, BackColor = INPUT_BG, Size = Dpi.Size(80, 26), TextAlign = ContentAlignment.MiddleCenter, Location = Dpi.Pt(118, y + 174) };
+            _lblPttKey = new Label { Text = "Add Key", Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), ForeColor = ACC, BackColor = INPUT_BG, Size = Dpi.Size(80, 26), TextAlign = ContentAlignment.MiddleCenter, Location = Dpi.Pt(118, y + 174) };
             _lblPttKey.Paint += (s, e) => { using (var p = new Pen(CARD_BDR)) e.Graphics.DrawRectangle(p, 0, 0, _lblPttKey.Width - 1, _lblPttKey.Height - 1); };
             _lblPttKey.MouseEnter += (s, e) => { if (!_capturingKey) _lblPttKey.BackColor = Color.FromArgb(28, 28, 28); };
             _lblPttKey.MouseLeave += (s, e) => { if (!_capturingKey) _lblPttKey.BackColor = INPUT_BG; };

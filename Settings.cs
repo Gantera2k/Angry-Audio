@@ -64,7 +64,7 @@ namespace AngryAudio
 
         public void ApplyDefaults()
         {
-            MicEnforceEnabled = false;
+            MicEnforceEnabled = true;
             MicVolumePercent = 100;
             MicEnforceIntervalSec = 60;
             SpeakerEnforceEnabled = false;
@@ -79,7 +79,7 @@ namespace AngryAudio
             NotifyOnCorrection = true;
             NotifyOnDeviceChange = true;
             PushToTalkEnabled = false;
-            PushToTalkKey = 0x14;  // VK_CAPS_LOCK
+            PushToTalkKey = 0;  // No default hotkey — user must set one
             PushToTalkKey2 = 0;  // disabled by default
             PushToTalkKey3 = 0;
             PttKey1ShowOverlay = true;
@@ -172,11 +172,11 @@ namespace AngryAudio
                 BackupCorruptFile();
             }
 
-            // Migration: old default was Tilde (0xC0), new default is CapsLock (0x14)
-            // Always migrate — Tilde was never a good default, spams characters in text fields
+            // Migration: old default was Tilde (0xC0) — spams characters in text fields.
+            // Migrate to no hotkey (user must set one explicitly).
             if (settings.PushToTalkKey == 0xC0)
             {
-                settings.PushToTalkKey = 0x14;
+                settings.PushToTalkKey = 0;
                 try { settings.Save(); } catch { }
             }
 
