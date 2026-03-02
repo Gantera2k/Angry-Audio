@@ -689,7 +689,15 @@ namespace AngryAudio
                 }
             }
         }
-        void OnKeyCapture(object s, KeyEventArgs e) { if (!_capturingKey) return; if (e.KeyCode == Keys.Escape) { _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; Logger.Info("Welcome: key capture cancelled"); return; } _pttKeyCode = (int)e.KeyCode; _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; Logger.Info("Welcome: captured key vk=" + _pttKeyCode + " (" + KeyName(_pttKeyCode) + ")"); if (_tipHotkey != null) _tipHotkey.Visible = false; ShowTip(_tipFunCallout); _card1.Invalidate(false); }
+        void OnKeyCapture(object s, KeyEventArgs e) { if (!_capturingKey) return; if (e.KeyCode == Keys.Escape) { _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; Logger.Info("Welcome: key capture cancelled"); return; } _pttKeyCode = (int)e.KeyCode; _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; Logger.Info("Welcome: captured key vk=" + _pttKeyCode + " (" + KeyName(_pttKeyCode) + ")");
+            // Auto-enable Push-to-Talk if no mode is selected yet
+            if (!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked) {
+                _tglPtt.Checked = true; // fires CheckedChanged → sets _modeChosen, notifies TrayApp
+            }
+            _modeChosen = true;
+            // Flash the toggle options so user knows other modes exist
+            FlashToggles();
+            if (_tipHotkey != null) _tipHotkey.Visible = false; ShowTip(_tipFunCallout); _card1.Invalidate(false); }
         // (toggles are always enabled — user picks mode FIRST in the new guided flow)
 
         // --- Toggle flicker animation (draws attention to mode selection) ---
@@ -1000,8 +1008,8 @@ namespace AngryAudio
             _tipHotkey.Location = Dpi.Pt(20, 210);
             _card1.Controls.Add(_tipHotkey); _tipHotkey.BringToFront();
 
-            // STEP 3 TIP: After key captured → confirm what just happened
-            _tipFunCallout = MakeTipCard("ALL connected mics are now controlled by your hotkey \u2014 not just one. Every mic. Hit Next!", 360, 42, arrowUp: false);
+            // STEP 3 TIP: After key captured → confirm what happened
+            _tipFunCallout = MakeTipCard("Push-to-Talk enabled! ALL connected mics are controlled \u2014 not just one. Mouse over the \u24D8 to see other modes. Hit Next!", 370, 48, arrowUp: false);
             _tipFunCallout.Location = Dpi.Pt(14, 248);
             _card1.Controls.Add(_tipFunCallout); _tipFunCallout.BringToFront();
 
