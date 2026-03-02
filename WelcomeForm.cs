@@ -382,6 +382,9 @@ namespace AngryAudio
                 // Phase 1: No mode chosen → orbit the toggle section (draws eye to "pick one")
                 // Phase 2: Mode chosen, no key → orbit the hotkey label (draws eye to "set key")
                 // Phase 3: Both done → no star
+                // Safety: if user unchecks all toggles and has no key, reset guidance
+                if (_modeChosen && _pttKeyCode <= 0 && !_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked)
+                    _modeChosen = false;
                 if (!_modeChosen && _tglPtt != null) {
                     // Orbit around all 3 toggles as a group
                     int tTop = _tglPtt.Top - Dpi.S(6);
