@@ -204,8 +204,8 @@ namespace AngryAudio
                 _pulsePhase += 0.08f;
                 if (_pulsePhase > (float)(Math.PI * 2)) _pulsePhase -= (float)(Math.PI * 2);
                 footer.Invalidate();
-                // Invalidate card1 for orbiting star (either toggle section or hotkey)
-                if (_card1 != null && _card1.Visible && (!_modeChosen || (_modeChosen && _pttKeyCode <= 0)))
+                // Invalidate card1 for orbiting star around hotkey
+                if (_pttKeyCode <= 0 && _card1 != null && _card1.Visible)
                     _card1.Invalidate(false);
                 // Invalidate visible tips for zip line animation
                 if (_tipHotkey != null && _tipHotkey.Visible) _tipHotkey.Invalidate();
@@ -385,19 +385,9 @@ namespace AngryAudio
                 // Safety: if user unchecks all toggles and has no key, reset guidance
                 if (_modeChosen && _pttKeyCode <= 0 && !_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked)
                     _modeChosen = false;
-                if (!_modeChosen && _tglPtt != null) {
-                    // Orbit around all 3 toggles as a group
-                    int tTop = _tglPtt.Top - Dpi.S(6);
-                    int tBot = _tglPtToggle.Bottom + Dpi.S(6);
-                    int tLeft = _tglPtt.Left - Dpi.S(6);
-                    int tRight = _card1.Width - Dpi.S(14);
-                    var saved = g.Save();
-                    g.TranslateTransform(tLeft, tTop);
-                    DarkTheme.PaintOrbitingStar(g, tRight - tLeft, tBot - tTop, _pulsePhase, Dpi.S(4));
-                    g.Restore(saved);
-                }
-                else if (_modeChosen && _pttKeyCode <= 0 && _lblPttKey != null) {
-                    // Orbit around hotkey label
+
+                // Orbiting star on hotkey label only — ? circles handle toggle attention
+                if (_pttKeyCode <= 0 && _lblPttKey != null) {
                     var r = _lblPttKey.Bounds;
                     int pad = Dpi.S(6);
                     var saved = g.Save();
@@ -1005,7 +995,7 @@ namespace AngryAudio
 
         void CreateTips() {
             // STEP 2 TIP: After mode chosen → guide to hotkey
-            _tipHotkey = MakeTipCard("Now set your hotkey \u2014 pick the same key you use in Discord or your game. Then click Next!", 300, 44, arrowUp: false);
+            _tipHotkey = MakeTipCard("Great choice! Now click Add Key and pick the same key you use in Discord or your game.", 300, 44, arrowUp: false);
             _tipHotkey.Location = Dpi.Pt(20, 210);
             _card1.Controls.Add(_tipHotkey); _tipHotkey.BringToFront();
 
