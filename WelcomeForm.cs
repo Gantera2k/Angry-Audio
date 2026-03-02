@@ -242,24 +242,24 @@ namespace AngryAudio
 
             // --- PTT toggles: 3 stacked with descriptions, matching Options panel ---
             _tglPtt = new ToggleSwitch { Location = Dpi.Pt(20, y + 44) };
-            _tglPtt.CheckedChanged += (s2, e2) => {
+            _tglPtt.CheckedChanged += (s2, e2) => { try {
                 if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(_tglPtt.Checked ? "ptt_on" : "ptt_off"); }
                 if (_tglPtt.Checked) { if (_tglPtm != null && _tglPtm.Checked) _tglPtm.Checked = false; if (_tglPtToggle != null && _tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _modeChosen = true; if (_pttKeyCode <= 0) ShowTip(_tipHotkey); _card1.Invalidate(false); }
-            };
+            } catch (Exception ex) { Logger.Error("PTT toggle failed", ex); } };
             _tglPtt.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtt);
 
             _tglPtm = new ToggleSwitch { Location = Dpi.Pt(20, y + 86) };
-            _tglPtm.CheckedChanged += (s2, e2) => {
+            _tglPtm.CheckedChanged += (s2, e2) => { try {
                 if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(_tglPtm.Checked ? "ptm_on" : "ptm_off"); }
                 if (_tglPtm.Checked) { if (_tglPtt != null && _tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtToggle != null && _tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _modeChosen = true; if (_pttKeyCode <= 0) ShowTip(_tipHotkey); _card1.Invalidate(false); }
-            };
+            } catch (Exception ex) { Logger.Error("PTM toggle failed", ex); } };
             _tglPtm.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtm);
 
             _tglPtToggle = new ToggleSwitch { Location = Dpi.Pt(20, y + 128) };
-            _tglPtToggle.CheckedChanged += (s2, e2) => {
+            _tglPtToggle.CheckedChanged += (s2, e2) => { try {
                 if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(_tglPtToggle.Checked ? "ptt_toggle_on" : "ptt_toggle_off"); }
                 if (_tglPtToggle.Checked) { if (_tglPtt != null && _tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtm != null && _tglPtm.Checked) _tglPtm.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _modeChosen = true; if (_pttKeyCode <= 0) ShowTip(_tipHotkey); _card1.Invalidate(false); }
-            };
+            } catch (Exception ex) { Logger.Error("PtToggle toggle failed", ex); } };
             _tglPtToggle.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtToggle);
             // Toggles ENABLED from the start — user picks mode FIRST
 
@@ -1150,6 +1150,13 @@ namespace AngryAudio
             _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose();
             _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose();
             _stars?.Dispose();
+            // Hide all tips and help circle tooltips — triggers VisibleChanged which stops fade timers
+            if (_tipHotkey != null) _tipHotkey.Visible = false;
+            if (_tipFunCallout != null) _tipFunCallout.Visible = false;
+            if (_tipMicLock != null) _tipMicLock.Visible = false;
+            foreach (var hc in _helpCircles)
+                foreach (Control c in hc.Parent?.Controls ?? (System.Collections.IEnumerable)new Control[0])
+                    if (c is BufferedPanel && c != hc && c.Visible) c.Visible = false;
             if (DialogResult != DialogResult.OK) { ProtectMic = false; ProtectSpeakers = false; }
             base.OnFormClosing(e);
         }
