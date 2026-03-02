@@ -242,24 +242,15 @@ namespace AngryAudio
 
             // --- PTT toggles: 3 stacked with descriptions, matching Options panel ---
             _tglPtt = new ToggleSwitch { Location = Dpi.Pt(20, y + 44) };
-            _tglPtt.CheckedChanged += (s2, e2) => { try {
-                if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(_tglPtt.Checked ? "ptt_on" : "ptt_off"); }
-                if (_tglPtt.Checked) { if (_tglPtm != null && _tglPtm.Checked) _tglPtm.Checked = false; if (_tglPtToggle != null && _tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _modeChosen = true; if (_pttKeyCode <= 0) ShowTip(_tipHotkey); _card1.Invalidate(false); }
-            } catch (Exception ex) { Logger.Error("PTT toggle failed", ex); } };
+            _tglPtt.CheckedChanged += (s2, e2) => OnWizardToggle(_tglPtt, "ptt_on", "ptt_off");
             _tglPtt.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtt);
 
             _tglPtm = new ToggleSwitch { Location = Dpi.Pt(20, y + 86) };
-            _tglPtm.CheckedChanged += (s2, e2) => { try {
-                if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(_tglPtm.Checked ? "ptm_on" : "ptm_off"); }
-                if (_tglPtm.Checked) { if (_tglPtt != null && _tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtToggle != null && _tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _modeChosen = true; if (_pttKeyCode <= 0) ShowTip(_tipHotkey); _card1.Invalidate(false); }
-            } catch (Exception ex) { Logger.Error("PTM toggle failed", ex); } };
+            _tglPtm.CheckedChanged += (s2, e2) => OnWizardToggle(_tglPtm, "ptm_on", "ptm_off");
             _tglPtm.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtm);
 
             _tglPtToggle = new ToggleSwitch { Location = Dpi.Pt(20, y + 128) };
-            _tglPtToggle.CheckedChanged += (s2, e2) => { try {
-                if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(_tglPtToggle.Checked ? "ptt_toggle_on" : "ptt_toggle_off"); }
-                if (_tglPtToggle.Checked) { if (_tglPtt != null && _tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtm != null && _tglPtm.Checked) _tglPtm.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _modeChosen = true; if (_pttKeyCode <= 0) ShowTip(_tipHotkey); _card1.Invalidate(false); }
-            } catch (Exception ex) { Logger.Error("PtToggle toggle failed", ex); } };
+            _tglPtToggle.CheckedChanged += (s2, e2) => OnWizardToggle(_tglPtToggle, "ptt_toggle_on", "ptt_toggle_off");
             _tglPtToggle.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtToggle);
             // Toggles ENABLED from the start — user picks mode FIRST
 
@@ -680,6 +671,21 @@ namespace AngryAudio
                 }
             }
         }
+        void OnWizardToggle(ToggleSwitch sender, string onMsg, string offMsg) {
+            try {
+                if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(sender.Checked ? onMsg : offMsg); }
+                if (sender.Checked) {
+                    // Uncheck all other mode toggles
+                    foreach (var tgl in new[] { _tglPtt, _tglPtm, _tglPtToggle })
+                        if (tgl != null && tgl != sender && tgl.Checked) tgl.Checked = false;
+                    if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false;
+                    _modeChosen = true;
+                    if (_pttKeyCode <= 0) ShowTip(_tipHotkey);
+                    _card1.Invalidate(false);
+                }
+            } catch (Exception ex) { Logger.Error("Wizard toggle failed: " + onMsg, ex); }
+        }
+
         void OnKeyCapture(object s, KeyEventArgs e) { if (!_capturingKey) return; if (e.KeyCode == Keys.Escape) { _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; Logger.Info("Welcome: key capture cancelled"); return; } _pttKeyCode = (int)e.KeyCode; _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; Logger.Info("Welcome: captured key vk=" + _pttKeyCode + " (" + KeyName(_pttKeyCode) + ")");
             // Auto-enable Push-to-Talk if no mode is selected yet
             if (!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked) {
@@ -763,27 +769,60 @@ namespace AngryAudio
             float[] _hcDist = null;
             float _hcTotal = 0;
             bool _hcHover = false;
-            Panel _hcTooltip = null;
+
+            // Simple tooltip — just a painted panel, no timers, no fade, no MakeTipCard
+            var tooltip = new BufferedPanel { Visible = false, BackColor = Color.Transparent };
+            tooltip.Paint += (s, e) => {
+                var g = e.Graphics;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                int cr = Dpi.S(6);
+                using (var path = DarkTheme.RoundedRect(new Rectangle(0, 0, tooltip.Width - 1, tooltip.Height - 1), cr)) {
+                    using (var b = new SolidBrush(Color.FromArgb(240, 16, 20, 28)))
+                        g.FillPath(b, path);
+                    using (var p = new Pen(Color.FromArgb(70, ACC.R, ACC.G, ACC.B), 1f))
+                        g.DrawPath(p, path);
+                }
+                // Left accent bar
+                int barW = Dpi.S(3);
+                using (var barPath = DarkTheme.RoundedRect(new Rectangle(0, 0, barW + cr, tooltip.Height - 1), cr)) {
+                    var oldClip = g.Clip;
+                    g.SetClip(new Rectangle(0, 0, barW + 2, tooltip.Height));
+                    using (var b = new SolidBrush(Color.FromArgb(200, ACC.R, ACC.G, ACC.B)))
+                        g.FillPath(b, barPath);
+                    g.Clip = oldClip;
+                }
+                using (var f = new Font(DarkTheme.Caption.FontFamily, 8f))
+                using (var b = new SolidBrush(Color.FromArgb(210, 220, 235))) {
+                    var rect = new RectangleF(Dpi.S(12), Dpi.S(6), tooltip.Width - Dpi.S(18), tooltip.Height - Dpi.S(12));
+                    g.DrawString(tooltipText, f, b, rect);
+                }
+            };
+
+            // Measure tooltip size based on text
+            using (var g = parentCard.CreateGraphics())
+            using (var f = new Font(DarkTheme.Caption.FontFamily, 8f)) {
+                var sz2 = g.MeasureString(tooltipText, f, Dpi.S(200));
+                tooltip.Size = new Size((int)sz2.Width + Dpi.S(22), (int)sz2.Height + Dpi.S(14));
+            }
+            parentCard.Controls.Add(tooltip);
 
             var circle = new BufferedPanel { Size = new Size(sz, sz), Location = Dpi.Pt(x, y), BackColor = Color.Transparent, Cursor = Cursors.Hand };
             circle.Paint += (s, e) => {
                 _hcTick++;
                 var g = e.Graphics;
-                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
                 g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-                // Circle background
                 int alpha = _hcHover ? 120 : 50;
                 using (var b = new SolidBrush(Color.FromArgb(alpha, ACC.R, ACC.G, ACC.B)))
                     g.FillEllipse(b, 1, 1, sz - 3, sz - 3);
-
-                // Base border
                 using (var p = new Pen(Color.FromArgb(_hcHover ? 200 : 100, ACC.R, ACC.G, ACC.B), 1.5f))
                     g.DrawEllipse(p, 1, 1, sz - 3, sz - 3);
 
-                // Zip line around the circle
+                // Zip line
                 if (_hcPts == null) {
-                    using (var path = new System.Drawing.Drawing2D.GraphicsPath()) {
+                    using (var path = new GraphicsPath()) {
                         path.AddEllipse(1, 1, sz - 3, sz - 3);
                         path.Flatten(null, 0.3f);
                         _hcPts = (PointF[])path.PathPoints.Clone();
@@ -795,11 +834,10 @@ namespace AngryAudio
                         float dy = _hcPts[i].Y - _hcPts[i-1].Y;
                         _hcDist[i] = _hcDist[i-1] + (float)Math.Sqrt(dx*dx + dy*dy);
                     }
-                    float cx = _hcPts[0].X - _hcPts[_hcPts.Length-1].X;
-                    float cy = _hcPts[0].Y - _hcPts[_hcPts.Length-1].Y;
-                    _hcTotal = _hcDist[_hcPts.Length-1] + (float)Math.Sqrt(cx*cx + cy*cy);
+                    float cx2 = _hcPts[0].X - _hcPts[_hcPts.Length-1].X;
+                    float cy2 = _hcPts[0].Y - _hcPts[_hcPts.Length-1].Y;
+                    _hcTotal = _hcDist[_hcPts.Length-1] + (float)Math.Sqrt(cx2*cx2 + cy2*cy2);
                 }
-
                 if (_hcPts.Length > 4 && _hcTotal > 1f) {
                     float speed = 3f;
                     float headPos = (_hcTick * speed) % _hcTotal;
@@ -823,31 +861,25 @@ namespace AngryAudio
                     }
                 }
 
-                // "?" text centered
                 using (var f = new Font("Segoe UI", 9f, FontStyle.Bold))
-                using (var b = new SolidBrush(Color.FromArgb(_hcHover ? 255 : 200, 220, 230, 245)))
-                {
+                using (var b = new SolidBrush(Color.FromArgb(_hcHover ? 255 : 200, 220, 230, 245))) {
                     var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
                     g.DrawString("?", f, b, sz / 2f, sz / 2f - 1, sf);
                 }
             };
 
-            // Hover tooltip
+            // Hover — just show/hide, zero timers
             circle.MouseEnter += (s, e) => {
                 _hcHover = true;
                 circle.Invalidate();
-                if (_hcTooltip == null) {
-                    _hcTooltip = MakeTipCard(tooltipText, 220, 58, arrowUp: false);
-                    parentCard.Controls.Add(_hcTooltip);
-                    _hcTooltip.BringToFront();
-                }
-                _hcTooltip.Location = new Point(circle.Left - Dpi.S(230), circle.Top - Dpi.S(10));
-                _hcTooltip.Visible = true;
+                tooltip.Location = new Point(circle.Left - tooltip.Width - Dpi.S(8), circle.Top - Dpi.S(4));
+                tooltip.BringToFront();
+                tooltip.Visible = true;
             };
             circle.MouseLeave += (s, e) => {
                 _hcHover = false;
                 circle.Invalidate();
-                if (_hcTooltip != null) _hcTooltip.Visible = false;
+                tooltip.Visible = false;
             };
 
             _helpCircles.Add(circle);
@@ -1150,13 +1182,10 @@ namespace AngryAudio
             _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose();
             _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose();
             _stars?.Dispose();
-            // Hide all tips and help circle tooltips — triggers VisibleChanged which stops fade timers
+            // Hide tip cards to stop any active fade timers
             if (_tipHotkey != null) _tipHotkey.Visible = false;
             if (_tipFunCallout != null) _tipFunCallout.Visible = false;
             if (_tipMicLock != null) _tipMicLock.Visible = false;
-            foreach (var hc in _helpCircles)
-                foreach (Control c in hc.Parent?.Controls ?? (System.Collections.IEnumerable)new Control[0])
-                    if (c is BufferedPanel && c != hc && c.Visible) c.Visible = false;
             if (DialogResult != DialogResult.OK) { ProtectMic = false; ProtectSpeakers = false; }
             base.OnFormClosing(e);
         }
