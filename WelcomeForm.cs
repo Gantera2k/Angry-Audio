@@ -667,12 +667,10 @@ namespace AngryAudio
                 _flashTimer = new Timer { Interval = 120 };
                 _flashTimer.Tick += (s2, e2) => {
                     _flashStep++;
-                    var on = Color.FromArgb(74, 158, 204);
-                    var off = Color.FromArgb(60, 60, 60);
-                    if (_flashStep == 1) { if (_tglPtt != null) _tglPtt.BackColor = on; }
-                    else if (_flashStep == 2) { if (_tglPtt != null) _tglPtt.BackColor = off; if (_tglPtm != null) _tglPtm.BackColor = on; }
-                    else if (_flashStep == 3) { if (_tglPtm != null) _tglPtm.BackColor = off; if (_tglPtToggle != null) _tglPtToggle.BackColor = on; }
-                    else { if (_tglPtToggle != null) _tglPtToggle.BackColor = off; _flashTimer.Stop(); }
+                    if (_flashStep == 1) { if (_tglPtt != null) _tglPtt.FlashHighlight = true; }
+                    else if (_flashStep == 2) { if (_tglPtt != null) _tglPtt.FlashHighlight = false; if (_tglPtm != null) _tglPtm.FlashHighlight = true; }
+                    else if (_flashStep == 3) { if (_tglPtm != null) _tglPtm.FlashHighlight = false; if (_tglPtToggle != null) _tglPtToggle.FlashHighlight = true; }
+                    else { if (_tglPtToggle != null) _tglPtToggle.FlashHighlight = false; _flashTimer.Stop(); }
                 };
             }
             _flashTimer.Start();
@@ -740,9 +738,9 @@ namespace AngryAudio
 
                     if (_zipPts.Length > 4 && _zipTotal > 1f) {
                         // _zipTick increments every frame, drives position continuously
-                        float speed = 4f; // pixels per frame
+                        float speed = 5f; // pixels per frame — fast electric feel
                         float headPos = (_zipTick * speed) % _zipTotal;
-                        float trailLen = _zipTotal * 0.18f;
+                        float trailLen = _zipTotal * 0.25f; // 25% of perimeter — longer trail
 
                         for (int i = 0; i < _zipPts.Length; i++) {
                             int next = (i + 1) % _zipPts.Length;
@@ -759,9 +757,9 @@ namespace AngryAudio
 
                             float t = 1f - (dist / trailLen); // 1 at head, 0 at tail
                             t = t * t; // ease — sharper falloff
-                            int za = (int)(220 * t * _fadeAlpha);
+                            int za = (int)(255 * t * _fadeAlpha);
                             if (za > 8) {
-                                float pw = 1f + t * 1.5f;
+                                float pw = 1.5f + t * 2f; // thicker at head, max ~3.5px
                                 using (var zp = new Pen(Color.FromArgb(za, ACC.R, ACC.G, ACC.B), pw))
                                     g.DrawLine(zp, _zipPts[i], _zipPts[next]);
                             }
@@ -836,7 +834,7 @@ namespace AngryAudio
             // Mic lock tip — BELOW the speakers section separator, before General
             // Speakers separator at ~14+122+134+122 = ~392, General at ~284*
             // Actually just put it right below mic separator at ~136
-            _tipMicLock = MakeTipCard("Locks your mic at your chosen level so apps can't secretly turn it down.", 300, 38, arrowUp: false);
+            _tipMicLock = MakeTipCard("Lock at 100% so you never have to yell because some app turned your volume down.", 320, 38, arrowUp: false);
             _tipMicLock.Location = Dpi.Pt(20, 126);
         }
 
