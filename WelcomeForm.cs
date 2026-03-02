@@ -758,20 +758,22 @@ namespace AngryAudio
         }
 
         void CreateTips() {
-            // Hotkey tip — below hotkey row, above separator
-            // py=14, hotkey row at py+174=188, separator at ~248
-            _tipHotkey = MakeTipCard("Pick the same key you use for voice chat in Discord, Zoom, or your game.", 260, 44, arrowUp: false);
-            _tipHotkey.Location = Dpi.Pt(20, 210);
+            // Hotkey tip — RIGHT of the key label, beside "Click to change" text
+            // Key label at (118, py+174), width 80. Tip starts after that.
+            _tipHotkey = MakeTipCard("Pick the same key you use for voice chat in Discord, Zoom, or your game.", 190, 52, arrowUp: false);
+            _tipHotkey.Location = Dpi.Pt(20, 248);
             _card1.Controls.Add(_tipHotkey); _tipHotkey.BringToFront();
 
-            // Fun callout — in the separator/AFK area
+            // Fun callout — in the AFK section area (overlays AFK briefly, auto-dismisses)
             _tipFunCallout = MakeTipCard("Angry Audio shows when your mic is hot \u2014 so you don't accidentally rant about your boss with everyone listening.", 340, 42, arrowUp: false);
-            _tipFunCallout.Location = Dpi.Pt(14, 250);
+            _tipFunCallout.Location = Dpi.Pt(14, 290);
             _card1.Controls.Add(_tipFunCallout); _tipFunCallout.BringToFront();
 
-            // Mic lock tip — below the toggle row on page 2
+            // Mic lock tip — BELOW the speakers section separator, before General
+            // Speakers separator at ~14+122+134+122 = ~392, General at ~284*
+            // Actually just put it right below mic separator at ~136
             _tipMicLock = MakeTipCard("Locks your mic at your chosen level so apps can't secretly turn it down.", 300, 38, arrowUp: false);
-            _tipMicLock.Location = Dpi.Pt(20, 106);
+            _tipMicLock.Location = Dpi.Pt(20, 126);
         }
 
         void ShowTip(Panel tip) {
