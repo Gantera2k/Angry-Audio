@@ -204,6 +204,9 @@ namespace AngryAudio
                 _pulsePhase += 0.08f;
                 if (_pulsePhase > (float)(Math.PI * 2)) _pulsePhase -= (float)(Math.PI * 2);
                 footer.Invalidate();
+                // Invalidate card1 for orbiting star (only when star is visible — no key set)
+                if (_pttKeyCode <= 0 && _card1 != null && _card1.Visible)
+                    _card1.Invalidate(false);
             };
             _pulseTimer.Start();
 
@@ -358,6 +361,16 @@ namespace AngryAudio
                     g.DrawString("seconds", f, b, Dpi.S(266), ay + Dpi.S(103));
                 using (var f = new Font("Segoe UI", 8f)) using (var b = new SolidBrush(DarkTheme.Txt4))
                     g.DrawString("Angry Audio gradually fades your audio back when you return.", f, b, Dpi.S(20), ay + Dpi.S(132));
+
+                // === Orbiting star around hotkey label — draws attention to key capture ===
+                if (_pttKeyCode <= 0 && _lblPttKey != null) {
+                    var r = _lblPttKey.Bounds;
+                    int pad = Dpi.S(6);
+                    var saved = g.Save();
+                    g.TranslateTransform(r.X - pad, r.Y - pad);
+                    DarkTheme.PaintOrbitingStar(g, r.Width + pad * 2, r.Height + pad * 2, _pulsePhase, Dpi.S(4));
+                    g.Restore(saved);
+                }
             };
 
             var tip1 = MakeTipPanel();
@@ -709,10 +722,21 @@ namespace AngryAudio
                     }
                 }
 
-                // Text
+                // Left accent bar — vibrant, eye-catching
+                int barW = Dpi.S(3);
+                using (var barPath = DarkTheme.RoundedRect(new Rectangle(0, bodyTop, barW + cr, tip.Height - bodyTop - 1), cr))
+                {
+                    var oldClip2 = g.Clip;
+                    g.SetClip(new Rectangle(0, bodyTop, barW + 2, tip.Height - bodyTop));
+                    using (var b = new SolidBrush(Color.FromArgb((int)(200 * _fadeAlpha), ACC.R, ACC.G, ACC.B)))
+                        g.FillPath(b, barPath);
+                    g.Clip = oldClip2;
+                }
+
+                // Text — bright and readable
                 var textRect = new Rectangle(Dpi.S(14), bodyTop + Dpi.S(8), tip.Width - Dpi.S(28), tip.Height - bodyTop - Dpi.S(16));
-                using (var tb = new SolidBrush(Color.FromArgb((int)(200 * _fadeAlpha), ACC.R, ACC.G, ACC.B)))
-                    g.DrawString(text, DarkTheme.Small, tb, new RectangleF(textRect.X, textRect.Y, textRect.Width, textRect.Height),
+                using (var tb = new SolidBrush(Color.FromArgb((int)(255 * _fadeAlpha), 210, 220, 235)))
+                    g.DrawString(text, DarkTheme.Caption, tb, new RectangleF(textRect.X, textRect.Y, textRect.Width, textRect.Height),
                         new StringFormat { LineAlignment = StringAlignment.Center });
             };
             tip.Click += (s, e) => { tip.Visible = false; if (_fadeIn != null) { _fadeIn.Stop(); _fadeIn.Dispose(); _fadeIn = null; } };
@@ -734,20 +758,20 @@ namespace AngryAudio
         }
 
         void CreateTips() {
-            // Hotkey tip — positioned to the right side, beside hotkey label
-            // py+174=hotkey row. Place tip right of "Click to change" text
-            _tipHotkey = MakeTipCard("Pick the same key you use for voice chat in Discord, Zoom, or your game.", 190, 48, arrowUp: false);
-            _tipHotkey.Location = Dpi.Pt(198, 132);
+            // Hotkey tip — below hotkey row, above separator
+            // py=14, hotkey row at py+174=188, separator at ~248
+            _tipHotkey = MakeTipCard("Pick the same key you use for voice chat in Discord, Zoom, or your game.", 260, 44, arrowUp: false);
+            _tipHotkey.Location = Dpi.Pt(20, 210);
             _card1.Controls.Add(_tipHotkey); _tipHotkey.BringToFront();
 
-            // Fun callout — below separator, overlays AFK header area temporarily
+            // Fun callout — in the separator/AFK area
             _tipFunCallout = MakeTipCard("Angry Audio shows when your mic is hot \u2014 so you don't accidentally rant about your boss with everyone listening.", 340, 42, arrowUp: false);
             _tipFunCallout.Location = Dpi.Pt(14, 250);
             _card1.Controls.Add(_tipFunCallout); _tipFunCallout.BringToFront();
 
-            // Mic lock tip — below the slider on page 2, above the toggle
+            // Mic lock tip — below the toggle row on page 2
             _tipMicLock = MakeTipCard("Locks your mic at your chosen level so apps can't secretly turn it down.", 300, 38, arrowUp: false);
-            _tipMicLock.Location = Dpi.Pt(20, 68);
+            _tipMicLock.Location = Dpi.Pt(20, 106);
         }
 
         void ShowTip(Panel tip) {
