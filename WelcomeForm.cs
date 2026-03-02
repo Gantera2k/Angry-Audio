@@ -45,6 +45,7 @@ namespace AngryAudio
         private Timer _micFlashTimer, _spkFlashTimer;
         private int _pttKeyCode = 0;
         private bool _capturingKey;
+        private bool _modeChosen; // true once user picks PTT/PTM/Toggle — guides star to hotkey
         private Action _showPage1Extras, _showPage2Extras;
         private int _currentPage = 1;
         private Timer _pulseTimer;
@@ -204,8 +205,8 @@ namespace AngryAudio
                 _pulsePhase += 0.08f;
                 if (_pulsePhase > (float)(Math.PI * 2)) _pulsePhase -= (float)(Math.PI * 2);
                 footer.Invalidate();
-                // Invalidate card1 for orbiting star (only when star is visible — no key set)
-                if (_pttKeyCode <= 0 && _card1 != null && _card1.Visible)
+                // Invalidate card1 for orbiting star (either toggle section or hotkey)
+                if (_card1 != null && _card1.Visible && (!_modeChosen || (_modeChosen && _pttKeyCode <= 0)))
                     _card1.Invalidate(false);
                 // Invalidate visible tips for zip line animation
                 if (_tipHotkey != null && _tipHotkey.Visible) _tipHotkey.Invalidate();
@@ -242,24 +243,24 @@ namespace AngryAudio
             _tglPtt = new ToggleSwitch { Location = Dpi.Pt(20, y + 44) };
             _tglPtt.CheckedChanged += (s2, e2) => {
                 if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(_tglPtt.Checked ? "ptt_on" : "ptt_off"); }
-                if (_tglPtt.Checked) { if (_tglPtm != null && _tglPtm.Checked) _tglPtm.Checked = false; if (_tglPtToggle != null && _tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; if (_tipHotkey != null) _tipHotkey.Visible = false; ShowTip(_tipFunCallout); }
+                if (_tglPtt.Checked) { if (_tglPtm != null && _tglPtm.Checked) _tglPtm.Checked = false; if (_tglPtToggle != null && _tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _modeChosen = true; if (_pttKeyCode <= 0) ShowTip(_tipHotkey); _card1.Invalidate(false); }
             };
             _tglPtt.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtt);
 
             _tglPtm = new ToggleSwitch { Location = Dpi.Pt(20, y + 86) };
             _tglPtm.CheckedChanged += (s2, e2) => {
                 if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(_tglPtm.Checked ? "ptm_on" : "ptm_off"); }
-                if (_tglPtm.Checked) { if (_tglPtt != null && _tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtToggle != null && _tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; if (_tipHotkey != null) _tipHotkey.Visible = false; ShowTip(_tipFunCallout); }
+                if (_tglPtm.Checked) { if (_tglPtt != null && _tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtToggle != null && _tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _modeChosen = true; if (_pttKeyCode <= 0) ShowTip(_tipHotkey); _card1.Invalidate(false); }
             };
             _tglPtm.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtm);
 
             _tglPtToggle = new ToggleSwitch { Location = Dpi.Pt(20, y + 128) };
             _tglPtToggle.CheckedChanged += (s2, e2) => {
                 if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(_tglPtToggle.Checked ? "ptt_toggle_on" : "ptt_toggle_off"); }
-                if (_tglPtToggle.Checked) { if (_tglPtt != null && _tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtm != null && _tglPtm.Checked) _tglPtm.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; if (_tipHotkey != null) _tipHotkey.Visible = false; ShowTip(_tipFunCallout); }
+                if (_tglPtToggle.Checked) { if (_tglPtt != null && _tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtm != null && _tglPtm.Checked) _tglPtm.Checked = false; if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false; _modeChosen = true; if (_pttKeyCode <= 0) ShowTip(_tipHotkey); _card1.Invalidate(false); }
             };
             _tglPtToggle.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtToggle);
-            UpdatePttTogglesEnabled(); // Disable until hotkey is set
+            // Toggles ENABLED from the start — user picks mode FIRST
             CreateTips();
 
             // Hotkey row — below all 3 toggles, matching Options panel style
@@ -366,8 +367,23 @@ namespace AngryAudio
                 using (var f = new Font("Segoe UI", 8f)) using (var b = new SolidBrush(DarkTheme.Txt4))
                     g.DrawString("Angry Audio gradually fades your audio back when you return.", f, b, Dpi.S(20), ay + Dpi.S(132));
 
-                // === Orbiting star around hotkey label — draws attention to key capture ===
-                if (_pttKeyCode <= 0 && _lblPttKey != null) {
+                // === Guided orbiting star ===
+                // Phase 1: No mode chosen → orbit the toggle section (draws eye to "pick one")
+                // Phase 2: Mode chosen, no key → orbit the hotkey label (draws eye to "set key")
+                // Phase 3: Both done → no star
+                if (!_modeChosen && _tglPtt != null) {
+                    // Orbit around all 3 toggles as a group
+                    int tTop = _tglPtt.Top - Dpi.S(6);
+                    int tBot = _tglPtToggle.Bottom + Dpi.S(6);
+                    int tLeft = _tglPtt.Left - Dpi.S(6);
+                    int tRight = _card1.Width - Dpi.S(14);
+                    var saved = g.Save();
+                    g.TranslateTransform(tLeft, tTop);
+                    DarkTheme.PaintOrbitingStar(g, tRight - tLeft, tBot - tTop, _pulsePhase, Dpi.S(4));
+                    g.Restore(saved);
+                }
+                else if (_modeChosen && _pttKeyCode <= 0 && _lblPttKey != null) {
+                    // Orbit around hotkey label
                     var r = _lblPttKey.Bounds;
                     int pad = Dpi.S(6);
                     var saved = g.Save();
@@ -654,8 +670,8 @@ namespace AngryAudio
                 }
             }
         }
-        void OnKeyCapture(object s, KeyEventArgs e) { if (!_capturingKey) return; if (e.KeyCode == Keys.Escape) { _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; Logger.Info("Welcome: key capture cancelled"); return; } _pttKeyCode = (int)e.KeyCode; _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; Logger.Info("Welcome: captured key vk=" + _pttKeyCode + " (" + KeyName(_pttKeyCode) + ")"); UpdatePttTogglesEnabled(); FlashToggles(); ShowTip(_tipHotkey); }
-        void UpdatePttTogglesEnabled() { bool hasKey = _pttKeyCode > 0; if (_tglPtt != null) _tglPtt.Enabled = hasKey; if (_tglPtm != null) _tglPtm.Enabled = hasKey; if (_tglPtToggle != null) _tglPtToggle.Enabled = hasKey; }
+        void OnKeyCapture(object s, KeyEventArgs e) { if (!_capturingKey) return; if (e.KeyCode == Keys.Escape) { _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; Logger.Info("Welcome: key capture cancelled"); return; } _pttKeyCode = (int)e.KeyCode; _lblPttKey.Text = KeyName(_pttKeyCode); _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC; _capturingKey = false; Logger.Info("Welcome: captured key vk=" + _pttKeyCode + " (" + KeyName(_pttKeyCode) + ")"); if (_tipHotkey != null) _tipHotkey.Visible = false; ShowTip(_tipFunCallout); _card1.Invalidate(false); }
+        // (toggles are always enabled — user picks mode FIRST in the new guided flow)
 
         // --- Toggle flicker animation (draws attention to mode selection) ---
         private Timer _flashTimer;
@@ -860,21 +876,18 @@ namespace AngryAudio
         }
 
         void CreateTips() {
-            // Hotkey tip — RIGHT of the key label, beside "Click to change" text
-            // Key label at (118, py+174), width 80. Tip starts after that.
-            _tipHotkey = MakeTipCard("Pick the same key you use for voice chat in Discord, Zoom, or your game.", 190, 52, arrowUp: false);
-            _tipHotkey.Location = Dpi.Pt(20, 248);
+            // STEP 2 TIP: After mode chosen → guide to hotkey
+            _tipHotkey = MakeTipCard("Pick the same key you use in Discord or your game. That's it \u2014 you're done!", 280, 44, arrowUp: false);
+            _tipHotkey.Location = Dpi.Pt(20, 210);
             _card1.Controls.Add(_tipHotkey); _tipHotkey.BringToFront();
 
-            // Fun callout — in the AFK section area (overlays AFK briefly, auto-dismisses)
-            _tipFunCallout = MakeTipCard("Angry Audio shows when your mic is hot \u2014 so you don't accidentally rant about your boss with everyone listening.", 340, 42, arrowUp: false);
-            _tipFunCallout.Location = Dpi.Pt(14, 290);
+            // STEP 3 TIP: After key captured → confirm what just happened
+            _tipFunCallout = MakeTipCard("ALL connected mics are now controlled by your hotkey \u2014 not just one. Every mic. Hit Next!", 360, 42, arrowUp: false);
+            _tipFunCallout.Location = Dpi.Pt(14, 248);
             _card1.Controls.Add(_tipFunCallout); _tipFunCallout.BringToFront();
 
-            // Mic lock tip — BELOW the speakers section separator, before General
-            // Speakers separator at ~14+122+134+122 = ~392, General at ~284*
-            // Actually just put it right below mic separator at ~136
-            _tipMicLock = MakeTipCard("Lock at 100% so you never have to yell because some app turned your volume down.", 320, 38, arrowUp: false);
+            // PAGE 2 TIP: Mic lock explanation
+            _tipMicLock = MakeTipCard("Toggle this on so you never have to yell at your computer. Your mic stays at 100%, fully controlled by your hotkey.", 340, 48, arrowUp: false);
             _tipMicLock.Location = Dpi.Pt(20, 126);
         }
 
