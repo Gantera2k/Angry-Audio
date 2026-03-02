@@ -25,18 +25,19 @@ namespace AngryAudioInstaller
             {
                 if (!createdNew)
                 {
-                    // Kill any existing installer instances and take over
+                    // Kill any existing installer instances — search broadly for renamed copies too
                     try
                     {
                         int myPid = Process.GetCurrentProcess().Id;
-                        foreach (var proc in Process.GetProcessesByName("Angry_Audio_Setup"))
+                        foreach (var proc in Process.GetProcesses())
                         {
-                            if (proc.Id != myPid)
-                                try { proc.Kill(); } catch { }
+                            try {
+                                if (proc.Id != myPid && proc.ProcessName.StartsWith("Angry_Audio_Setup"))
+                                    proc.Kill();
+                            } catch { }
                         }
                     }
                     catch { }
-                    // Brief pause for mutex release, then re-acquire
                     System.Threading.Thread.Sleep(500);
                     try { mutex.WaitOne(3000); } catch { }
                 }
