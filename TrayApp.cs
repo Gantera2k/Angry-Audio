@@ -176,8 +176,8 @@ namespace AngryAudio
                 ShowWelcomeDialog();
             }
 
-            // Show privacy splash on every startup (unless wizard was closed by opening Options)
-            if (!_skipSplash)
+            // Show privacy splash on every startup (unless wizard is open or was closed by opening Options)
+            if (!_skipSplash && _openWelcomeForm == null)
             {
                 // Red warning fires AFTER splash closes so they don't overlap
                 if (_settings.FirstRunComplete)
