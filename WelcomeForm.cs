@@ -3,6 +3,7 @@
 // SplashForm and PaddedNumericUpDown have been moved to Controls.cs.
 //
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -212,6 +213,8 @@ namespace AngryAudio
                 if (_tipHotkey != null && _tipHotkey.Visible) _tipHotkey.Invalidate();
                 if (_tipFunCallout != null && _tipFunCallout.Visible) _tipFunCallout.Invalidate();
                 if (_tipMicLock != null && _tipMicLock.Visible) _tipMicLock.Invalidate();
+                // Invalidate help circles for zip line animation
+                foreach (var hc in _helpCircles) if (hc.Visible) hc.Invalidate();
             };
             _pulseTimer.Start();
 
@@ -261,6 +264,16 @@ namespace AngryAudio
             };
             _tglPtToggle.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtToggle);
             // Toggles ENABLED from the start — user picks mode FIRST
+
+            // --- Help circles (?) — hover for use-case explanation ---
+            int helpX = 350; // right side of card
+            _card1.Controls.Add(MakeHelpCircle(helpX, y + 46,
+                "Best for gaming and calls.\nYour mic stays muted until you hold the key.\nRelease to mute again.", _card1));
+            _card1.Controls.Add(MakeHelpCircle(helpX, y + 88,
+                "Best if you're usually talking.\nHold the key to temporarily mute yourself.\nRelease to unmute.", _card1));
+            _card1.Controls.Add(MakeHelpCircle(helpX, y + 130,
+                "Best for meetings and streams.\nPress once to unmute, press again to mute.\nNo need to hold anything.", _card1));
+
             CreateTips();
 
             // Hotkey row — below all 3 toggles, matching Options panel style
@@ -450,6 +463,12 @@ namespace AngryAudio
                 if (_onToggle != null) { _onToggle("spk_vol:" + _spkSlider.Value); _onToggle(_tglSpkEnf.Checked ? "spk_lock_on" : "spk_lock_off"); }
             };
             _tglSpkEnf.PaintParentBg = PaintCardBg; _card2.Controls.Add(_tglSpkEnf);
+
+            // Help circles for page 2
+            _card2.Controls.Add(MakeHelpCircle(350, y + 90,
+                "Toggle this on so you never have to yell\nat your computer. Apps can silently lower\nyour mic \u2014 this keeps it locked at your level.", _card2));
+            _card2.Controls.Add(MakeHelpCircle(350, y2 + 90,
+                "Same thing for speakers. Apps can change\nyour volume without asking \u2014 this locks it\nwhere you set it.", _card2));
 
             // General section toggles — same card, below enforcement
             int gy = 284; // General section start Y — centered between separators
@@ -677,6 +696,7 @@ namespace AngryAudio
         private Timer _flashTimer;
         private int _flashStep;
         private Panel[] _flashHighlights;
+        private List<Panel> _helpCircles = new List<Panel>();
         void FlashToggles() {
             if (_flashTimer != null && _flashTimer.Enabled) return;
             _flashStep = 0;
@@ -735,6 +755,105 @@ namespace AngryAudio
         // --- Tip panels — styled as mini-cards matching the app's visual language ---
         private Panel _tipHotkey, _tipFunCallout, _tipMicLock;
         private Timer _tipDismissTimer;
+
+        // --- Help circle (?) with zip line animation and hover tooltip ---
+        Panel MakeHelpCircle(int x, int y, string tooltipText, Panel parentCard) {
+            int sz = Dpi.S(20);
+            int _hcTick = 0;
+            PointF[] _hcPts = null;
+            float[] _hcDist = null;
+            float _hcTotal = 0;
+            bool _hcHover = false;
+            Panel _hcTooltip = null;
+
+            var circle = new BufferedPanel { Size = new Size(sz, sz), Location = Dpi.Pt(x, y), BackColor = Color.Transparent, Cursor = Cursors.Hand };
+            circle.Paint += (s, e) => {
+                _hcTick++;
+                var g = e.Graphics;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+                // Circle background
+                int alpha = _hcHover ? 120 : 50;
+                using (var b = new SolidBrush(Color.FromArgb(alpha, ACC.R, ACC.G, ACC.B)))
+                    g.FillEllipse(b, 1, 1, sz - 3, sz - 3);
+
+                // Base border
+                using (var p = new Pen(Color.FromArgb(_hcHover ? 200 : 100, ACC.R, ACC.G, ACC.B), 1.5f))
+                    g.DrawEllipse(p, 1, 1, sz - 3, sz - 3);
+
+                // Zip line around the circle
+                if (_hcPts == null) {
+                    using (var path = new System.Drawing.Drawing2D.GraphicsPath()) {
+                        path.AddEllipse(1, 1, sz - 3, sz - 3);
+                        path.Flatten(null, 0.3f);
+                        _hcPts = (PointF[])path.PathPoints.Clone();
+                    }
+                    _hcDist = new float[_hcPts.Length];
+                    _hcDist[0] = 0;
+                    for (int i = 1; i < _hcPts.Length; i++) {
+                        float dx = _hcPts[i].X - _hcPts[i-1].X;
+                        float dy = _hcPts[i].Y - _hcPts[i-1].Y;
+                        _hcDist[i] = _hcDist[i-1] + (float)Math.Sqrt(dx*dx + dy*dy);
+                    }
+                    float cx = _hcPts[0].X - _hcPts[_hcPts.Length-1].X;
+                    float cy = _hcPts[0].Y - _hcPts[_hcPts.Length-1].Y;
+                    _hcTotal = _hcDist[_hcPts.Length-1] + (float)Math.Sqrt(cx*cx + cy*cy);
+                }
+
+                if (_hcPts.Length > 4 && _hcTotal > 1f) {
+                    float speed = 3f;
+                    float headPos = (_hcTick * speed) % _hcTotal;
+                    float trailLen = _hcTotal * 0.3f;
+                    for (int i = 0; i < _hcPts.Length; i++) {
+                        int next = (i + 1) % _hcPts.Length;
+                        float d0 = _hcDist[i];
+                        float d1 = (i < _hcPts.Length - 1) ? _hcDist[i+1] : _hcTotal;
+                        float mid = (d0 + d1) * 0.5f;
+                        float dist = headPos - mid;
+                        if (dist < 0) dist += _hcTotal;
+                        if (dist > trailLen) continue;
+                        float t = 1f - (dist / trailLen);
+                        t = t * t;
+                        int za = (int)(255 * t);
+                        if (za > 10) {
+                            float pw = 1.2f + t * 1.5f;
+                            using (var zp = new Pen(Color.FromArgb(za, ACC.R, ACC.G, ACC.B), pw))
+                                g.DrawLine(zp, _hcPts[i], _hcPts[next]);
+                        }
+                    }
+                }
+
+                // "?" text centered
+                using (var f = new Font("Segoe UI", 9f, FontStyle.Bold))
+                using (var b = new SolidBrush(Color.FromArgb(_hcHover ? 255 : 200, 220, 230, 245)))
+                {
+                    var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                    g.DrawString("?", f, b, sz / 2f, sz / 2f - 1, sf);
+                }
+            };
+
+            // Hover tooltip
+            circle.MouseEnter += (s, e) => {
+                _hcHover = true;
+                circle.Invalidate();
+                if (_hcTooltip == null) {
+                    _hcTooltip = MakeTipCard(tooltipText, 220, 58, arrowUp: false);
+                    parentCard.Controls.Add(_hcTooltip);
+                    _hcTooltip.BringToFront();
+                }
+                _hcTooltip.Location = new Point(circle.Left - Dpi.S(230), circle.Top - Dpi.S(10));
+                _hcTooltip.Visible = true;
+            };
+            circle.MouseLeave += (s, e) => {
+                _hcHover = false;
+                circle.Invalidate();
+                if (_hcTooltip != null) _hcTooltip.Visible = false;
+            };
+
+            _helpCircles.Add(circle);
+            return circle;
+        }
 
         Panel MakeTipCard(string text, int w, int h, bool arrowUp = false) {
             int arrowH = arrowUp ? Dpi.S(8) : 0;
@@ -877,7 +996,7 @@ namespace AngryAudio
 
         void CreateTips() {
             // STEP 2 TIP: After mode chosen → guide to hotkey
-            _tipHotkey = MakeTipCard("Pick the same key you use in Discord or your game. That's it \u2014 you're done!", 280, 44, arrowUp: false);
+            _tipHotkey = MakeTipCard("Now set your hotkey \u2014 pick the same key you use in Discord or your game. Then click Next!", 300, 44, arrowUp: false);
             _tipHotkey.Location = Dpi.Pt(20, 210);
             _card1.Controls.Add(_tipHotkey); _tipHotkey.BringToFront();
 
