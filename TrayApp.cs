@@ -1349,8 +1349,13 @@ namespace AngryAudio
             }
         }
 
+        private bool _toggleProcessing;
         private void OnOptionToggle(string toggleId)
         {
+            // Prevent reentrancy — rapid toggle clicks can cause COM STA deadlocks
+            if (_toggleProcessing) return;
+            _toggleProcessing = true;
+            try {
             // Reset toast cooldown — toggle feedback should ALWAYS show
             _lastToastShown = DateTime.MinValue;
 
@@ -1641,6 +1646,7 @@ namespace AngryAudio
             {
                 Logger.Error("Toggle actuation failed: " + toggleId, ex);
             }
+            } finally { _toggleProcessing = false; }
         }
 
         private void UpdatePauseMenuItem()
