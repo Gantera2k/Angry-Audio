@@ -71,14 +71,12 @@ namespace AngryAudio
         static readonly Color INPUT_BG = DarkTheme.InputBG;
 
         static readonly string PAGE1_TIP =
-            "Apps can silently listen through your microphone without your " +
-            "knowledge. Angry Audio guards your privacy by keeping your mic " +
-            "muted when you're not using it.";
+            "Choose how you want to control your mic. Not sure? " +
+            "Start with Push-to-Talk \u2014 it's what the pros use.";
 
         static readonly string PAGE2_TIP =
-            "Apps can change your speaker and microphone volume at any time " +
-            "without asking. Angry Audio locks your levels so nothing changes " +
-            "without your permission.";
+            "Lock your volume so apps can't mess with it. " +
+            "No more surprise changes in the middle of a call.";
 
         private Action<string> _onToggle;
         // Star rendering now handled by shared StarBackground class
@@ -268,11 +266,11 @@ namespace AngryAudio
             // --- Help circles (?) — hover for use-case explanation ---
             int helpX = 350; // right side of card
             _card1.Controls.Add(MakeHelpCircle(helpX, y + 46,
-                "Best for gaming and calls.\nYour mic stays muted until you hold the key.\nRelease to mute again.", _card1));
+                "Best for gaming and voice calls.\nYour mic is completely silent until\nyou hold the key. Just like Discord.", _card1));
             _card1.Controls.Add(MakeHelpCircle(helpX, y + 88,
-                "Best if you're usually talking.\nHold the key to temporarily mute yourself.\nRelease to unmute.", _card1));
+                "Best if you talk a lot.\nYour mic stays open \u2014 hold the\nkey when you need to mute quickly.", _card1));
             _card1.Controls.Add(MakeHelpCircle(helpX, y + 130,
-                "Best for meetings and streams.\nPress once to unmute, press again to mute.\nNo need to hold anything.", _card1));
+                "Best for meetings and streams.\nTap once to unmute, tap again\nto mute. No holding needed.", _card1));
 
             CreateTips();
 
@@ -312,7 +310,7 @@ namespace AngryAudio
                 // PTT section header
                 using (var f = new Font("Segoe UI", 10f, FontStyle.Bold)) using (var b = new SolidBrush(ACC))
                     g.DrawString("Push-to-Talk", f, b, Dpi.S(20), py);
-                // Gold shield badge — matches splash screen style
+                // Gold shield badge
                 {
                     float shieldSz = Dpi.S(16);
                     float shieldX = Dpi.S(136);
@@ -320,33 +318,33 @@ namespace AngryAudio
                     DarkTheme.DrawShield(g, shieldX, shieldY, shieldSz, Color.FromArgb(218, 175, 62), true);
                     using (var f = new Font("Segoe UI", 7.5f, FontStyle.Bold))
                     using (var b = new SolidBrush(Color.FromArgb(235, 215, 145)))
-                        g.DrawString("Best Protection", f, b, shieldX + shieldSz + Dpi.S(4), py + Dpi.S(1));
+                        g.DrawString("Recommended", f, b, shieldX + shieldSz + Dpi.S(4), py + Dpi.S(1));
                 }
                 using (var f = new Font("Segoe UI", 7.5f)) using (var b = new SolidBrush(TXT3))
-                    g.DrawString("Hold a key to control your mic.", f, b, Dpi.S(20), py + Dpi.S(20));
+                    g.DrawString("Pick your style, then set your hotkey below.", f, b, Dpi.S(20), py + Dpi.S(20));
                 // Toggle 1: Push-to-Talk
                 using (var f = new Font("Segoe UI", 9f, FontStyle.Bold)) using (var b = new SolidBrush(TXT))
-                    g.DrawString("Enable Push-to-Talk", f, b, Dpi.S(68), py + Dpi.S(45));
+                    g.DrawString("Push-to-Talk", f, b, Dpi.S(68), py + Dpi.S(45));
                 using (var f = new Font("Segoe UI", 7.5f)) using (var b = new SolidBrush(TXT3))
-                    g.DrawString("Mic stays muted at the OS level until you hold the hotkey.", f, b, Dpi.S(68), py + Dpi.S(64));
+                    g.DrawString("Silent until you hold the key \u2014 just like Discord and most games.", f, b, Dpi.S(68), py + Dpi.S(64));
                 // Toggle 2: Push-to-Mute
                 using (var f = new Font("Segoe UI", 9f, FontStyle.Bold)) using (var b = new SolidBrush(TXT))
-                    g.DrawString("Enable Push-to-Mute", f, b, Dpi.S(68), py + Dpi.S(87));
+                    g.DrawString("Push-to-Mute", f, b, Dpi.S(68), py + Dpi.S(87));
                 using (var f = new Font("Segoe UI", 7.5f)) using (var b = new SolidBrush(TXT3))
-                    g.DrawString("Mic stays open \u2014 hold the hotkey to mute.", f, b, Dpi.S(68), py + Dpi.S(106));
+                    g.DrawString("Mic stays open \u2014 hold the key to mute for coughs and sneezes.", f, b, Dpi.S(68), py + Dpi.S(106));
                 // Toggle 3: Push-to-Toggle
                 using (var f = new Font("Segoe UI", 9f, FontStyle.Bold)) using (var b = new SolidBrush(TXT))
-                    g.DrawString("Enable Push-to-Toggle", f, b, Dpi.S(68), py + Dpi.S(129));
+                    g.DrawString("Push-to-Toggle", f, b, Dpi.S(68), py + Dpi.S(129));
                 using (var f = new Font("Segoe UI", 7.5f)) using (var b = new SolidBrush(TXT3))
-                    g.DrawString("Press once to unmute, press again to mute.", f, b, Dpi.S(68), py + Dpi.S(148));
-                // Hotkey row — below all toggles, matching Options panel style
+                    g.DrawString("Tap once to unmute, tap again to mute. No holding needed.", f, b, Dpi.S(68), py + Dpi.S(148));
+                // Hotkey row
                 using (var f = new Font("Segoe UI", 9f, FontStyle.Bold)) using (var b = new SolidBrush(TXT))
                     g.DrawString("Hotkey:", f, b, Dpi.S(20), py + Dpi.S(178));
                 using (var f = new Font("Segoe UI", 7.5f)) using (var b = new SolidBrush(DarkTheme.Txt4))
-                    g.DrawString("Click to change \u00B7 Esc cancels", f, b, Dpi.S(206), py + Dpi.S(180));
+                    g.DrawString("Click to set \u00B7 Press Esc to cancel", f, b, Dpi.S(206), py + Dpi.S(180));
                 // System-wide mic note
                 using (var f = new Font("Segoe UI", 7f)) using (var b = new SolidBrush(Color.FromArgb(90, ACC.R, ACC.G, ACC.B)))
-                    g.DrawString("Mutes all microphones system-wide \u2014 headset, camera mic, USB devices.", f, b, Dpi.S(20), py + Dpi.S(210));
+                    g.DrawString("Controls every mic on your system \u2014 headset, camera mic, USB devices.", f, b, Dpi.S(20), py + Dpi.S(210));
                 // Separator
                 int sepY = Dpi.S(248);
                 using (var p = new Pen(CARD_BDR)) g.DrawLine(p, Dpi.S(20), sepY, _card1.Width - Dpi.S(20), sepY);
@@ -362,10 +360,10 @@ namespace AngryAudio
                     DarkTheme.DrawShield(g, shieldX, shieldY, shieldSz, DarkTheme.Green, true);
                     using (var f = new Font("Segoe UI", 7.5f, FontStyle.Bold))
                     using (var b = new SolidBrush(Color.FromArgb(140, 220, 140)))
-                        g.DrawString("Better Than Nothing", f, b, shieldX + shieldSz + Dpi.S(4), ay + Dpi.S(1));
+                        g.DrawString("Extra Safety", f, b, shieldX + shieldSz + Dpi.S(4), ay + Dpi.S(1));
                 }
                 using (var f = new Font("Segoe UI", 7.5f)) using (var b = new SolidBrush(TXT3))
-                    g.DrawString("Auto-mute when you step away.", f, b, Dpi.S(20), ay + Dpi.S(20));
+                    g.DrawString("Auto-mute when you walk away from your desk.", f, b, Dpi.S(20), ay + Dpi.S(20));
                 using (var f = new Font("Segoe UI", 9f)) using (var b = new SolidBrush(TXT))
                     g.DrawString("Mute mic after", f, b, Dpi.S(68), ay + Dpi.S(45));
                 using (var f = new Font("Segoe UI", 9f)) using (var b = new SolidBrush(TXT3))
@@ -466,9 +464,9 @@ namespace AngryAudio
 
             // Help circles for page 2
             _card2.Controls.Add(MakeHelpCircle(350, y + 90,
-                "Toggle this on so you never have to yell\nat your computer. Apps can silently lower\nyour mic \u2014 this keeps it locked at your level.", _card2));
+                "Apps like Zoom and Discord love to\nsilently change your mic volume.\nThis snaps it right back.", _card2));
             _card2.Controls.Add(MakeHelpCircle(350, y2 + 90,
-                "Same thing for speakers. Apps can change\nyour volume without asking \u2014 this locks it\nwhere you set it.", _card2));
+                "Same thing for your speakers.\nNo more apps blasting your volume\nor turning it down without asking.", _card2));
 
             // General section toggles — same card, below enforcement
             int gy = 284; // General section start Y — centered between separators
@@ -503,7 +501,7 @@ namespace AngryAudio
                 using (var f = new Font("Segoe UI", 8f)) using (var b = new SolidBrush(_micCurColor))
                     g.DrawString(_micCurText, f, b, Dpi.S(20), py + Dpi.S(66));
                 using (var f = new Font("Segoe UI", 9f)) using (var b = new SolidBrush(TXT2))
-                    g.DrawString("Prevent apps from changing mic volume.", f, b, Dpi.S(68), py + Dpi.S(89));
+                    g.DrawString("Lock mic volume", f, b, Dpi.S(68), py + Dpi.S(89));
                 // Separator — mic/speaker
                 int sepY = Dpi.S(14 + 122);
                 using (var p = new Pen(CARD_BDR)) g.DrawLine(p, Dpi.S(20), sepY, _card2.Width - Dpi.S(20), sepY);
@@ -520,7 +518,7 @@ namespace AngryAudio
                 using (var f = new Font("Segoe UI", 8f)) using (var b = new SolidBrush(_spkCurColor))
                     g.DrawString(_spkCurText, f, b, Dpi.S(20), sy + Dpi.S(66));
                 using (var f = new Font("Segoe UI", 9f)) using (var b = new SolidBrush(TXT2))
-                    g.DrawString("Prevent apps from changing speaker volume.", f, b, Dpi.S(68), sy + Dpi.S(89));
+                    g.DrawString("Lock speaker volume", f, b, Dpi.S(68), sy + Dpi.S(89));
 
                 // === Separator — enforcement / general ===
                 int genSepY = Dpi.S(274);
@@ -531,18 +529,18 @@ namespace AngryAudio
                 using (var f = new Font("Segoe UI", 10f, FontStyle.Bold)) using (var b = new SolidBrush(ACC))
                     g.DrawString("General", f, b, Dpi.S(20), genY);
                 using (var f = new Font("Segoe UI", 7.5f)) using (var b = new SolidBrush(TXT3))
-                    g.DrawString("Startup behavior and notifications.", f, b, Dpi.S(20), genY + Dpi.S(18));
+                    g.DrawString("Startup and alerts.", f, b, Dpi.S(20), genY + Dpi.S(18));
                 using (var f = new Font("Segoe UI", 9f)) using (var b = new SolidBrush(TXT2))
-                    g.DrawString("Start with Windows", f, b, Dpi.S(68), genY + Dpi.S(38));
+                    g.DrawString("Launch when Windows starts", f, b, Dpi.S(68), genY + Dpi.S(38));
                 // Separator — general / notifications
                 int genSep2 = genY + Dpi.S(70);
                 using (var p = new Pen(CARD_BDR)) g.DrawLine(p, Dpi.S(20), genSep2, _card2.Width - Dpi.S(20), genSep2);
                 using (var f = new Font("Segoe UI", 7f, FontStyle.Bold)) using (var b = new SolidBrush(DarkTheme.Txt4))
                     g.DrawString("NOTIFICATIONS", f, b, Dpi.S(20), genY + Dpi.S(82));
                 using (var f = new Font("Segoe UI", 9f)) using (var b = new SolidBrush(TXT2))
-                    g.DrawString("Volume Correction Alerts", f, b, Dpi.S(68), genY + Dpi.S(106));
+                    g.DrawString("Notify when volume is corrected", f, b, Dpi.S(68), genY + Dpi.S(106));
                 using (var f = new Font("Segoe UI", 9f)) using (var b = new SolidBrush(TXT2))
-                    g.DrawString("Device Change Alerts", f, b, Dpi.S(68), genY + Dpi.S(138));
+                    g.DrawString("Notify when devices change", f, b, Dpi.S(68), genY + Dpi.S(138));
             };
 
             var tip2 = MakeTipPanel();
@@ -566,7 +564,7 @@ namespace AngryAudio
                 var g = e.Graphics; g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
                 PaintUnifiedStars(g, tip);
                 using (var p = new Pen(Color.FromArgb(40, 40, 40))) g.DrawLine(p, Dpi.S(16), 0, tip.Width - Dpi.S(32), 0);
-                string msg = "These settings can be changed anytime by double-clicking the tray kitty.";
+                string msg = "You can change these anytime \u2014 just double-click the kitty in your system tray.";
                 using (var f = new Font("Segoe UI", 8f))
                 using (var b = new SolidBrush(DarkTheme.Txt4))
                 {
@@ -1014,7 +1012,7 @@ namespace AngryAudio
             _card1.Controls.Add(_tipFunCallout); _tipFunCallout.BringToFront();
 
             // PAGE 2 TIP: Mic lock explanation
-            _tipMicLock = MakeTipCard("Toggle this on so you never have to yell at your computer. Your mic stays at 100%, fully controlled by your hotkey.", 340, 48, arrowUp: false);
+            _tipMicLock = MakeTipCard("Tired of yelling \"CAN YOU HEAR ME?\" because some app turned your mic down? Lock it here. Hit Save when you're done!", 360, 48, arrowUp: false);
             _tipMicLock.Location = Dpi.Pt(20, 126);
         }
 

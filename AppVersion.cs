@@ -2,7 +2,7 @@ namespace AngryAudio
 {
     public static class AppVersion
     {
-        public const string Version = "62.5";
+        public const string Version = "62.6";
         public const string FullName = "Angry Audio v" + Version;
         public const string Copyright = "\u00A9 2026 Andrew Ganter. All Rights Reserved.";
         public const string LegalNotice =
