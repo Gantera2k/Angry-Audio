@@ -49,21 +49,14 @@ namespace AngryAudio
         protected override void OnMouseEnter(EventArgs e) { _hovering = true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { _hovering = false; Invalidate(); base.OnMouseLeave(e); }
 
-        private bool _flashHighlight;
-        /// <summary>Temporarily highlight the track (for guided 1-2-3 flicker).</summary>
-        public bool FlashHighlight { get { return _flashHighlight; } set { _flashHighlight = value; Invalidate(); } }
         protected override void OnPaint(PaintEventArgs e) {
             var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias;
             if (PaintParentBg != null) PaintParentBg(g, this);
             else { using (var b = new SolidBrush(DarkTheme.GlassFlat)) g.FillRectangle(b, ClientRectangle); }
             int w = Width, h = Height;
-            Color bg;
-            if (_flashHighlight)
-                bg = Color.FromArgb(130, 210, 255); // bright accent flash
-            else
-                bg = _checked
-                    ? (_hovering ? Color.FromArgb(130, 210, 255) : DarkTheme.Accent)
-                    : (_hovering ? Color.FromArgb(90, 90, 90) : Color.FromArgb(55, 55, 55));
+            Color bg = _checked
+                ? (_hovering ? Color.FromArgb(130, 210, 255) : DarkTheme.Accent)
+                : (_hovering ? Color.FromArgb(90, 90, 90) : Color.FromArgb(55, 55, 55));
             using (var b = new SolidBrush(bg)) {
                 g.FillEllipse(b, 0, 0, h, h); g.FillEllipse(b, w - h, 0, h, h);
                 g.FillRectangle(b, h / 2f, 0, w - h, h);

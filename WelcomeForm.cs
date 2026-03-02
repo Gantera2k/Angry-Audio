@@ -660,17 +660,57 @@ namespace AngryAudio
         // --- Toggle flicker animation (draws attention to mode selection) ---
         private Timer _flashTimer;
         private int _flashStep;
+        private Panel[] _flashHighlights;
         void FlashToggles() {
             if (_flashTimer != null && _flashTimer.Enabled) return;
             _flashStep = 0;
+
+            // Create highlight panels behind toggle rows (same pattern as Options EnforceToggleSelection)
+            if (_flashHighlights == null && _card1 != null) {
+                var toggles = new ToggleSwitch[] { _tglPtt, _tglPtm, _tglPtToggle };
+                Color flashBorder = Color.FromArgb(180, ACC.R, ACC.G, ACC.B);
+                _flashHighlights = new Panel[3];
+                for (int i = 0; i < 3; i++) {
+                    var tgl = toggles[i];
+                    if (tgl == null) continue;
+                    _flashHighlights[i] = new BufferedPanel {
+                        Location = new Point(Dpi.S(4), tgl.Top - Dpi.S(4)),
+                        Size = new Size(_card1.Width - Dpi.S(8), Dpi.S(42)),
+                        BackColor = Color.Transparent, Visible = false
+                    };
+                    var hl = _flashHighlights[i];
+                    hl.Paint += (s, e) => {
+                        var p2 = (Panel)s;
+                        if (p2.BackColor != Color.Transparent) {
+                            using (var pen = new Pen(flashBorder, 2f))
+                                e.Graphics.DrawRectangle(pen, 1, 1, p2.Width - 3, p2.Height - 3);
+                        }
+                    };
+                    _card1.Controls.Add(hl);
+                    hl.BringToFront();
+                    tgl.BringToFront();
+                }
+            }
+
+            Color flashColor = Color.FromArgb(60, ACC.R, ACC.G, ACC.B);
             if (_flashTimer == null) {
-                _flashTimer = new Timer { Interval = 120 };
+                _flashTimer = new Timer { Interval = 180 };
                 _flashTimer.Tick += (s2, e2) => {
-                    _flashStep++;
-                    if (_flashStep == 1) { if (_tglPtt != null) _tglPtt.FlashHighlight = true; }
-                    else if (_flashStep == 2) { if (_tglPtt != null) _tglPtt.FlashHighlight = false; if (_tglPtm != null) _tglPtm.FlashHighlight = true; }
-                    else if (_flashStep == 3) { if (_tglPtm != null) _tglPtm.FlashHighlight = false; if (_tglPtToggle != null) _tglPtToggle.FlashHighlight = true; }
-                    else { if (_tglPtToggle != null) _tglPtToggle.FlashHighlight = false; _flashTimer.Stop(); }
+                    if (_flashHighlights == null) { _flashTimer.Stop(); return; }
+                    if (_flashStep < 6) {
+                        int idx = _flashStep % 3;
+                        for (int i = 0; i < 3; i++) {
+                            if (_flashHighlights[i] == null) continue;
+                            _flashHighlights[i].BackColor = (i == idx) ? flashColor : Color.Transparent;
+                            _flashHighlights[i].Visible = true;
+                            _flashHighlights[i].Invalidate();
+                        }
+                        _flashStep++;
+                    } else {
+                        for (int i = 0; i < 3; i++)
+                            if (_flashHighlights[i] != null) _flashHighlights[i].Visible = false;
+                        _flashTimer.Stop();
+                    }
                 };
             }
             _flashTimer.Start();
