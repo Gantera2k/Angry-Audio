@@ -687,7 +687,13 @@ namespace AngryAudio
             var tip = new BufferedPanel { Size = Dpi.Size(w, h + (arrowUp ? 8 : 0)), Visible = false, BackColor = Color.Transparent };
             float _fadeAlpha = 0f;
             Timer _fadeIn = null;
+            // Zip line cache — per tip, captured by closure
+            PointF[] _zipPts = null;
+            float[] _zipDist = null;
+            float _zipTotal = 0;
+            int _zipTick = 0;
             tip.Paint += (s, e) => {
+                _zipTick++;
                 var g = e.Graphics;
                 g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                 g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
@@ -712,69 +718,52 @@ namespace AngryAudio
 
                 // === ZIP LINE — blue data pulse racing around the border ===
                 if (_fadeAlpha >= 0.8f) {
-                    using (var path = DarkTheme.RoundedRect(bodyRect, cr)) {
-                        path.Flatten(null, 0.5f);
-                        var pts = path.PathPoints;
-                        if (pts.Length > 4) {
-                            // Calculate total perimeter length
-                            float totalLen = 0;
-                            float[] segLens = new float[pts.Length];
-                            for (int i = 1; i < pts.Length; i++) {
-                                float dx = pts[i].X - pts[i-1].X;
-                                float dy = pts[i].Y - pts[i-1].Y;
-                                segLens[i] = (float)Math.Sqrt(dx*dx + dy*dy);
-                                totalLen += segLens[i];
-                            }
-                            // Close the loop
-                            float cdx = pts[0].X - pts[pts.Length-1].X;
-                            float cdy = pts[0].Y - pts[pts.Length-1].Y;
-                            float closeLen = (float)Math.Sqrt(cdx*cdx + cdy*cdy);
-                            totalLen += closeLen;
+                    // Flatten the border path into points (once, on first use)
+                    if (_zipPts == null || _zipPts.Length == 0) {
+                        using (var path = DarkTheme.RoundedRect(bodyRect, cr)) {
+                            path.Flatten(null, 0.5f);
+                            _zipPts = (PointF[])path.PathPoints.Clone();
+                        }
+                        // Pre-compute cumulative distances
+                        _zipDist = new float[_zipPts.Length];
+                        _zipDist[0] = 0;
+                        for (int i = 1; i < _zipPts.Length; i++) {
+                            float dx = _zipPts[i].X - _zipPts[i-1].X;
+                            float dy = _zipPts[i].Y - _zipPts[i-1].Y;
+                            _zipDist[i] = _zipDist[i-1] + (float)Math.Sqrt(dx*dx + dy*dy);
+                        }
+                        // Close the loop distance
+                        float cx = _zipPts[0].X - _zipPts[_zipPts.Length-1].X;
+                        float cy = _zipPts[0].Y - _zipPts[_zipPts.Length-1].Y;
+                        _zipTotal = _zipDist[_zipPts.Length-1] + (float)Math.Sqrt(cx*cx + cy*cy);
+                    }
 
-                            // Zip position — fast, with glitch stutter
-                            float zipSpeed = 3.5f;
-                            float zipPos = (_pulsePhase * zipSpeed) % totalLen;
-                            float trailLen = totalLen * 0.15f; // 15% of perimeter
+                    if (_zipPts.Length > 4 && _zipTotal > 1f) {
+                        // _zipTick increments every frame, drives position continuously
+                        float speed = 4f; // pixels per frame
+                        float headPos = (_zipTick * speed) % _zipTotal;
+                        float trailLen = _zipTotal * 0.18f;
 
-                            // Draw the bright trail segment
-                            float accumulated = 0;
-                            for (int i = 0; i < pts.Length; i++) {
-                                int next = (i + 1) % pts.Length;
-                                float sl = (i < pts.Length - 1) ? segLens[i + 1] : closeLen;
-                                float segStart = accumulated;
-                                float segEnd = accumulated + sl;
+                        for (int i = 0; i < _zipPts.Length; i++) {
+                            int next = (i + 1) % _zipPts.Length;
+                            float d0 = _zipDist[i];
+                            float d1 = (i < _zipPts.Length - 1) ? _zipDist[i+1] : _zipTotal;
 
-                                // Check if this segment overlaps with the trail
-                                float trailStart = zipPos - trailLen;
-                                float trailEnd = zipPos;
-                                // Handle wrap-around
-                                bool inTrail = false;
-                                if (trailStart < 0) {
-                                    inTrail = (segEnd > trailStart + totalLen || segStart < trailEnd);
-                                } else {
-                                    inTrail = (segEnd > trailStart && segStart < trailEnd);
-                                }
+                            // Distance from head BACKWARDS along the trail (modular)
+                            float mid = (d0 + d1) * 0.5f;
+                            float dist = headPos - mid;
+                            if (dist < 0) dist += _zipTotal; // wrap
+                            // dist is now how far BEHIND the head this segment is
+                            // Only draw if within trail length (behind the head)
+                            if (dist > trailLen) continue;
 
-                                if (inTrail && sl > 0.1f) {
-                                    // Calculate alpha based on distance from head
-                                    float distFromHead;
-                                    float midSeg = (segStart + segEnd) / 2f;
-                                    if (trailStart < 0) {
-                                        float d1 = zipPos - midSeg;
-                                        float d2 = zipPos - (midSeg - totalLen);
-                                        distFromHead = Math.Min(Math.Abs(d1), Math.Abs(d2));
-                                    } else {
-                                        distFromHead = Math.Abs(zipPos - midSeg);
-                                    }
-                                    float t = 1f - Math.Min(1f, distFromHead / trailLen);
-                                    int za = (int)(200 * t * _fadeAlpha);
-                                    if (za > 5) {
-                                        float pw = 1f + t * 1.2f; // thicker at head
-                                        using (var zp = new Pen(Color.FromArgb(za, ACC.R, ACC.G, ACC.B), pw))
-                                            g.DrawLine(zp, pts[i], pts[next]);
-                                    }
-                                }
-                                accumulated += sl;
+                            float t = 1f - (dist / trailLen); // 1 at head, 0 at tail
+                            t = t * t; // ease — sharper falloff
+                            int za = (int)(220 * t * _fadeAlpha);
+                            if (za > 8) {
+                                float pw = 1f + t * 1.5f;
+                                using (var zp = new Pen(Color.FromArgb(za, ACC.R, ACC.G, ACC.B), pw))
+                                    g.DrawLine(zp, _zipPts[i], _zipPts[next]);
                             }
                         }
                     }
@@ -817,6 +806,7 @@ namespace AngryAudio
             tip.VisibleChanged += (s, e) => {
                 if (tip.Visible) {
                     _fadeAlpha = 0f;
+                    _zipPts = null; _zipDist = null; _zipTotal = 0; _zipTick = 0; // reset zip cache
                     _fadeIn = new Timer { Interval = 30 };
                     int fadeStep = 0;
                     _fadeIn.Tick += (s2, e2) => {
