@@ -979,15 +979,20 @@ namespace AngryAudio
                 if (tip.Visible) {
                     _fadeAlpha = 0f;
                     _zipPts = null; _zipDist = null; _zipTotal = 0; _zipTick = 0; // reset zip cache
+                    if (_fadeIn != null) { _fadeIn.Stop(); _fadeIn.Dispose(); _fadeIn = null; }
                     _fadeIn = new Timer { Interval = 30 };
                     int fadeStep = 0;
                     _fadeIn.Tick += (s2, e2) => {
+                        if (_fadeIn == null || tip == null || tip.IsDisposed) return;
                         fadeStep++;
                         _fadeAlpha = Math.Min(1f, fadeStep * 0.12f);
                         tip.Invalidate();
                         if (_fadeAlpha >= 1f) { _fadeIn.Stop(); _fadeIn.Dispose(); _fadeIn = null; }
                     };
                     _fadeIn.Start();
+                } else {
+                    // Stop fade animation on hide
+                    if (_fadeIn != null) { _fadeIn.Stop(); _fadeIn.Dispose(); _fadeIn = null; }
                 }
             };
             return tip;
