@@ -1354,6 +1354,18 @@ namespace AngryAudio
             // Reset toast cooldown — toggle feedback should ALWAYS show
             _lastToastShown = DateTime.MinValue;
 
+            // Suspend/resume PTT hook during key capture
+            if (toggleId == "capture_start") {
+                if (_pushToTalk != null) _pushToTalk.SuspendHook = true;
+                Logger.Info("PTT hook SUSPENDED for key capture");
+                return;
+            }
+            if (toggleId == "capture_stop") {
+                if (_pushToTalk != null) _pushToTalk.SuspendHook = false;
+                Logger.Info("PTT hook RESUMED after key capture");
+                return;
+            }
+
             // Handle parameterized commands
             if (toggleId != null && (toggleId.StartsWith("ptt_key:") || toggleId.StartsWith("ptt_key2:") || toggleId.StartsWith("ptt_key3:")))
             {

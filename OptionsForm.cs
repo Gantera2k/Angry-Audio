@@ -142,6 +142,8 @@ namespace AngryAudio
         private bool[] _prevKeyState = new bool[256]; // track previous state to detect transitions
 
         void StartCapturePolling() {
+            // Tell TrayApp to suspend PTT hook so we can capture the key
+            if (_onToggle != null) _onToggle("capture_start");
             // Snapshot current key state so we only detect NEW presses
             for (int i = 0; i < 256; i++)
                 _prevKeyState[i] = (GetAsyncKeyState(i) & 0x8000) != 0;
@@ -155,6 +157,7 @@ namespace AngryAudio
 
         void StopCapturePolling() {
             if (_captureTimer != null) _captureTimer.Stop();
+            if (_onToggle != null) _onToggle("capture_stop");
         }
 
         private int _capturePollCount;

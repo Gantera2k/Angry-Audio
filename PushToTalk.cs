@@ -83,6 +83,8 @@ namespace AngryAudio
         public int LastTriggeredKey { get; private set; }
         public bool IsToggleMode { get { return _toggleMode; } }
         public bool IsPushToMuteMode { get { return _pushToMuteMode; } }
+        /// <summary>When true, hook passes all keys through without consuming them. Used during key capture.</summary>
+        public bool SuspendHook { get; set; }
 
         public event Action OnTalkStart;
         public event Action OnTalkStop;
@@ -308,7 +310,7 @@ namespace AngryAudio
         /// </summary>
         private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
         {
-            if (nCode >= 0 && _enabled)
+            if (nCode >= 0 && _enabled && !SuspendHook)
             {
                 int msg = (int)wParam;
                 if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
