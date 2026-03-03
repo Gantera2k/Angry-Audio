@@ -415,10 +415,105 @@ namespace AngryAudio
         }
 
         /// <summary>
-        /// Set volume for a specific process by name (e.g., "chrome", "discord").
-        /// Matches case-insensitively without .exe extension.
-        /// Returns number of sessions affected.
+        /// Get all active CAPTURE sessions — apps currently using the microphone.
+        /// Returns process names of apps with active mic capture sessions.
         /// </summary>
+        public static System.Collections.Generic.List<AudioSession> GetMicCaptureSessions()
+        {
+            var sessions = new System.Collections.Generic.List<AudioSession>();
+            IMMDeviceEnumerator enumerator = null;
+            IMMDeviceCollection devices = null;
+            const int DEVICE_STATE_ACTIVE = 0x00000001;
+
+            try
+            {
+                enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorClass();
+                int hr = enumerator.EnumAudioEndpoints(EDataFlow.eCapture, DEVICE_STATE_ACTIVE, out devices);
+                if (hr != 0 || devices == null) return sessions;
+
+                int devCount;
+                devices.GetCount(out devCount);
+
+                for (int d = 0; d < devCount; d++)
+                {
+                    IMMDevice device = null;
+                    IAudioSessionManager2 sessionMgr = null;
+                    IAudioSessionEnumerator sessionEnum = null;
+
+                    try
+                    {
+                        hr = devices.Item(d, out device);
+                        if (hr != 0 || device == null) continue;
+
+                        object iface;
+                        hr = device.Activate(IID_IAudioSessionManager2, 23, IntPtr.Zero, out iface);
+                        if (hr != 0 || iface == null) continue;
+                        sessionMgr = (IAudioSessionManager2)iface;
+
+                        hr = sessionMgr.GetSessionEnumerator(out sessionEnum);
+                        if (hr != 0 || sessionEnum == null) continue;
+
+                        int count;
+                        sessionEnum.GetCount(out count);
+
+                        for (int i = 0; i < count; i++)
+                        {
+                            IAudioSessionControl ctrl = null;
+                            IAudioSessionControl2 ctrl2 = null;
+                            try
+                            {
+                                hr = sessionEnum.GetSession(i, out ctrl);
+                                if (hr != 0 || ctrl == null) continue;
+
+                                ctrl2 = ctrl as IAudioSessionControl2;
+                                if (ctrl2 == null) continue;
+
+                                uint pid;
+                                ctrl2.GetProcessId(out pid);
+                                if (pid == 0) continue; // system session
+
+                                int state;
+                                ctrl.GetState(out state);
+                                if (state != 1) continue; // 1 = AudioSessionStateActive
+
+                                string procName = GetProcessName(pid);
+                                if (string.IsNullOrEmpty(procName) || procName == "Unknown") continue;
+
+                                // Avoid duplicates
+                                bool exists = false;
+                                foreach (var s in sessions)
+                                    if (s.ProcessName == procName) { exists = true; break; }
+                                if (exists) continue;
+
+                                sessions.Add(new AudioSession { ProcessId = pid, ProcessName = procName, DisplayName = procName });
+                            }
+                            finally
+                            {
+                                if (ctrl2 != null && ctrl2 != ctrl && Marshal.IsComObject(ctrl2)) Marshal.ReleaseComObject(ctrl2);
+                                if (ctrl != null && Marshal.IsComObject(ctrl)) Marshal.ReleaseComObject(ctrl);
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        if (sessionEnum != null && Marshal.IsComObject(sessionEnum)) Marshal.ReleaseComObject(sessionEnum);
+                        if (sessionMgr != null && Marshal.IsComObject(sessionMgr)) Marshal.ReleaseComObject(sessionMgr);
+                        if (device != null && Marshal.IsComObject(device)) Marshal.ReleaseComObject(device);
+                    }
+                }
+            }
+            catch (Exception ex) { Logger.Error("GetMicCaptureSessions failed", ex); }
+            finally
+            {
+                if (devices != null && Marshal.IsComObject(devices)) Marshal.ReleaseComObject(devices);
+                if (enumerator != null && Marshal.IsComObject(enumerator)) Marshal.ReleaseComObject(enumerator);
+            }
+
+            return sessions;
+        }
+
+        /// <summary>
+        /// Set volume for a specific process by name (e.g., "chrome", "discord").
         public static int SetAppVolume(string processName, float percent)
         {
             int affected = 0;

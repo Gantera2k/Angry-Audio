@@ -26,7 +26,7 @@ namespace AngryAudio
         private Label[] _navLabels;
         private int _activePane = 0;
 
-        private ToggleSwitch _tglAfkMic, _tglAfkSpk, _tglPtt, _tglPtm, _tglPtToggle, _tglMicEnf, _tglSpkEnf, _tglAppEnf, _tglStartup, _tglNotifyCorr, _tglNotifyDev, _tglOverlay;
+        private ToggleSwitch _tglAfkMic, _tglAfkSpk, _tglPtt, _tglPtm, _tglPtToggle, _tglMicEnf, _tglSpkEnf, _tglAppEnf, _tglStartup, _tglNotifyCorr, _tglNotifyDev, _tglOverlay, _tglSoundFeedback;
         private NumericUpDown _nudAfkMicSec, _nudAfkSpkSec;
         private Label _lblPttKey, _lblPttKey2, _lblPttKey3;
         private Label _lblKey2Label, _lblKey2Hint, _lblKey3Label, _lblKey3Hint;
@@ -1155,6 +1155,9 @@ namespace AngryAudio
             _tglOverlay = Tgl("Show Mic Status Overlay", "Floating pill shows mic open/closed \u2014 drag to reposition, right-click to dismiss", y, card);
             _tglOverlay.CheckedChanged += (s,e) => { if (!_loading) { _settings.MicOverlayEnabled = _tglOverlay.Checked; if (_onToggle != null) _onToggle(_tglOverlay.Checked ? "overlay_on" : "overlay_off"); } };
             y += 42;
+            _tglSoundFeedback = Tgl("PTT Sound Feedback", "Play a click when your mic opens or closes \u2014 so you know it worked without looking.", y, card);
+            _tglSoundFeedback.CheckedChanged += (s,e) => { if (!_loading) { _settings.PttSoundFeedback = _tglSoundFeedback.Checked; } };
+            y += 42;
             _tglNotifyCorr = Tgl("Volume Correction Alerts", "Show a toast when Angry Audio resets your audio.", y, card);
             _tglNotifyCorr.CheckedChanged += (s,e) => { if (!_loading) { _settings.NotifyOnCorrection = _tglNotifyCorr.Checked; if (_onToggle != null) _onToggle(_tglNotifyCorr.Checked ? "notify_corr_on" : "notify_corr_off"); } };
             y += 42;
@@ -1566,6 +1569,7 @@ namespace AngryAudio
                 if (InvokeRequired) { BeginInvoke((Action)RefreshOverlayToggle); return; }
                 _loading = true;
                 _tglOverlay.Checked = _settings.MicOverlayEnabled;
+                if (_tglSoundFeedback != null) _tglSoundFeedback.Checked = _settings.PttSoundFeedback;
                 _loading = false;
             } catch { _loading = false; }
         }
@@ -1657,6 +1661,7 @@ namespace AngryAudio
             _settings.AfkSpeakerMuteEnabled=_tglAfkSpk.Checked;_settings.AfkSpeakerMuteSec=(int)_nudAfkSpkSec.Value;
             _settings.PushToTalkEnabled=_tglPtt.Checked;_settings.PushToMuteEnabled=_tglPtm.Checked;_settings.PushToToggleEnabled=_tglPtToggle.Checked;_settings.PushToTalkKey=_pttKeyCode;_settings.PushToTalkKey2=_pttKeyCode2;_settings.PushToTalkConsumeKey=false;
             _settings.MicOverlayEnabled=_tglOverlay.Checked;
+            if (_tglSoundFeedback != null) _settings.PttSoundFeedback=_tglSoundFeedback.Checked;
             _settings.MicEnforceEnabled=_tglMicEnf.Checked;_settings.MicVolumePercent=_trkMicVol.Value;
             _settings.SpeakerEnforceEnabled=_tglSpkEnf.Checked;_settings.SpeakerVolumePercent=_trkSpkVol.Value;
             _settings.AppVolumeEnforceEnabled=_tglAppEnf.Checked;_settings.AppVolumeRules=CollectAppRules();

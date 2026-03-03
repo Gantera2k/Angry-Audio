@@ -42,6 +42,7 @@ namespace AngryAudio
         public bool PushToToggleEnabled { get; set; }
         public bool PushToMuteEnabled { get; set; }
         public bool MicOverlayEnabled { get; set; }
+        public bool PttSoundFeedback { get; set; }
 
         // Per-app volume enforcement
         // Key = process name (lowercase, no .exe), Value = target volume percent
@@ -92,6 +93,7 @@ namespace AngryAudio
             PushToToggleEnabled = false;
             PushToMuteEnabled = false;
             MicOverlayEnabled = true;
+            PttSoundFeedback = false;
             AppVolumeRules = new Dictionary<string, int>();
             AppVolumeEnforceEnabled = false;
             AppVolumeEnforceIntervalSec = 5;
@@ -161,6 +163,7 @@ namespace AngryAudio
                 if (values.ContainsKey("pushToToggleEnabled")) settings.PushToToggleEnabled = ParseBool(values["pushToToggleEnabled"]);
                 if (values.ContainsKey("pushToMuteEnabled")) settings.PushToMuteEnabled = ParseBool(values["pushToMuteEnabled"]);
                 if (values.ContainsKey("micOverlayEnabled")) settings.MicOverlayEnabled = ParseBool(values["micOverlayEnabled"]);
+                if (values.ContainsKey("pttSoundFeedback")) settings.PttSoundFeedback = ParseBool(values["pttSoundFeedback"]);
                 if (values.ContainsKey("appVolumeEnforceEnabled")) settings.AppVolumeEnforceEnabled = ParseBool(values["appVolumeEnforceEnabled"]);
                 if (values.ContainsKey("appVolumeEnforceIntervalSec")) settings.AppVolumeEnforceIntervalSec = ParseInt(values["appVolumeEnforceIntervalSec"], 5);
                 if (values.ContainsKey("appVolumeRules")) settings.AppVolumeRules = ParseAppRules(values["appVolumeRules"]);
@@ -223,6 +226,7 @@ namespace AngryAudio
                 sb.AppendLine(JsonField("pushToToggleEnabled", PushToToggleEnabled) + ",");
                 sb.AppendLine(JsonField("pushToMuteEnabled", PushToMuteEnabled) + ",");
                 sb.AppendLine(JsonField("micOverlayEnabled", MicOverlayEnabled) + ",");
+                sb.AppendLine(JsonField("pttSoundFeedback", PttSoundFeedback) + ",");
                 sb.AppendLine(JsonField("appVolumeEnforceEnabled", AppVolumeEnforceEnabled) + ",");
                 sb.AppendLine(JsonField("appVolumeEnforceIntervalSec", AppVolumeEnforceIntervalSec) + ",");
                 sb.AppendLine(JsonFieldStr("appVolumeRules", SerializeAppRules(AppVolumeRules)));

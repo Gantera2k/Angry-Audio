@@ -32,6 +32,7 @@ namespace AngryAudio
         private NotifyIcon _trayIcon;
         private ContextMenuStrip _contextMenu;
         private ToolStripMenuItem _pauseMenuItem;
+        private ToolStripMenuItem _micListenerMenuItem;
         private System.Threading.Timer _pollTimer;
         private System.Threading.Timer _pttSafetyTimer;
         private bool _pollFast;
@@ -64,6 +65,9 @@ namespace AngryAudio
         private volatile bool _micMutePausedForOpenMic;
         private DateTime _lastOpenMicCheck = DateTime.MinValue;
         private DateTime _lastAppEnforceCheck = DateTime.MinValue;
+        private DateTime _lastMicListenerCheck = DateTime.MinValue;
+        private string _lastMicListenerKey = "";
+        private System.Collections.Generic.List<string> _micListenerNames = new System.Collections.Generic.List<string>();
         private DateTime _lastDeviceChangeCheck = DateTime.MinValue;
         private DateTime _lastTrayUpdate = DateTime.MinValue;
         private string _lastOpenMicApp;
@@ -97,6 +101,7 @@ namespace AngryAudio
         private Icon _afkIcon;
         private Icon _errorIcon;
         private Icon _pttIcon;
+        private Icon _micHotIcon;
 
         // Push-to-talk
         private PushToTalk _pushToTalk;
@@ -301,6 +306,30 @@ namespace AngryAudio
                         _lastAppEnforceCheck = DateTime.UtcNow;
                         EnforceAppVolumes();
                     }
+                }
+
+                // Mic listener monitoring — who's using the mic? (throttled — every 10s)
+                if ((DateTime.UtcNow - _lastMicListenerCheck).TotalSeconds >= 10)
+                {
+                    _lastMicListenerCheck = DateTime.UtcNow;
+                    try
+                    {
+                        var listeners = Audio.GetMicCaptureSessions();
+                        var names = new System.Collections.Generic.List<string>();
+                        foreach (var s in listeners) names.Add(s.ProcessName);
+                        names.Sort();
+                        string key = string.Join(",", names.ToArray());
+                        if (key != _lastMicListenerKey)
+                        {
+                            _lastMicListenerKey = key;
+                            _micListenerNames = names;
+                            if (names.Count > 0)
+                                Logger.Info("Mic listeners: " + key);
+                            else
+                                Logger.Info("Mic listeners: none");
+                        }
+                    }
+                    catch (Exception ex) { Logger.Error("Mic listener check failed", ex); }
                 }
 
                 // Push-to-talk auto-sync (detect live setting changes from Options)
@@ -902,8 +931,28 @@ namespace AngryAudio
             _contextMenu.Renderer = new DarkMenuRenderer();
 
             // Hide tooltip when context menu is open so they don't overlap
-            _contextMenu.Opening += (s, e) => { if (_trayIcon != null) _trayIcon.Text = ""; };
+            _contextMenu.Opening += (s, e) => {
+                if (_trayIcon != null) _trayIcon.Text = "";
+                // Refresh mic listener display
+                if (_micListenerMenuItem != null) {
+                    if (_micListenerNames.Count > 0) {
+                        string names = string.Join(", ", _micListenerNames.ToArray());
+                        if (names.Length > 45) names = names.Substring(0, 42) + "...";
+                        _micListenerMenuItem.Text = "\ud83c\udfa4 Mic: " + names;
+                        _micListenerMenuItem.ForeColor = Color.FromArgb(255, 180, 100);
+                    } else {
+                        _micListenerMenuItem.Text = "\ud83c\udfa4 Mic: No apps listening";
+                        _micListenerMenuItem.ForeColor = DarkTheme.Txt4;
+                    }
+                }
+            };
             _contextMenu.Closed += (s, e) => UpdateTrayState();
+
+            // Mic listener status — shows who's using your mic
+            _micListenerMenuItem = new ToolStripMenuItem("") { Enabled = false };
+            _micListenerMenuItem.ForeColor = DarkTheme.Txt3;
+            _contextMenu.Items.Add(_micListenerMenuItem);
+            _contextMenu.Items.Add(new ToolStripSeparator());
 
             var optionsItem = new ToolStripMenuItem("\u2699  Options...");
             optionsItem.Click += (s, e) => ShowOptions();
@@ -957,8 +1006,10 @@ namespace AngryAudio
                 Icon targetIcon;
                 if (_isPaused)
                     targetIcon = _pausedIcon ?? _baseIcon;
+                else if (_pushToTalk != null && _pushToTalk.Enabled && _pushToTalk.IsTalking)
+                    targetIcon = _micHotIcon ?? _baseIcon; // green dot = mic is hot
                 else if (_pushToTalk != null && _pushToTalk.Enabled && !_pushToTalk.IsTalking)
-                    targetIcon = _pttIcon ?? _baseIcon;
+                    targetIcon = _pttIcon ?? _baseIcon; // red dot = mic is muted
                 else if (_micAfkState == AfkState.AfkMuted || _speakerAfkState == AfkState.AfkMuted)
                     targetIcon = _afkIcon ?? _baseIcon;
                 else
@@ -1046,10 +1097,11 @@ namespace AngryAudio
             _pausedIcon = GenerateTrayIcon("‖");
             _afkIcon = GenerateTrayIcon("Z");
             _errorIcon = GenerateTrayIcon("!");
-            _pttIcon = null; // No separate icon — uses _baseIcon; tooltip already shows PTT state
+            _pttIcon = GenerateTrayIcon(null, Color.FromArgb(220, 60, 60)); // red dot = mic muted
+            _micHotIcon = GenerateTrayIcon(null, Color.FromArgb(60, 200, 90)); // green dot = mic hot
         }
 
-        private Icon GenerateTrayIcon(string badge)
+        private Icon GenerateTrayIcon(string badge, Color? dotColor = null)
         {
             using (var bmp = new Bitmap(32, 32, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
             using (var g = Graphics.FromImage(bmp))
@@ -1060,7 +1112,7 @@ namespace AngryAudio
                 // Draw mascot head on fully transparent canvas
                 Mascot.DrawMascotHead(g, 0, 0, 32);
 
-                // Badge overlay
+                // Badge overlay (text in circle)
                 if (badge != null)
                 {
                     using (var badgeBg = new SolidBrush(badge == "!" ? DarkTheme.ErrorRed : DarkTheme.Accent))
@@ -1071,6 +1123,14 @@ namespace AngryAudio
                         var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
                         g.DrawString(badge, badgeFont, badgeTextBrush, new RectangleF(19, 19, 13, 13), sf);
                     }
+                }
+                // Dot indicator (small colored circle, no text)
+                else if (dotColor.HasValue)
+                {
+                    using (var bg = new SolidBrush(Color.FromArgb(40, 40, 40)))
+                        g.FillEllipse(bg, 21, 21, 11, 11);
+                    using (var fill = new SolidBrush(dotColor.Value))
+                        g.FillEllipse(fill, 22, 22, 9, 9);
                 }
 
                 // Build proper ICO with embedded PNG for true alpha transparency
@@ -1152,6 +1212,10 @@ namespace AngryAudio
 
         private void OnPttTalkStart()
         {
+            // Sound feedback — high pitch click for mic open
+            if (_settings.PttSoundFeedback)
+                System.Threading.ThreadPool.QueueUserWorkItem(_ => { try { Console.Beep(1200, 40); } catch { } });
+
             // If mic is AFK muted, break out of AFK immediately
             if (_micAfkState == AfkState.AfkMuted || _micAfkState == AfkState.FadingIn || _micAfkState == AfkState.FadingOut)
             {
@@ -1184,6 +1248,10 @@ namespace AngryAudio
 
         private void OnPttTalkStop()
         {
+            // Sound feedback — lower pitch click for mic muted
+            if (_settings.PttSoundFeedback)
+                System.Threading.ThreadPool.QueueUserWorkItem(_ => { try { Console.Beep(800, 40); } catch { } });
+
             UpdateTrayState();
             try
             {
@@ -2096,6 +2164,7 @@ namespace AngryAudio
             _afkIcon?.Dispose();
             _errorIcon?.Dispose();
             _pttIcon?.Dispose();
+            _micHotIcon?.Dispose();
         }
     }
 
