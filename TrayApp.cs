@@ -1180,14 +1180,15 @@ namespace AngryAudio
             _pushToTalk.OnTalkStop -= OnPttTalkStop;
             _pushToTalk.OnTalkStart += OnPttTalkStart;
             _pushToTalk.OnTalkStop += OnPttTalkStop;
-            // Priority: PTT > PTM > Toggle
-            bool toggleMode = _settings.PushToToggleEnabled && !_settings.PushToTalkEnabled && !_settings.PushToMuteEnabled;
-            bool ptmMode = _settings.PushToMuteEnabled && !_settings.PushToTalkEnabled;
-            _pushToTalk.Enable(_settings.PushToTalkKey, _settings.PushToTalkConsumeKey, toggleMode, ptmMode, _settings.PushToTalkKey2, _settings.PushToTalkKey3);
+            // Per-mode keys — each mode uses its own key, no fallback
+            int pttKey = _settings.PushToTalkEnabled ? _settings.PushToTalkKey : 0;
+            int ptmKey = _settings.PushToMuteEnabled ? _settings.PushToMuteKey : 0;
+            int toggleKey = _settings.PushToToggleEnabled ? _settings.PushToToggleKey : 0;
+            _pushToTalk.EnableMultiMode(pttKey, ptmKey, toggleKey, _settings.PushToTalkConsumeKey, _settings.PushToTalkKey2, _settings.PushToTalkKey3);
             // Show correct overlay state
             if (_micStatus != null && !_micStatus.IsDisposed)
             {
-                if (ptmMode)
+                if (ptmKey > 0 && pttKey <= 0)
                     _micStatus.ShowMicOpenIdle();
                 else
                     _micStatus.ShowMicClosed();
@@ -1447,7 +1448,7 @@ namespace AngryAudio
             }
 
             // Handle parameterized commands
-            if (toggleId != null && (toggleId.StartsWith("ptt_key:") || toggleId.StartsWith("ptt_key2:") || toggleId.StartsWith("ptt_key3:")))
+            if (toggleId != null && (toggleId.StartsWith("ptt_key:") || toggleId.StartsWith("ptt_key2:") || toggleId.StartsWith("ptt_key3:") || toggleId.StartsWith("ptm_key:") || toggleId.StartsWith("toggle_key:")))
             {
                 // Parse and save the key value to settings
                 int colonIdx = toggleId.IndexOf(':');
@@ -1456,6 +1457,8 @@ namespace AngryAudio
                 if (toggleId.StartsWith("ptt_key:")) _settings.PushToTalkKey = keyVal;
                 else if (toggleId.StartsWith("ptt_key2:")) _settings.PushToTalkKey2 = keyVal;
                 else if (toggleId.StartsWith("ptt_key3:")) _settings.PushToTalkKey3 = keyVal;
+                else if (toggleId.StartsWith("ptm_key:")) _settings.PushToMuteKey = keyVal;
+                else if (toggleId.StartsWith("toggle_key:")) _settings.PushToToggleKey = keyVal;
                 Logger.Info("Hotkey updated via toggle: " + toggleId + " → saved to settings");
                 
                 // Re-enable PTT with updated keys if currently active
@@ -1796,6 +1799,8 @@ namespace AngryAudio
                     _settings.PushToMuteEnabled = wf.PtMuteEnabled;
                     _settings.PushToToggleEnabled = wf.PtToggleEnabled;
                     if (wf.PttKey > 0) _settings.PushToTalkKey = wf.PttKey;
+                    if (wf.PtMuteKey > 0) _settings.PushToMuteKey = wf.PtMuteKey;
+                    if (wf.PtToggleKey > 0) _settings.PushToToggleKey = wf.PtToggleKey;
                     _settings.StartWithWindows = wf.StartupEnabled;
                     _settings.NotifyOnCorrection = wf.NotifyCorrEnabled;
                     _settings.NotifyOnDeviceChange = wf.NotifyDevEnabled;

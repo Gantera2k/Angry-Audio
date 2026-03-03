@@ -31,6 +31,8 @@ namespace AngryAudio
         public bool PtMuteEnabled { get; private set; }
         public bool PtToggleEnabled { get; private set; }
         public int PttKey { get; private set; } = 0;
+        public int PtMuteKey { get; private set; } = 0;
+        public int PtToggleKey { get; private set; } = 0;
         public bool StartupEnabled { get; private set; } = true;
         public bool NotifyCorrEnabled { get; private set; } = true;
         public bool NotifyDevEnabled { get; private set; } = true;
@@ -41,11 +43,11 @@ namespace AngryAudio
         private ToggleSwitch _tglMicEnf, _tglSpkEnf, _tglAfkMic, _tglAfkSpk, _tglPtt, _tglPtm, _tglPtToggle;
         private ToggleSwitch _tglStartup, _tglNotifyCorr, _tglNotifyDev;
         private NumericUpDown _nudAfkMic, _nudAfkSpk;
-        private Label _lblPttKey;
+        private Label _lblPttKey, _lblPtmKey, _lblPtToggleKey;
         private Timer _pollTimer;
         private Timer _micFlashTimer, _spkFlashTimer;
-        private int _pttKeyCode = 0;
-        private bool _capturingKey;
+        private int _pttKeyCode = 0, _ptmKeyCode = 0, _ptToggleKeyCode = 0;
+        private bool _capturingKey, _capturingPtmKey, _capturingToggleKey;
         private bool _modeChosen; // true once user picks PTT/PTM/Toggle — guides star to hotkey
         private Action _showPage1Extras, _showPage2Extras;
         private int _currentPage = 1;
@@ -240,22 +242,41 @@ namespace AngryAudio
             _card1 = MakeRoundCard(); _card1.Dock = DockStyle.Top; _card1.Height = Dpi.S(444);
             int y = 14;
 
-            // --- PTT toggles: 3 stacked with descriptions, matching Options panel ---
+            // --- PTT row: toggle + inline key ---
             _tglPtt = new ToggleSwitch { Location = Dpi.Pt(20, y + 44) };
             _tglPtt.CheckedChanged += (s2, e2) => OnWizardToggle(_tglPtt, "ptt_on", "ptt_off");
             _tglPtt.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtt);
+            _lblPttKey = new Label { Text = "Add Key", Font = new Font("Segoe UI", 8.5f, FontStyle.Bold), ForeColor = ACC, BackColor = INPUT_BG, Size = Dpi.Size(72, 22), TextAlign = ContentAlignment.MiddleCenter, Location = Dpi.Pt(270, y + 46) };
+            _lblPttKey.Paint += (s, e) => { using (var p = new Pen(CARD_BDR)) e.Graphics.DrawRectangle(p, 0, 0, _lblPttKey.Width - 1, _lblPttKey.Height - 1); };
+            _lblPttKey.MouseEnter += (s, e) => { if (!_capturingKey) _lblPttKey.BackColor = Color.FromArgb(28, 28, 28); };
+            _lblPttKey.MouseLeave += (s, e) => { if (!_capturingKey) _lblPttKey.BackColor = INPUT_BG; };
+            _lblPttKey.Click += (s, e) => StartKeyCapture();
+            _card1.Controls.Add(_lblPttKey);
 
+            // --- PTM row: toggle + inline key ---
             _tglPtm = new ToggleSwitch { Location = Dpi.Pt(20, y + 86) };
             _tglPtm.CheckedChanged += (s2, e2) => OnWizardToggle(_tglPtm, "ptm_on", "ptm_off");
             _tglPtm.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtm);
+            _lblPtmKey = new Label { Text = "Add Key", Font = new Font("Segoe UI", 8.5f, FontStyle.Bold), ForeColor = ACC, BackColor = INPUT_BG, Size = Dpi.Size(72, 22), TextAlign = ContentAlignment.MiddleCenter, Location = Dpi.Pt(270, y + 88) };
+            _lblPtmKey.Paint += (s, e) => { using (var p = new Pen(CARD_BDR)) e.Graphics.DrawRectangle(p, 0, 0, _lblPtmKey.Width - 1, _lblPtmKey.Height - 1); };
+            _lblPtmKey.MouseEnter += (s, e) => { if (!_capturingPtmKey) _lblPtmKey.BackColor = Color.FromArgb(28, 28, 28); };
+            _lblPtmKey.MouseLeave += (s, e) => { if (!_capturingPtmKey) _lblPtmKey.BackColor = INPUT_BG; };
+            _lblPtmKey.Click += (s, e) => StartWizPtmKeyCapture();
+            _card1.Controls.Add(_lblPtmKey);
 
+            // --- Toggle row: toggle + inline key ---
             _tglPtToggle = new ToggleSwitch { Location = Dpi.Pt(20, y + 128) };
             _tglPtToggle.CheckedChanged += (s2, e2) => OnWizardToggle(_tglPtToggle, "ptt_toggle_on", "ptt_toggle_off");
             _tglPtToggle.PaintParentBg = PaintCardBg; _card1.Controls.Add(_tglPtToggle);
-            // Toggles ENABLED from the start — user picks mode FIRST
+            _lblPtToggleKey = new Label { Text = "Add Key", Font = new Font("Segoe UI", 8.5f, FontStyle.Bold), ForeColor = ACC, BackColor = INPUT_BG, Size = Dpi.Size(72, 22), TextAlign = ContentAlignment.MiddleCenter, Location = Dpi.Pt(270, y + 130) };
+            _lblPtToggleKey.Paint += (s, e) => { using (var p = new Pen(CARD_BDR)) e.Graphics.DrawRectangle(p, 0, 0, _lblPtToggleKey.Width - 1, _lblPtToggleKey.Height - 1); };
+            _lblPtToggleKey.MouseEnter += (s, e) => { if (!_capturingToggleKey) _lblPtToggleKey.BackColor = Color.FromArgb(28, 28, 28); };
+            _lblPtToggleKey.MouseLeave += (s, e) => { if (!_capturingToggleKey) _lblPtToggleKey.BackColor = INPUT_BG; };
+            _lblPtToggleKey.Click += (s, e) => StartWizToggleKeyCapture();
+            _card1.Controls.Add(_lblPtToggleKey);
 
-            // --- Help circles (?) — hover for use-case explanation ---
-            int helpX = 350; // right side of card
+            // --- Help circles ---
+            int helpX = 350;
             _card1.Controls.Add(MakeHelpCircle(helpX, y + 46,
                 "Best for gaming and voice calls.\nYour mic is completely silent until\nyou hold the key. Just like Discord.", _card1));
             _card1.Controls.Add(MakeHelpCircle(helpX, y + 88,
@@ -264,14 +285,6 @@ namespace AngryAudio
                 "Best for meetings and streams.\nTap once to unmute, tap again\nto mute. No holding needed.", _card1));
 
             CreateTips();
-
-            // Hotkey row — below all 3 toggles, matching Options panel style
-            _lblPttKey = new Label { Text = "Add Key", Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), ForeColor = ACC, BackColor = INPUT_BG, Size = Dpi.Size(80, 26), TextAlign = ContentAlignment.MiddleCenter, Location = Dpi.Pt(118, y + 174) };
-            _lblPttKey.Paint += (s, e) => { using (var p = new Pen(CARD_BDR)) e.Graphics.DrawRectangle(p, 0, 0, _lblPttKey.Width - 1, _lblPttKey.Height - 1); };
-            _lblPttKey.MouseEnter += (s, e) => { if (!_capturingKey) _lblPttKey.BackColor = Color.FromArgb(28, 28, 28); };
-            _lblPttKey.MouseLeave += (s, e) => { if (!_capturingKey) _lblPttKey.BackColor = INPUT_BG; };
-            _lblPttKey.Click += (s, e) => StartKeyCapture();
-            _card1.Controls.Add(_lblPttKey);
 
             int afkY = 262;
             _tglAfkMic = new ToggleSwitch { Checked = true, Location = Dpi.Pt(20, afkY + 44) };
@@ -317,25 +330,26 @@ namespace AngryAudio
                 using (var f = new Font("Segoe UI", 9f, FontStyle.Bold)) using (var b = new SolidBrush(TXT))
                     g.DrawString("Push-to-Talk", f, b, Dpi.S(68), py + Dpi.S(45));
                 using (var f = new Font("Segoe UI", 7.5f)) using (var b = new SolidBrush(TXT3))
-                    g.DrawString("Silent until you hold the key \u2014 just like Discord and most games.", f, b, Dpi.S(68), py + Dpi.S(64));
+                    g.DrawString("Silent until you hold the key.", f, b, Dpi.S(68), py + Dpi.S(64));
                 // Toggle 2: Push-to-Mute
                 using (var f = new Font("Segoe UI", 9f, FontStyle.Bold)) using (var b = new SolidBrush(TXT))
                     g.DrawString("Push-to-Mute", f, b, Dpi.S(68), py + Dpi.S(87));
                 using (var f = new Font("Segoe UI", 7.5f)) using (var b = new SolidBrush(TXT3))
-                    g.DrawString("Mic stays open \u2014 hold the key to mute for coughs and sneezes.", f, b, Dpi.S(68), py + Dpi.S(106));
+                    g.DrawString("Hold the key to mute.", f, b, Dpi.S(68), py + Dpi.S(106));
                 // Toggle 3: Push-to-Toggle
                 using (var f = new Font("Segoe UI", 9f, FontStyle.Bold)) using (var b = new SolidBrush(TXT))
                     g.DrawString("Push-to-Toggle", f, b, Dpi.S(68), py + Dpi.S(129));
                 using (var f = new Font("Segoe UI", 7.5f)) using (var b = new SolidBrush(TXT3))
-                    g.DrawString("Tap once to unmute, tap again to mute. No holding needed.", f, b, Dpi.S(68), py + Dpi.S(148));
-                // Hotkey row
-                using (var f = new Font("Segoe UI", 9f, FontStyle.Bold)) using (var b = new SolidBrush(TXT))
-                    g.DrawString("Hotkey:", f, b, Dpi.S(20), py + Dpi.S(178));
-                using (var f = new Font("Segoe UI", 7.5f)) using (var b = new SolidBrush(DarkTheme.Txt4))
-                    g.DrawString("Click to set \u00B7 Press Esc to cancel", f, b, Dpi.S(206), py + Dpi.S(180));
+                    g.DrawString("Tap to unmute, tap again to mute.", f, b, Dpi.S(68), py + Dpi.S(148));
+                // Inline key hints
+                using (var f = new Font("Segoe UI", 7.5f)) using (var b = new SolidBrush(DarkTheme.Txt4)) {
+                    g.DrawString("Hotkey:", f, b, Dpi.S(226), py + Dpi.S(50));
+                    g.DrawString("Hotkey:", f, b, Dpi.S(226), py + Dpi.S(92));
+                    g.DrawString("Hotkey:", f, b, Dpi.S(226), py + Dpi.S(134));
+                }
                 // System-wide mic note
                 using (var f = new Font("Segoe UI", 7f)) using (var b = new SolidBrush(Color.FromArgb(90, ACC.R, ACC.G, ACC.B)))
-                    g.DrawString("Controls every mic on your system \u2014 headset, camera mic, USB devices.", f, b, Dpi.S(20), py + Dpi.S(210));
+                    g.DrawString("Controls every mic on your system \u2014 headset, camera mic, USB devices.", f, b, Dpi.S(20), py + Dpi.S(170));
                 // Separator
                 int sepY = Dpi.S(248);
                 using (var p = new Pen(CARD_BDR)) g.DrawLine(p, Dpi.S(20), sepY, _card1.Width - Dpi.S(20), sepY);
@@ -374,12 +388,17 @@ namespace AngryAudio
                 // Phase 2: Mode chosen, no key → orbit the hotkey label (draws eye to "set key")
                 // Phase 3: Both done → no star
                 // Safety: if user unchecks all toggles and has no key, reset guidance
-                if (_modeChosen && _pttKeyCode <= 0 && !_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked)
+                if (_modeChosen && _pttKeyCode <= 0 && _ptmKeyCode <= 0 && _ptToggleKeyCode <= 0 && !_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked)
                     _modeChosen = false;
 
-                // Orbiting star on hotkey label only — ? circles handle toggle attention
-                if (_pttKeyCode <= 0 && _lblPttKey != null) {
-                    var r = _lblPttKey.Bounds;
+                // Orbiting star on the first mode key that needs setting
+                Label orbitTarget = null;
+                if (_tglPtt.Checked && _pttKeyCode <= 0 && _lblPttKey != null) orbitTarget = _lblPttKey;
+                else if (_tglPtm.Checked && _ptmKeyCode <= 0 && _lblPtmKey != null) orbitTarget = _lblPtmKey;
+                else if (_tglPtToggle.Checked && _ptToggleKeyCode <= 0 && _lblPtToggleKey != null) orbitTarget = _lblPtToggleKey;
+                else if (!_modeChosen && _lblPttKey != null) orbitTarget = _lblPttKey; // no mode yet, guide to PTT
+                if (orbitTarget != null) {
+                    var r = orbitTarget.Bounds;
                     int pad = Dpi.S(6);
                     var saved = g.Save();
                     g.TranslateTransform(r.X - pad, r.Y - pad);
@@ -658,7 +677,7 @@ namespace AngryAudio
         }
         void StopCapturePolling() { if (_captureTimer != null) _captureTimer.Stop(); if (_onToggle != null) _onToggle("capture_stop"); }
         void CaptureTimerTick(object s, EventArgs e) {
-            if (!_capturingKey) { StopCapturePolling(); return; }
+            if (!_capturingKey && !_capturingPtmKey && !_capturingToggleKey) { StopCapturePolling(); return; }
             for (int vk = 1; vk < 256; vk++) {
                 if (vk >= 1 && vk <= 3) continue; // skip mouse buttons
                 bool down = (GetAsyncKeyState(vk) & 0x8000) != 0;
@@ -666,17 +685,21 @@ namespace AngryAudio
                 _prevKeyState[vk] = down;
                 if (down && !wasDown) {
                     StopCapturePolling();
-                    OnKeyCapture(this, new KeyEventArgs((Keys)vk));
+                    if (_capturingKey) OnKeyCapture(this, new KeyEventArgs((Keys)vk)); else if (_capturingPtmKey) OnPtmKeyCapture(this, new KeyEventArgs((Keys)vk)); else if (_capturingToggleKey) OnToggleKeyCapture(this, new KeyEventArgs((Keys)vk));
                     return;
                 }
             }
         }
         void OnWizardToggle(ToggleSwitch sender, string onMsg, string offMsg) {
             try {
-                if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(sender.Checked ? onMsg : offMsg); }
+                if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle("ptm_key:" + _ptmKeyCode); _onToggle("toggle_key:" + _ptToggleKeyCode); _onToggle(sender.Checked ? onMsg : offMsg); }
                 if (sender.Checked) {
                     _modeChosen = true;
-                    if (_pttKeyCode <= 0) ShowTip(_tipHotkey);
+                    bool needsKey = false;
+                    if (sender == _tglPtt && _pttKeyCode <= 0) needsKey = true;
+                    else if (sender == _tglPtm && _ptmKeyCode <= 0) needsKey = true;
+                    else if (sender == _tglPtToggle && _ptToggleKeyCode <= 0) needsKey = true;
+                    if (needsKey) ShowTip(_tipHotkey);
                     _card1.Invalidate(false);
                 }
             } catch (Exception ex) { Logger.Error("Wizard toggle failed: " + onMsg, ex); }
@@ -691,6 +714,10 @@ namespace AngryAudio
             // Flash the toggle options so user knows other modes exist
             FlashToggles();
             if (_tipHotkey != null) _tipHotkey.Visible = false; ShowTip(_tipFunCallout); _card1.Invalidate(false); }
+        void StartWizPtmKeyCapture() { if(_capturingKey||_capturingToggleKey)return;_capturingPtmKey=true;_lblPtmKey.Text="Press...";_lblPtmKey.BackColor=ACC;_lblPtmKey.ForeColor=Color.White;StartCapturePolling(); }
+        void OnPtmKeyCapture(object s, KeyEventArgs e) { if(!_capturingPtmKey)return;if(e.KeyCode==Keys.Escape){_lblPtmKey.Text=_ptmKeyCode>0?KeyName(_ptmKeyCode):"Add Key";_lblPtmKey.BackColor=INPUT_BG;_lblPtmKey.ForeColor=ACC;_capturingPtmKey=false;return;}int vk=(int)e.KeyCode;if(vk==0x10)vk=(GetAsyncKeyState(0xA1)&0x8000)!=0?0xA1:0xA0;if(vk==0x11)vk=(GetAsyncKeyState(0xA3)&0x8000)!=0?0xA3:0xA2;if(vk==0x12)vk=(GetAsyncKeyState(0xA5)&0x8000)!=0?0xA5:0xA4;_ptmKeyCode=vk;_lblPtmKey.Text=KeyName(_ptmKeyCode);_lblPtmKey.BackColor=INPUT_BG;_lblPtmKey.ForeColor=ACC;_capturingPtmKey=false;if(_onToggle!=null)_onToggle("ptm_key:"+_ptmKeyCode);if(!_tglPtm.Checked){_tglPtm.Checked=true;}_modeChosen=true;FlashToggles();if(_tipHotkey!=null)_tipHotkey.Visible=false;ShowTip(_tipFunCallout);_card1.Invalidate(false); }
+        void StartWizToggleKeyCapture() { if(_capturingKey||_capturingPtmKey)return;_capturingToggleKey=true;_lblPtToggleKey.Text="Press...";_lblPtToggleKey.BackColor=ACC;_lblPtToggleKey.ForeColor=Color.White;StartCapturePolling(); }
+        void OnToggleKeyCapture(object s, KeyEventArgs e) { if(!_capturingToggleKey)return;if(e.KeyCode==Keys.Escape){_lblPtToggleKey.Text=_ptToggleKeyCode>0?KeyName(_ptToggleKeyCode):"Add Key";_lblPtToggleKey.BackColor=INPUT_BG;_lblPtToggleKey.ForeColor=ACC;_capturingToggleKey=false;return;}int vk=(int)e.KeyCode;if(vk==0x10)vk=(GetAsyncKeyState(0xA1)&0x8000)!=0?0xA1:0xA0;if(vk==0x11)vk=(GetAsyncKeyState(0xA3)&0x8000)!=0?0xA3:0xA2;if(vk==0x12)vk=(GetAsyncKeyState(0xA5)&0x8000)!=0?0xA5:0xA4;_ptToggleKeyCode=vk;_lblPtToggleKey.Text=KeyName(_ptToggleKeyCode);_lblPtToggleKey.BackColor=INPUT_BG;_lblPtToggleKey.ForeColor=ACC;_capturingToggleKey=false;if(_onToggle!=null)_onToggle("toggle_key:"+_ptToggleKeyCode);if(!_tglPtToggle.Checked){_tglPtToggle.Checked=true;}_modeChosen=true;FlashToggles();if(_tipHotkey!=null)_tipHotkey.Visible=false;ShowTip(_tipFunCallout);_card1.Invalidate(false); }
         // (toggles are always enabled — user picks mode FIRST in the new guided flow)
 
         // --- Toggle flicker animation (draws attention to mode selection) ---
@@ -1092,7 +1119,7 @@ namespace AngryAudio
             ProtectMic = _tglMicEnf.Checked; ProtectSpeakers = _tglSpkEnf.Checked;
             MicVolPercent = _micSlider.Value; SpkVolPercent = _spkSlider.Value;
             AfkMicEnabled = _tglAfkMic.Checked; AfkMicSec = (int)_nudAfkMic.Value; AfkSpkEnabled = _tglAfkSpk.Checked; AfkSpkSec = (int)_nudAfkSpk.Value;
-            PttEnabled = _tglPtt.Checked; PtMuteEnabled = _tglPtm.Checked; PtToggleEnabled = _tglPtToggle.Checked; PttKey = _pttKeyCode;
+            PttEnabled = _tglPtt.Checked; PtMuteEnabled = _tglPtm.Checked; PtToggleEnabled = _tglPtToggle.Checked; PttKey = _pttKeyCode; PtMuteKey = _ptmKeyCode; PtToggleKey = _ptToggleKeyCode;
             StartupEnabled = _tglStartup.Checked; NotifyCorrEnabled = _tglNotifyCorr.Checked; NotifyDevEnabled = _tglNotifyDev.Checked;
             DialogResult = DialogResult.OK; Close();
         }

@@ -35,6 +35,8 @@ namespace AngryAudio
         public int PushToTalkKey { get; set; }
         public int PushToTalkKey2 { get; set; }
         public int PushToTalkKey3 { get; set; }
+        public int PushToMuteKey { get; set; }
+        public int PushToToggleKey { get; set; }
         public bool PttKey1ShowOverlay { get; set; }
         public bool PttKey2ShowOverlay { get; set; }
         public bool PttKey3ShowOverlay { get; set; }
@@ -86,6 +88,8 @@ namespace AngryAudio
             PushToTalkKey = 0;  // No default hotkey — user must set one
             PushToTalkKey2 = 0;  // disabled by default
             PushToTalkKey3 = 0;
+            PushToMuteKey = 0;
+            PushToToggleKey = 0;
             PttKey1ShowOverlay = true;
             PttKey2ShowOverlay = true;
             PttKey3ShowOverlay = true;
@@ -162,6 +166,8 @@ namespace AngryAudio
                 if (values.ContainsKey("pushToTalkConsumeKey")) settings.PushToTalkConsumeKey = ParseBool(values["pushToTalkConsumeKey"]);
                 if (values.ContainsKey("pushToToggleEnabled")) settings.PushToToggleEnabled = ParseBool(values["pushToToggleEnabled"]);
                 if (values.ContainsKey("pushToMuteEnabled")) settings.PushToMuteEnabled = ParseBool(values["pushToMuteEnabled"]);
+                if (values.ContainsKey("pushToMuteKey")) settings.PushToMuteKey = ParseInt(values["pushToMuteKey"], 0);
+                if (values.ContainsKey("pushToToggleKey")) settings.PushToToggleKey = ParseInt(values["pushToToggleKey"], 0);
                 if (values.ContainsKey("micOverlayEnabled")) settings.MicOverlayEnabled = ParseBool(values["micOverlayEnabled"]);
                 if (values.ContainsKey("pttSoundFeedback")) settings.PttSoundFeedback = ParseBool(values["pttSoundFeedback"]);
                 if (values.ContainsKey("appVolumeEnforceEnabled")) settings.AppVolumeEnforceEnabled = ParseBool(values["appVolumeEnforceEnabled"]);
@@ -225,6 +231,8 @@ namespace AngryAudio
                 sb.AppendLine(JsonField("pushToTalkConsumeKey", PushToTalkConsumeKey) + ",");
                 sb.AppendLine(JsonField("pushToToggleEnabled", PushToToggleEnabled) + ",");
                 sb.AppendLine(JsonField("pushToMuteEnabled", PushToMuteEnabled) + ",");
+                sb.AppendLine(JsonField("pushToMuteKey", PushToMuteKey) + ",");
+                sb.AppendLine(JsonField("pushToToggleKey", PushToToggleKey) + ",");
                 sb.AppendLine(JsonField("micOverlayEnabled", MicOverlayEnabled) + ",");
                 sb.AppendLine(JsonField("pttSoundFeedback", PttSoundFeedback) + ",");
                 sb.AppendLine(JsonField("appVolumeEnforceEnabled", AppVolumeEnforceEnabled) + ",");

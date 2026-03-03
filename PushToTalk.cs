@@ -65,6 +65,9 @@ namespace AngryAudio
         private bool _toggleMode;
         private bool _pushToMuteMode;
         private bool _toggleMicOpen;
+        private System.Collections.Generic.Dictionary<int, int> _keyModes = new System.Collections.Generic.Dictionary<int, int>();
+        private int _activeMode = -1; // 0=PTT, 1=PTM, 2=Toggle
+        private bool _hasPttKeys, _hasPtmKeys, _hasToggleKeys;
 
         // Common virtual key codes
         public const int VK_CAPS_LOCK = 0x14;
@@ -78,7 +81,21 @@ namespace AngryAudio
 
         // --- Public API (unchanged) ---
 
-        public bool IsTalking { get { return _toggleMode ? _toggleMicOpen : (_pushToMuteMode ? !_keyHeld : _keyHeld); } }
+        public bool IsTalking { get {
+            if (_keyHeld) {
+                if (_activeMode == 0) return true;   // PTT held = talking
+                if (_activeMode == 1) return false;  // PTM held = muted
+                if (_activeMode == 2) return _toggleMicOpen; // Toggle = current state
+            }
+            // No key held — resting state
+            if (_hasPttKeys || _hasPtmKeys || _hasToggleKeys) {
+                bool hasPtmOnly = _hasPtmKeys && !_hasPttKeys && !_hasToggleKeys;
+                if (hasPtmOnly) return true; // PTM resting = mic open = talking
+                if (_hasToggleKeys && !_hasPttKeys) return _toggleMicOpen;
+                return false; // PTT present = resting muted = not talking
+            }
+            return _toggleMode ? _toggleMicOpen : (_pushToMuteMode ? !_keyHeld : _keyHeld);
+        } }
         public bool Enabled { get { return _enabled; } }
         public System.Collections.Generic.HashSet<int> Hotkeys { get { return _hotkeys; } }
         public int LastTriggeredKey { get; private set; }
@@ -163,6 +180,51 @@ namespace AngryAudio
             }
         }
 
+        public void EnableMultiMode(int pttKey, int ptmKey, int toggleKey, bool consumeKey, int pttKey2 = 0, int pttKey3 = 0)
+        {
+            if (_enabled) Disable();
+            _hotkeys.Clear();
+            _keyModes.Clear();
+            if (pttKey > 0) { _hotkeys.Add(pttKey); _keyModes[pttKey] = 0; }
+            if (pttKey2 > 0) { _hotkeys.Add(pttKey2); _keyModes[pttKey2] = 0; }
+            if (pttKey3 > 0) { _hotkeys.Add(pttKey3); _keyModes[pttKey3] = 0; }
+            if (ptmKey > 0) { _hotkeys.Add(ptmKey); _keyModes[ptmKey] = 1; }
+            if (toggleKey > 0) { _hotkeys.Add(toggleKey); _keyModes[toggleKey] = 2; }
+            _hasPttKeys = pttKey > 0 || pttKey2 > 0 || pttKey3 > 0;
+            _hasPtmKeys = ptmKey > 0;
+            _hasToggleKeys = toggleKey > 0;
+            _toggleMode = toggleKey > 0 && pttKey <= 0 && ptmKey <= 0;
+            _pushToMuteMode = ptmKey > 0 && pttKey <= 0;
+            _keyHeld = false;
+            _toggleMicOpen = false;
+            _activeMode = -1;
+            _needsHook = _hotkeys.Contains(VK_CAPS_LOCK) || _hotkeys.Contains(VK_SCROLL_LOCK) || _hotkeys.Contains(VK_NUM_LOCK);
+            if (_needsHook)
+            {
+                try
+                {
+                    using (var process = Process.GetCurrentProcess())
+                    using (var module = process.MainModule)
+                        _hookId = SetWindowsHookEx(WH_KEYBOARD_LL, _hookProc, GetModuleHandle(module.ModuleName), 0);
+                    if (_hookId == IntPtr.Zero)
+                        Logger.Error("Hook install failed. Error: " + Marshal.GetLastWin32Error());
+                }
+                catch (Exception ex) { Logger.Error("Hook install failed.", ex); }
+            }
+            _enabled = true;
+            // PTM-only starts unmuted (mic open); all other combos start muted
+            bool ptmOnly = ptmKey > 0 && pttKey <= 0 && toggleKey <= 0;
+            Audio.SetMicMute(!ptmOnly);
+            Logger.Info("Multi-mode enabled. Keys: " + string.Join(", ", _hotkeys) + " InitialMute=" + (!ptmOnly));
+            ForceCapsLockOff();
+            _pollTimer = new System.Threading.Timer(PollKeyState, null, POLL_INTERVAL_MS, POLL_INTERVAL_MS);
+            if (_needsHook)
+                _hookHealthTimer = new System.Threading.Timer(_ => {
+                    if (!_enabled || !_needsHook) return;
+                    if (_hookId == IntPtr.Zero) { Logger.Info("Hook health: hook lost, reinstalling..."); ReinstallHook(); }
+                }, null, 5000, 5000);
+        }
+
         public void Disable()
         {
             if (!_enabled) return;
@@ -222,61 +284,42 @@ namespace AngryAudio
                     }
                 }
 
-                if (_toggleMode)
+                // Determine mode for this key
+                int mode = _keyModes.ContainsKey(triggeredKey) ? _keyModes[triggeredKey] : (_toggleMode ? 2 : (_pushToMuteMode ? 1 : 0));
+
+                if (anyDown && !_keyHeld)
                 {
-                    if (anyDown && !_keyHeld)
+                    _keyHeld = true;
+                    _activeMode = mode;
+                    LastTriggeredKey = triggeredKey;
+                    if (mode == 2) // Toggle
                     {
-                        _keyHeld = true;
-                        LastTriggeredKey = triggeredKey;
                         _toggleMicOpen = !_toggleMicOpen;
                         Audio.SetMicMute(!_toggleMicOpen);
-                        if (_toggleMicOpen)
-                        {
-                            try { OnTalkStart?.Invoke(); } catch { }
-                            Logger.Debug("Toggle: Mic opened.");
-                        }
-                        else
-                        {
-                            try { OnTalkStop?.Invoke(); } catch { }
-                            Logger.Debug("Toggle: Mic closed.");
-                        }
+                        if (_toggleMicOpen) { try { OnTalkStart?.Invoke(); } catch { } }
+                        else { try { OnTalkStop?.Invoke(); } catch { } }
                     }
-                    else if (!anyDown && _keyHeld)
+                    else if (mode == 1) // PTM
                     {
-                        _keyHeld = false;
-                    }
-                }
-                else if (_pushToMuteMode)
-                {
-                    if (anyDown && !_keyHeld)
-                    {
-                        _keyHeld = true;
-                        LastTriggeredKey = triggeredKey;
                         Audio.SetMicMute(true);
                         try { OnTalkStop?.Invoke(); } catch { }
-                        Logger.Debug("PTM: Key down — mic muted.");
                     }
-                    else if (!anyDown && _keyHeld)
+                    else // PTT (mode 0)
                     {
-                        _keyHeld = false;
                         Audio.SetMicMute(false);
                         try { OnTalkStart?.Invoke(); } catch { }
-                        Logger.Debug("PTM: Key up — mic open.");
                     }
                 }
-                else
+                else if (!anyDown && _keyHeld)
                 {
-                    if (anyDown && !_keyHeld)
+                    _keyHeld = false;
+                    if (_activeMode == 1) // PTM key-up
                     {
-                        _keyHeld = true;
-                        LastTriggeredKey = triggeredKey;
                         Audio.SetMicMute(false);
                         try { OnTalkStart?.Invoke(); } catch { }
-                        Logger.Debug("PTT: Key down — mic open.");
                     }
-                    else if (!anyDown && _keyHeld)
+                    else if (_activeMode == 0) // PTT key-up
                     {
-                        _keyHeld = false;
                         Audio.SetMicMute(true);
                         try { OnTalkStop?.Invoke(); } catch { }
                         Logger.Debug("PTT: Key up — mic muted.");
@@ -296,31 +339,43 @@ namespace AngryAudio
         {
             if (!_enabled) return;
 
-            if (_toggleMode)
+            // Determine what mic state SHOULD be right now based on active mode and key state
+            bool shouldBeMuted;
+            if (_keyHeld)
             {
-                bool shouldBeMuted = !_toggleMicOpen;
-                if (Audio.GetMicMute() != shouldBeMuted)
-                {
-                    Audio.SetMicMute(shouldBeMuted);
-                    Logger.Debug("Toggle: Re-enforced mic " + (shouldBeMuted ? "muted" : "open") + ".");
-                }
-            }
-            else if (_pushToMuteMode)
-            {
-                if (!_keyHeld && Audio.GetMicMute())
-                {
-                    Audio.SetMicMute(false);
-                    Logger.Debug("PTM: Re-opened mic (something tried to mute it).");
-                }
+                // Key is physically held — respect the active mode
+                if (_activeMode == 0) shouldBeMuted = false;      // PTT: key held = mic open
+                else if (_activeMode == 1) shouldBeMuted = true;   // PTM: key held = mic muted
+                else shouldBeMuted = !_toggleMicOpen;              // Toggle: depends on toggle state
             }
             else
             {
-                if (!_keyHeld && !Audio.GetMicMute())
+                // No key held — what's the resting state?
+                if (_hasPttKeys || _hasPtmKeys || _hasToggleKeys)
                 {
-                    Audio.SetMicMute(true);
-                    Logger.Debug("PTT: Re-muted mic (something tried to unmute it).");
+                    bool hasPtmOnly = _hasPtmKeys && !_hasPttKeys && !_hasToggleKeys;
+                    if (hasPtmOnly) shouldBeMuted = false;         // PTM-only resting = open
+                    else if (_hasToggleKeys && !_hasPttKeys) shouldBeMuted = !_toggleMicOpen; // Toggle resting = toggle state
+                    else shouldBeMuted = true;                     // PTT present = resting muted
+                }
+                else
+                {
+                    // Legacy single-mode
+                    if (_toggleMode) shouldBeMuted = !_toggleMicOpen;
+                    else if (_pushToMuteMode) shouldBeMuted = false;
+                    else shouldBeMuted = true;
                 }
             }
+
+            try
+            {
+                if (Audio.GetMicMute() != shouldBeMuted)
+                {
+                    Audio.SetMicMute(shouldBeMuted);
+                    Logger.Debug("EnforceMute: corrected to " + (shouldBeMuted ? "muted" : "open") + " (mode=" + _activeMode + ")");
+                }
+            }
+            catch { }
         }
 
         /// <summary>
