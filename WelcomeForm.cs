@@ -675,10 +675,6 @@ namespace AngryAudio
             try {
                 if (_onToggle != null) { _onToggle("ptt_key:" + _pttKeyCode); _onToggle(sender.Checked ? onMsg : offMsg); }
                 if (sender.Checked) {
-                    // Uncheck all other mode toggles
-                    foreach (var tgl in new[] { _tglPtt, _tglPtm, _tglPtToggle })
-                        if (tgl != null && tgl != sender && tgl.Checked) tgl.Checked = false;
-                    if (_tglAfkMic != null && _tglAfkMic.Checked) _tglAfkMic.Checked = false;
                     _modeChosen = true;
                     if (_pttKeyCode <= 0) ShowTip(_tipHotkey);
                     _card1.Invalidate(false);

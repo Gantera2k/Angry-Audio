@@ -1167,23 +1167,30 @@ namespace AngryAudio
 
         // --- Push-to-Talk Helpers (eliminates duplicate sub/unsub/enable patterns) ---
 
+        private bool AnyModeEnabled()
+        {
+            return _settings.PushToTalkEnabled || _settings.PushToMuteEnabled || _settings.PushToToggleEnabled;
+        }
+
         private void EnablePtt()
         {
             if (_pushToTalk == null) return;
+            if (!AnyModeEnabled()) return;
             _pushToTalk.OnTalkStart -= OnPttTalkStart;
             _pushToTalk.OnTalkStop -= OnPttTalkStop;
             _pushToTalk.OnTalkStart += OnPttTalkStart;
             _pushToTalk.OnTalkStop += OnPttTalkStop;
-            bool toggleMode = _settings.PushToToggleEnabled;
-            bool ptmMode = _settings.PushToMuteEnabled;
+            // Priority: PTT > PTM > Toggle
+            bool toggleMode = _settings.PushToToggleEnabled && !_settings.PushToTalkEnabled && !_settings.PushToMuteEnabled;
+            bool ptmMode = _settings.PushToMuteEnabled && !_settings.PushToTalkEnabled;
             _pushToTalk.Enable(_settings.PushToTalkKey, _settings.PushToTalkConsumeKey, toggleMode, ptmMode, _settings.PushToTalkKey2, _settings.PushToTalkKey3);
             // Show correct overlay state
             if (_micStatus != null && !_micStatus.IsDisposed)
             {
                 if (ptmMode)
-                    _micStatus.ShowMicOpenIdle();  // PTM: mic starts open
+                    _micStatus.ShowMicOpenIdle();
                 else
-                    _micStatus.ShowMicClosed();    // PTT/Toggle: mic starts closed
+                    _micStatus.ShowMicClosed();
             }
         }
 
@@ -1561,84 +1568,42 @@ namespace AngryAudio
                         break;
                     case "ptt_on":
                         _settings.PushToTalkEnabled = true;
-                        _settings.PushToToggleEnabled = false;
-                        _settings.PushToMuteEnabled = false;
-                        if (_micStatus != null) { _micStatus.PushToMuteMode = false; _micStatus.ToggleMode = false; }
                         DismissMicWarning();
-                        if (_settings.AfkMicMuteEnabled)
-                        {
-                            _settings.AfkMicMuteEnabled = false;
-                            _micAfkState = AfkState.Active;
-                            Logger.Info("PTT enabled — AFK mic mute auto-disabled (PTT overrides).");
-                        }
-                        else
-                        {
-                        }
                         DisablePtt();
                         EnablePtt();
                         Audio.SetMicMute(true);
                         if (_micStatus != null && !_micStatus.IsDisposed)
-                            { _micStatus.UseExtendedDelay();
-                            _micStatus.ShowMicClosed(); }
+                            { _micStatus.PushToMuteMode = false; _micStatus.ToggleMode = false;
+                            _micStatus.UseExtendedDelay(); _micStatus.ShowMicClosed(); }
                         break;
                     case "ptt_off":
                         _settings.PushToTalkEnabled = false;
                         DisablePtt();
-                        Audio.SetMicMute(false);
-                        // ShowBalloon("Push-to-Talk Disabled", "Your mic is now always open.");
-                        if (_micStatus != null && !_micStatus.IsDisposed)
-                            { _micStatus.UseExtendedDelay();
-                            _micStatus.ShowMicOpenIdle(); }
-                        CheckMicUnprotected();
+                        EnablePtt(); // re-enable if other modes still active
+                        if (!AnyModeEnabled()) { Audio.SetMicMute(false); CheckMicUnprotected();
+                            if (_micStatus != null && !_micStatus.IsDisposed) { _micStatus.UseExtendedDelay(); _micStatus.ShowMicOpenIdle(); } }
                         break;
                     case "ptm_on":
                         _settings.PushToMuteEnabled = true;
-                        _settings.PushToTalkEnabled = false;
-                        _settings.PushToToggleEnabled = false;
                         DismissMicWarning();
-                        if (_micStatus != null) { _micStatus.PushToMuteMode = true; _micStatus.ToggleMode = false; }
-                        if (_settings.AfkMicMuteEnabled)
-                        {
-                            _settings.AfkMicMuteEnabled = false;
-                            _micAfkState = AfkState.Active;
-                            Logger.Info("PTM enabled — AFK mic mute auto-disabled.");
-                        }
-                        else
-                        {
-                        }
+                        if (_micStatus != null) _micStatus.PushToMuteMode = true;
                         DisablePtt();
                         EnablePtt();
-                        Audio.SetMicMute(false);
-                        if (_micStatus != null && !_micStatus.IsDisposed)
-                            { _micStatus.UseExtendedDelay();
-                            _micStatus.ShowMicOpenIdle(); }
+                        if (!_settings.PushToTalkEnabled) { Audio.SetMicMute(false);
+                            if (_micStatus != null && !_micStatus.IsDisposed) { _micStatus.UseExtendedDelay(); _micStatus.ShowMicOpenIdle(); } }
                         break;
                     case "ptm_off":
                         _settings.PushToMuteEnabled = false;
-                        if (_micStatus != null) { _micStatus.PushToMuteMode = false; _micStatus.ToggleMode = false; }
+                        if (_micStatus != null) _micStatus.PushToMuteMode = false;
                         DisablePtt();
-                        Audio.SetMicMute(false);
-                        // ShowBalloon("Push-to-Mute Disabled", "Your mic is now always open.");
-                        if (_micStatus != null && !_micStatus.IsDisposed)
-                            { _micStatus.UseExtendedDelay();
-                            _micStatus.ShowMicOpenIdle(); }
-                        CheckMicUnprotected();
+                        EnablePtt();
+                        if (!AnyModeEnabled()) { Audio.SetMicMute(false); CheckMicUnprotected();
+                            if (_micStatus != null && !_micStatus.IsDisposed) { _micStatus.UseExtendedDelay(); _micStatus.ShowMicOpenIdle(); } }
                         break;
                     case "ptt_toggle_on":
                         _settings.PushToToggleEnabled = true;
-                        _settings.PushToTalkEnabled = false;
-                        _settings.PushToMuteEnabled = false;
-                        if (_micStatus != null) { _micStatus.ToggleMode = true; _micStatus.PushToMuteMode = false; }
                         DismissMicWarning();
-                        if (_settings.AfkMicMuteEnabled)
-                        {
-                            _settings.AfkMicMuteEnabled = false;
-                            _micAfkState = AfkState.Active;
-                            Logger.Info("Toggle enabled — AFK mic mute auto-disabled.");
-                        }
-                        else
-                        {
-                        }
+                        if (_micStatus != null) _micStatus.ToggleMode = true;
                         DisablePtt();
                         EnablePtt();
                         Audio.SetMicMute(true);
@@ -1647,13 +1612,11 @@ namespace AngryAudio
                         break;
                     case "ptt_toggle_off":
                         _settings.PushToToggleEnabled = false;
-                        if (_micStatus != null) { _micStatus.ToggleMode = false; _micStatus.PushToMuteMode = false; }
+                        if (_micStatus != null) _micStatus.ToggleMode = false;
                         DisablePtt();
-                        Audio.SetMicMute(false);
-                        // ShowBalloon("Push-to-Toggle Disabled", "Your mic is now always open.");
-                        if (_micStatus != null && !_micStatus.IsDisposed)
-                            { _micStatus.UseExtendedDelay(); _micStatus.ShowMicOpenIdle(); }
-                        CheckMicUnprotected();
+                        EnablePtt();
+                        if (!AnyModeEnabled()) { Audio.SetMicMute(false); CheckMicUnprotected();
+                            if (_micStatus != null && !_micStatus.IsDisposed) { _micStatus.UseExtendedDelay(); _micStatus.ShowMicOpenIdle(); } }
                         break;
                     case "overlay_on":
                         _settings.MicOverlayEnabled = true;

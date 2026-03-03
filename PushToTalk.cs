@@ -47,6 +47,7 @@ namespace AngryAudio
 
         // Polling timer
         private System.Threading.Timer _pollTimer;
+        private System.Threading.Timer _hookHealthTimer;
         private const int POLL_INTERVAL_MS = 30;
 
         // Hook (optional, for key consumption only)
@@ -148,6 +149,18 @@ namespace AngryAudio
 
             // Start polling — this is the primary detection mechanism
             _pollTimer = new System.Threading.Timer(PollKeyState, null, POLL_INTERVAL_MS, POLL_INTERVAL_MS);
+
+            // Hook health check timer — reinstalls hook if Windows killed it
+            if (_needsHook)
+            {
+                _hookHealthTimer = new System.Threading.Timer(_ => {
+                    if (!_enabled || !_needsHook) return;
+                    if (_hookId == IntPtr.Zero) {
+                        Logger.Warn("Hook health: hook handle is zero — reinstalling.");
+                        ReinstallHook();
+                    }
+                }, null, 5000, 5000);
+            }
         }
 
         public void Disable()
@@ -158,6 +171,12 @@ namespace AngryAudio
             {
                 try { _pollTimer.Dispose(); } catch { }
                 _pollTimer = null;
+            }
+
+            if (_hookHealthTimer != null)
+            {
+                try { _hookHealthTimer.Dispose(); } catch { }
+                _hookHealthTimer = null;
             }
 
             if (_hookId != IntPtr.Zero)
@@ -341,6 +360,28 @@ namespace AngryAudio
                 }
             }
             return CallNextHookEx(_hookId, nCode, wParam, lParam);
+        }
+
+        private void ReinstallHook()
+        {
+            try
+            {
+                if (_hookId != IntPtr.Zero)
+                {
+                    try { UnhookWindowsHookEx(_hookId); } catch { }
+                    _hookId = IntPtr.Zero;
+                }
+                using (var process = Process.GetCurrentProcess())
+                using (var module = process.MainModule)
+                {
+                    _hookId = SetWindowsHookEx(WH_KEYBOARD_LL, _hookProc, GetModuleHandle(module.ModuleName), 0);
+                }
+                if (_hookId != IntPtr.Zero)
+                    Logger.Info("Hook reinstalled successfully.");
+                else
+                    Logger.Error("Hook reinstall failed. Error: " + Marshal.GetLastWin32Error());
+            }
+            catch (Exception ex) { Logger.Error("ReinstallHook failed.", ex); }
         }
 
         public void ForceCapsLockOff()

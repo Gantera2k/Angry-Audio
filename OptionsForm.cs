@@ -603,7 +603,7 @@ namespace AngryAudio
                 if (_tglPtt.Checked && _pttKeyCode <= 0) { _loading = true; _tglPtt.Checked = false; _loading = false; return; }
                 _settings.PushToTalkEnabled = _tglPtt.Checked; _settings.PushToTalkKey = _pttKeyCode; _settings.PushToTalkKey2 = _pttKeyCode2; _settings.PushToTalkKey3 = _pttKeyCode3;
                 if (_onToggle != null) _onToggle(_tglPtt.Checked ? "ptt_on" : "ptt_off");
-                if (_tglPtt.Checked) { _loading = true; if (_tglPtm.Checked) _tglPtm.Checked = false; if (_tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic.Checked) _tglAfkMic.Checked = false; _loading = false; }
+                if (_tglPtt.Checked) { /* modes can coexist */ }
             } };
             y += 42;
             _tglPtm = Tgl("Enable Push-to-Mute", "Mic stays open \u2014 hold the hotkey to mute for coughs and sneezes.", y, card);
@@ -611,7 +611,7 @@ namespace AngryAudio
                 if (_tglPtm.Checked && _pttKeyCode <= 0) { _loading = true; _tglPtm.Checked = false; _loading = false; return; }
                 _settings.PushToMuteEnabled = _tglPtm.Checked; _settings.PushToTalkKey = _pttKeyCode; _settings.PushToTalkKey2 = _pttKeyCode2; _settings.PushToTalkKey3 = _pttKeyCode3;
                 if (_onToggle != null) _onToggle(_tglPtm.Checked ? "ptm_on" : "ptm_off");
-                if (_tglPtm.Checked) { _loading = true; if (_tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtToggle.Checked) _tglPtToggle.Checked = false; if (_tglAfkMic.Checked) _tglAfkMic.Checked = false; _loading = false; }
+                if (_tglPtm.Checked) { /* modes can coexist */ }
             } };
             y += 42;
             _tglPtToggle = Tgl("Enable Push-to-Toggle", "Press the hotkey once to unmute, press again to mute.", y, card);
@@ -619,7 +619,7 @@ namespace AngryAudio
                 if (_tglPtToggle.Checked && _pttKeyCode <= 0) { _loading = true; _tglPtToggle.Checked = false; _loading = false; return; }
                 _settings.PushToToggleEnabled = _tglPtToggle.Checked; _settings.PushToTalkKey = _pttKeyCode; _settings.PushToTalkKey2 = _pttKeyCode2; _settings.PushToTalkKey3 = _pttKeyCode3;
                 if (_onToggle != null) _onToggle(_tglPtToggle.Checked ? "ptt_toggle_on" : "ptt_toggle_off");
-                if (_tglPtToggle.Checked) { _loading = true; if (_tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtm.Checked) _tglPtm.Checked = false; if (_tglAfkMic.Checked) _tglAfkMic.Checked = false; _loading = false; }
+                if (_tglPtToggle.Checked) { /* modes can coexist */ }
             } };
             y += 48;
             AddText(card, "Hotkey 1:", 20, y+3, 9f, TXT2);
@@ -1170,7 +1170,11 @@ namespace AngryAudio
             AddText(card, AppVersion.Copyright, 16, y, 8f, TXT2);
             y += 18;
             AddText(card, "Unauthorized copying, modification, or distribution prohibited.", 16, y, 7f, TXT4, FontStyle.Regular, 440);
+            card.Dock = DockStyle.None;
+            card.Size = new Size(10, Dpi.S(y + 30));
+            card.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             pane.Controls.Add(card);
+            pane.Layout += (s, e) => { if (card != null) card.Width = pane.ClientSize.Width - 1; };
         }
 
         void BuildFooter() {
