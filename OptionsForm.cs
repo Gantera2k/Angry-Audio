@@ -600,33 +600,36 @@ namespace AngryAudio
         void BuildPttPane(Panel pane) {
             var card = MakeCard(0, "Push-to-Talk", "Set this same key as push-to-talk in Discord, Zoom, Teams, etc.");
             int y = 64;
-            // --- PTT toggle + inline hotkey ---
-            _tglPtt = Tgl("Enable Push-to-Talk", "Mic stays muted at the OS level until you hold the hotkey.", y, card);
+
+            // --- PTT SECTION ---
+            _tglPtt = Tgl("Enable Push-to-Talk", "Mic stays muted until you hold the hotkey.", y, card);
             _tglPtt.CheckedChanged += (s,e) => { if (!_loading) {
                 if (_tglPtt.Checked && _pttKeyCode <= 0) { _loading = true; _tglPtt.Checked = false; _loading = false; return; }
                 _settings.PushToTalkEnabled = _tglPtt.Checked; _settings.PushToTalkKey = _pttKeyCode; _settings.PushToTalkKey2 = _pttKeyCode2; _settings.PushToTalkKey3 = _pttKeyCode3;
                 if (_onToggle != null) _onToggle(_tglPtt.Checked ? "ptt_on" : "ptt_off");
             } };
-            y += 30;
-            AddText(card, "Hotkey:", 56, y+3, 8f, TXT3);
-            _lblPttKey = new Label{Text=_pttKeyCode > 0 ? PushToTalk.GetKeyName(_pttKeyCode) : "Add Key",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(90,26),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(120,y)};
-            _lblPttKey.Paint += (s,e) => { using(var p=new Pen(INPUT_BDR)) e.Graphics.DrawRectangle(p,0,0,_lblPttKey.Width-1,_lblPttKey.Height-1); };
+            y += 40;
+            AddText(card, "Hotkey:", 64, y+3, 8f, TXT3);
+            _lblPttKey = new Label{Text=_pttKeyCode > 0 ? PushToTalk.GetKeyName(_pttKeyCode) : "Add Key",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(100,28),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(120,y)};
+            _lblPttKey.Paint += (s,e) => { using(var p=new Pen(Color.FromArgb(60,ACC.R,ACC.G,ACC.B))) e.Graphics.DrawRectangle(p,0,0,_lblPttKey.Width-1,_lblPttKey.Height-1); };
             _lblPttKey.MouseEnter += (s,e) => { if(!_capturingKey) _lblPttKey.BackColor = Color.FromArgb(28, 28, 28); };
             _lblPttKey.MouseLeave += (s,e) => { if(!_capturingKey) _lblPttKey.BackColor = INPUT_BG; };
             _lblPttKey.Click += (s,e) => StartKeyCapture(); card.Controls.Add(_lblPttKey);
             _chkKey1Overlay = MakeOverlayCheck(y, card, _key1ShowOverlay, (v) => { _key1ShowOverlay = v; _settings.PttKey1ShowOverlay = v; if(!_loading && _onToggle!=null)_onToggle("eye1"); });
-            AddText(card, "Click to change", 216, y+5, 7f, TXT4);
-            y += 28;
-            // PTT Key 2
-            _lblKey2Label = new Label{Text="Key 2:",Font=new Font("Segoe UI",8f),ForeColor=TXT3,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(56,y+3)}; card.Controls.Add(_lblKey2Label);
-            _lblPttKey2 = new Label{Text=PushToTalk.GetKeyName(_pttKeyCode2),Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(90,26),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(120,y)};
-            _lblPttKey2.Paint += (s,e) => { using(var p=new Pen(INPUT_BDR)) e.Graphics.DrawRectangle(p,0,0,_lblPttKey2.Width-1,_lblPttKey2.Height-1); };
+            if (_chkKey1Overlay != null) _chkKey1Overlay.Location = Dpi.Pt(226, y+1);
+            AddText(card, "Click to change", 258, y+6, 7f, TXT4);
+            y += 32;
+            // Key 2 row
+            _lblKey2Label = new Label{Text="Key 2:",Font=new Font("Segoe UI",8f),ForeColor=TXT3,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(64,y+3)}; card.Controls.Add(_lblKey2Label);
+            _lblPttKey2 = new Label{Text=PushToTalk.GetKeyName(_pttKeyCode2),Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(100,28),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(120,y)};
+            _lblPttKey2.Paint += (s,e) => { using(var p=new Pen(Color.FromArgb(60,ACC.R,ACC.G,ACC.B))) e.Graphics.DrawRectangle(p,0,0,_lblPttKey2.Width-1,_lblPttKey2.Height-1); };
             _lblPttKey2.MouseEnter += (s,e) => { if(!_capturingKey2) _lblPttKey2.BackColor = Color.FromArgb(28, 28, 28); };
             _lblPttKey2.MouseLeave += (s,e) => { if(!_capturingKey2) _lblPttKey2.BackColor = INPUT_BG; };
             _lblPttKey2.Click += (s,e) => StartKeyCapture2(); card.Controls.Add(_lblPttKey2);
             _chkKey2Overlay = MakeOverlayCheck(y, card, _key2ShowOverlay, (v) => { _key2ShowOverlay = v; _settings.PttKey2ShowOverlay = v; if(!_loading && _onToggle!=null)_onToggle("eye2"); });
-            _lblKey2Hint = new Label{Text="",Font=new Font("Segoe UI",7f),ForeColor=TXT4,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(216,y+5)}; card.Controls.Add(_lblKey2Hint);
-            _btnRemoveKey2 = new Button{Text="",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(24,24),BackColor=Color.Transparent,TabStop=false,Location=Dpi.Pt(390,y+1)};
+            if (_chkKey2Overlay != null) _chkKey2Overlay.Location = Dpi.Pt(226, y+1);
+            _lblKey2Hint = new Label{Text="",Font=new Font("Segoe UI",7f),ForeColor=TXT4,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(258,y+6)}; card.Controls.Add(_lblKey2Hint);
+            _btnRemoveKey2 = new Button{Text="",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(24,24),BackColor=Color.Transparent,TabStop=false,Location=Dpi.Pt(258,y+2)};
             _btnRemoveKey2.FlatAppearance.BorderSize=0; _btnRemoveKey2.FlatAppearance.MouseOverBackColor=Color.Transparent; _btnRemoveKey2.FlatAppearance.MouseDownBackColor=Color.Transparent;
             bool _hoverRm2 = false;
             _btnRemoveKey2.MouseEnter += (s,e) => { _hoverRm2=true; _btnRemoveKey2.Invalidate(); };
@@ -634,21 +637,21 @@ namespace AngryAudio
             _btnRemoveKey2.Paint += (s,e) => { PaintRemoveIcon(e.Graphics, _btnRemoveKey2.ClientRectangle, _hoverRm2); };
             _btnRemoveKey2.Click += (s,e) => { if (_pttKeyCode3 > 0) { _pttKeyCode2 = _pttKeyCode3; _settings.PushToTalkKey2 = _pttKeyCode3; _lblPttKey2.Text = KeyName(_pttKeyCode2); _key2ShowOverlay = _key3ShowOverlay; _settings.PttKey2ShowOverlay = _key3ShowOverlay; if(_chkKey2Overlay!=null) _chkKey2Overlay.Checked = _key2ShowOverlay; _pttKeyCode3 = 0; _settings.PushToTalkKey3 = 0; _key3ShowOverlay = true; _settings.PttKey3ShowOverlay = true; } else { _pttKeyCode2 = 0; _settings.PushToTalkKey2 = 0; } UpdateKey2Visibility(); };
             card.Controls.Add(_btnRemoveKey2);
-            _btnAddKey2 = new Button{Text="+ Add Key",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(90,26),ForeColor=ACC,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false,Location=Dpi.Pt(120,y)};
+            _btnAddKey2 = new Button{Text="+ Add Key",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(100,28),ForeColor=ACC,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false,Location=Dpi.Pt(120,y)};
             _btnAddKey2.FlatAppearance.BorderColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);
             _btnAddKey2.MouseEnter += (s,e) => { _btnAddKey2.BackColor=Color.FromArgb(ACC.R/5,ACC.G/5,ACC.B/5); };
             _btnAddKey2.MouseLeave += (s,e) => { _btnAddKey2.BackColor=Color.FromArgb(20,20,20); };
             _btnAddKey2.Click += (s,e) => StartKeyCapture2(); card.Controls.Add(_btnAddKey2);
             UpdateKey2Visibility();
-            _lblKey3Label = new Label{Text="Key 3:",Font=new Font("Segoe UI",8f),ForeColor=TXT3,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(270,y+3)}; card.Controls.Add(_lblKey3Label);
-            _lblPttKey3 = new Label{Text=PushToTalk.GetKeyName(_pttKeyCode3),Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(90,26),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(320,y)};
-            _lblPttKey3.Paint += (s,e) => { using(var p=new Pen(INPUT_BDR)) e.Graphics.DrawRectangle(p,0,0,_lblPttKey3.Width-1,_lblPttKey3.Height-1); };
+            _lblKey3Label = new Label{Text="Key 3:",Font=new Font("Segoe UI",8f),ForeColor=TXT3,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(290,y+3)}; card.Controls.Add(_lblKey3Label);
+            _lblPttKey3 = new Label{Text=PushToTalk.GetKeyName(_pttKeyCode3),Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(100,28),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(340,y)};
+            _lblPttKey3.Paint += (s,e) => { using(var p=new Pen(Color.FromArgb(60,ACC.R,ACC.G,ACC.B))) e.Graphics.DrawRectangle(p,0,0,_lblPttKey3.Width-1,_lblPttKey3.Height-1); };
             _lblPttKey3.MouseEnter += (s,e) => { if(!_capturingKey3) _lblPttKey3.BackColor = Color.FromArgb(28, 28, 28); };
             _lblPttKey3.MouseLeave += (s,e) => { if(!_capturingKey3) _lblPttKey3.BackColor = INPUT_BG; };
             _lblPttKey3.Click += (s,e) => StartKeyCapture3(); card.Controls.Add(_lblPttKey3);
             _chkKey3Overlay = MakeOverlayCheck(y, card, _key3ShowOverlay, (v) => { _key3ShowOverlay = v; _settings.PttKey3ShowOverlay = v; if(!_loading && _onToggle!=null)_onToggle("eye3"); });
-            if (_chkKey3Overlay != null) _chkKey3Overlay.Location = Dpi.Pt(416, y);
-            _btnRemoveKey3 = new Button{Text="",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(24,24),BackColor=Color.Transparent,TabStop=false,Location=Dpi.Pt(444,y+1)};
+            if (_chkKey3Overlay != null) _chkKey3Overlay.Location = Dpi.Pt(446, y+1);
+            _btnRemoveKey3 = new Button{Text="",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(24,24),BackColor=Color.Transparent,TabStop=false,Location=Dpi.Pt(446,y+2)};
             _btnRemoveKey3.FlatAppearance.BorderSize=0; _btnRemoveKey3.FlatAppearance.MouseOverBackColor=Color.Transparent; _btnRemoveKey3.FlatAppearance.MouseDownBackColor=Color.Transparent;
             bool _hoverRm3 = false;
             _btnRemoveKey3.MouseEnter += (s,e) => { _hoverRm3=true; _btnRemoveKey3.Invalidate(); };
@@ -656,48 +659,53 @@ namespace AngryAudio
             _btnRemoveKey3.Paint += (s,e) => { PaintRemoveIcon(e.Graphics, _btnRemoveKey3.ClientRectangle, _hoverRm3); };
             _btnRemoveKey3.Click += (s,e) => { _pttKeyCode3 = 0; _settings.PushToTalkKey3 = 0; UpdateKey3Visibility(); };
             card.Controls.Add(_btnRemoveKey3);
-            _btnAddKey3 = new Button{Text="+ Key",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(60,26),ForeColor=ACC,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false,Location=Dpi.Pt(270,y)};
+            _btnAddKey3 = new Button{Text="+ Key",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(70,28),ForeColor=ACC,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false,Location=Dpi.Pt(290,y)};
             _btnAddKey3.FlatAppearance.BorderColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);
             _btnAddKey3.MouseEnter += (s,e) => { _btnAddKey3.BackColor=Color.FromArgb(ACC.R/5,ACC.G/5,ACC.B/5); };
             _btnAddKey3.MouseLeave += (s,e) => { _btnAddKey3.BackColor=Color.FromArgb(20,20,20); };
             _btnAddKey3.Click += (s,e) => StartKeyCapture3(); card.Controls.Add(_btnAddKey3);
-            _lblKey3Hint = new Label{Text="",Font=new Font("Segoe UI",7f),ForeColor=TXT4,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(216,y+5)}; card.Controls.Add(_lblKey3Hint);
+            _lblKey3Hint = new Label{Text="",Font=new Font("Segoe UI",7f),ForeColor=TXT4,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(258,y+6)}; card.Controls.Add(_lblKey3Hint);
             UpdateKey3Visibility();
-            y += 34;
-            AddLine(card, y); y += 14;
-            // --- PTM toggle + inline hotkey ---
+
+            y += 38;
+            AddLine(card, y); y += 16;
+
+            // --- PTM SECTION ---
             _tglPtm = Tgl("Enable Push-to-Mute", "Mic stays open \u2014 hold the hotkey to mute.", y, card);
             _tglPtm.CheckedChanged += (s,e) => { if (!_loading) {
                 if (_tglPtm.Checked && _ptmKeyCode <= 0) { _loading = true; _tglPtm.Checked = false; _loading = false; return; }
                 _settings.PushToMuteEnabled = _tglPtm.Checked; _settings.PushToMuteKey = _ptmKeyCode;
                 if (_onToggle != null) _onToggle(_tglPtm.Checked ? "ptm_on" : "ptm_off");
             } };
-            y += 30;
-            AddText(card, "Hotkey:", 56, y+3, 8f, TXT3);
-            _lblPtmKey = new Label{Text=_ptmKeyCode > 0 ? PushToTalk.GetKeyName(_ptmKeyCode) : "Add Key",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(90,26),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(120,y)};
-            _lblPtmKey.Paint += (s,e) => { using(var p=new Pen(INPUT_BDR)) e.Graphics.DrawRectangle(p,0,0,_lblPtmKey.Width-1,_lblPtmKey.Height-1); };
+            y += 40;
+            AddText(card, "Hotkey:", 64, y+3, 8f, TXT3);
+            _lblPtmKey = new Label{Text=_ptmKeyCode > 0 ? PushToTalk.GetKeyName(_ptmKeyCode) : "Add Key",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(100,28),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(120,y)};
+            _lblPtmKey.Paint += (s,e) => { using(var p=new Pen(Color.FromArgb(60,ACC.R,ACC.G,ACC.B))) e.Graphics.DrawRectangle(p,0,0,_lblPtmKey.Width-1,_lblPtmKey.Height-1); };
             _lblPtmKey.MouseEnter += (s,e) => { if(!_capturingPtmKey) _lblPtmKey.BackColor = Color.FromArgb(28, 28, 28); };
             _lblPtmKey.MouseLeave += (s,e) => { if(!_capturingPtmKey) _lblPtmKey.BackColor = INPUT_BG; };
             _lblPtmKey.Click += (s,e) => StartPtmKeyCapture(); card.Controls.Add(_lblPtmKey);
-            AddText(card, "Click to change", 216, y+5, 7f, TXT4);
-            y += 34;
-            AddLine(card, y); y += 14;
-            // --- Toggle toggle + inline hotkey ---
+            AddText(card, "Click to change", 226, y+6, 7f, TXT4);
+
+            y += 38;
+            AddLine(card, y); y += 16;
+
+            // --- TOGGLE SECTION ---
             _tglPtToggle = Tgl("Enable Push-to-Toggle", "Tap once to unmute, tap again to mute.", y, card);
             _tglPtToggle.CheckedChanged += (s,e) => { if (!_loading) {
                 if (_tglPtToggle.Checked && _ptToggleKeyCode <= 0) { _loading = true; _tglPtToggle.Checked = false; _loading = false; return; }
                 _settings.PushToToggleEnabled = _tglPtToggle.Checked; _settings.PushToToggleKey = _ptToggleKeyCode;
                 if (_onToggle != null) _onToggle(_tglPtToggle.Checked ? "ptt_toggle_on" : "ptt_toggle_off");
             } };
-            y += 30;
-            AddText(card, "Hotkey:", 56, y+3, 8f, TXT3);
-            _lblPtToggleKey = new Label{Text=_ptToggleKeyCode > 0 ? PushToTalk.GetKeyName(_ptToggleKeyCode) : "Add Key",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(90,26),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(120,y)};
-            _lblPtToggleKey.Paint += (s,e) => { using(var p=new Pen(INPUT_BDR)) e.Graphics.DrawRectangle(p,0,0,_lblPtToggleKey.Width-1,_lblPtToggleKey.Height-1); };
+            y += 40;
+            AddText(card, "Hotkey:", 64, y+3, 8f, TXT3);
+            _lblPtToggleKey = new Label{Text=_ptToggleKeyCode > 0 ? PushToTalk.GetKeyName(_ptToggleKeyCode) : "Add Key",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(100,28),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(120,y)};
+            _lblPtToggleKey.Paint += (s,e) => { using(var p=new Pen(Color.FromArgb(60,ACC.R,ACC.G,ACC.B))) e.Graphics.DrawRectangle(p,0,0,_lblPtToggleKey.Width-1,_lblPtToggleKey.Height-1); };
             _lblPtToggleKey.MouseEnter += (s,e) => { if(!_capturingToggleKey) _lblPtToggleKey.BackColor = Color.FromArgb(28, 28, 28); };
             _lblPtToggleKey.MouseLeave += (s,e) => { if(!_capturingToggleKey) _lblPtToggleKey.BackColor = INPUT_BG; };
             _lblPtToggleKey.Click += (s,e) => StartToggleKeyCapture(); card.Controls.Add(_lblPtToggleKey);
-            AddText(card, "Click to change", 216, y+5, 7f, TXT4);
-            y += 36;
+            AddText(card, "Click to change", 226, y+6, 7f, TXT4);
+
+            y += 40;
             AddText(card, "Mutes all microphones system-wide \u2014 headset, camera mic, USB devices.", 20, y, 7f, Color.FromArgb(90, ACC.R, ACC.G, ACC.B));
             pane.Controls.Add(card);
         }
