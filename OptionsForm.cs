@@ -599,7 +599,7 @@ namespace AngryAudio
         }
 
         void BuildPttPane(Panel pane) {
-            var card = MakeCard(0, "Push-to-Talk", "Set this same key as push-to-talk in Discord, Zoom, Teams, etc.");
+            var card = MakeCard(0, "Push-to-Talk", "Control when your mic is live. Enable one or more modes below.");
             int y = 64;
 
             // --- PTT SECTION ---
@@ -618,7 +618,7 @@ namespace AngryAudio
             _lblPttKey.Click += (s,e) => StartKeyCapture(); card.Controls.Add(_lblPttKey);
             _chkKey1Overlay = MakeOverlayCheck(y, card, _key1ShowOverlay, (v) => { _key1ShowOverlay = v; _settings.PttKey1ShowOverlay = v; if(!_loading && _onToggle!=null)_onToggle("eye1"); });
             if (_chkKey1Overlay != null) _chkKey1Overlay.Location = Dpi.Pt(226, y+1);
-            AddText(card, "Click to change", 258, y+6, 7f, TXT4);
+            AddText(card, "Click to change", 258, y+6, 7f, TXT3);
             y += 32;
             // Key 2 row
             _lblKey2Label = new Label{Text="Key 2:",Font=new Font("Segoe UI",8f),ForeColor=TXT3,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(64,y+3)}; card.Controls.Add(_lblKey2Label);
@@ -685,7 +685,7 @@ namespace AngryAudio
             _lblPtmKey.MouseEnter += (s,e) => { if(!_capturingPtmKey) _lblPtmKey.BackColor = Color.FromArgb(28, 28, 28); };
             _lblPtmKey.MouseLeave += (s,e) => { if(!_capturingPtmKey) _lblPtmKey.BackColor = INPUT_BG; };
             _lblPtmKey.Click += (s,e) => StartPtmKeyCapture(); card.Controls.Add(_lblPtmKey);
-            AddText(card, "Click to change", 226, y+6, 7f, TXT4);
+            AddText(card, "Click to change", 226, y+6, 7f, TXT3);
 
             y += 38;
             AddLine(card, y); y += 16;
@@ -704,7 +704,7 @@ namespace AngryAudio
             _lblPtToggleKey.MouseEnter += (s,e) => { if(!_capturingToggleKey) _lblPtToggleKey.BackColor = Color.FromArgb(28, 28, 28); };
             _lblPtToggleKey.MouseLeave += (s,e) => { if(!_capturingToggleKey) _lblPtToggleKey.BackColor = INPUT_BG; };
             _lblPtToggleKey.Click += (s,e) => StartToggleKeyCapture(); card.Controls.Add(_lblPtToggleKey);
-            AddText(card, "Click to change", 226, y+6, 7f, TXT4);
+            AddText(card, "Click to change", 226, y+6, 7f, TXT3);
 
             y += 40;
             AddText(card, "Mutes all microphones system-wide \u2014 headset, camera mic, USB devices.", 20, y, 7f, Color.FromArgb(90, ACC.R, ACC.G, ACC.B));
