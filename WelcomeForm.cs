@@ -383,27 +383,20 @@ namespace AngryAudio
                 using (var f = new Font("Segoe UI", 8f)) using (var b = new SolidBrush(DarkTheme.Txt4))
                     g.DrawString("Angry Audio gradually fades your audio back when you return.", f, b, Dpi.S(20), ay + Dpi.S(132));
 
-                // === Guided orbiting star ===
-                // Phase 1: No mode chosen → orbit the toggle section (draws eye to "pick one")
-                // Phase 2: Mode chosen, no key → orbit the hotkey label (draws eye to "set key")
-                // Phase 3: Both done → no star
-                // Safety: if user unchecks all toggles and has no key, reset guidance
-                if (_modeChosen && _pttKeyCode <= 0 && _ptmKeyCode <= 0 && _ptToggleKeyCode <= 0 && !_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked)
-                    _modeChosen = false;
-
-                // Orbiting star on the first mode key that needs setting
-                Label orbitTarget = null;
-                if (_tglPtt.Checked && _pttKeyCode <= 0 && _lblPttKey != null) orbitTarget = _lblPttKey;
-                else if (_tglPtm.Checked && _ptmKeyCode <= 0 && _lblPtmKey != null) orbitTarget = _lblPtmKey;
-                else if (_tglPtToggle.Checked && _ptToggleKeyCode <= 0 && _lblPtToggleKey != null) orbitTarget = _lblPtToggleKey;
-                else if (!_modeChosen && _lblPttKey != null) orbitTarget = _lblPttKey; // no mode yet, guide to PTT
-                if (orbitTarget != null) {
-                    var r = orbitTarget.Bounds;
-                    int pad = Dpi.S(6);
-                    var saved = g.Save();
-                    g.TranslateTransform(r.X - pad, r.Y - pad);
-                    DarkTheme.PaintOrbitingStar(g, r.Width + pad * 2, r.Height + pad * 2, _pulsePhase, Dpi.S(4));
-                    g.Restore(saved);
+                // === Subtle glow on first unset hotkey ===
+                // Draws a pulsing glow border around the first "Add Key" that needs setting
+                Label glowTarget = null;
+                if (_tglPtt.Checked && _pttKeyCode <= 0 && _lblPttKey != null) glowTarget = _lblPttKey;
+                else if (_tglPtm.Checked && _ptmKeyCode <= 0 && _lblPtmKey != null) glowTarget = _lblPtmKey;
+                else if (_tglPtToggle.Checked && _ptToggleKeyCode <= 0 && _lblPtToggleKey != null) glowTarget = _lblPtToggleKey;
+                else if (!_modeChosen && _lblPttKey != null) glowTarget = _lblPttKey;
+                if (glowTarget != null) {
+                    var r = glowTarget.Bounds;
+                    int pad = Dpi.S(3);
+                    float pulse = (float)((Math.Sin(_pulsePhase * 2.5) + 1.0) / 2.0); // faster pulse
+                    int alpha = (int)(40 + 60 * pulse);
+                    using (var pen = new Pen(Color.FromArgb(alpha, ACC.R, ACC.G, ACC.B), Dpi.PenW(2)))
+                        g.DrawRectangle(pen, r.X - pad, r.Y - pad, r.Width + pad * 2, r.Height + pad * 2);
                 }
             };
 

@@ -663,7 +663,8 @@ namespace AngryAudio
             _btnAddKey3.Click += (s,e) => StartKeyCapture3(); card.Controls.Add(_btnAddKey3);
             _lblKey3Hint = new Label{Text="",Font=new Font("Segoe UI",7f),ForeColor=TXT4,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(216,y+5)}; card.Controls.Add(_lblKey3Hint);
             UpdateKey3Visibility();
-            y += 40;
+            y += 34;
+            AddLine(card, y); y += 14;
             // --- PTM toggle + inline hotkey ---
             _tglPtm = Tgl("Enable Push-to-Mute", "Mic stays open \u2014 hold the hotkey to mute.", y, card);
             _tglPtm.CheckedChanged += (s,e) => { if (!_loading) {
@@ -679,7 +680,8 @@ namespace AngryAudio
             _lblPtmKey.MouseLeave += (s,e) => { if(!_capturingPtmKey) _lblPtmKey.BackColor = INPUT_BG; };
             _lblPtmKey.Click += (s,e) => StartPtmKeyCapture(); card.Controls.Add(_lblPtmKey);
             AddText(card, "Click to change", 216, y+5, 7f, TXT4);
-            y += 40;
+            y += 34;
+            AddLine(card, y); y += 14;
             // --- Toggle toggle + inline hotkey ---
             _tglPtToggle = Tgl("Enable Push-to-Toggle", "Tap once to unmute, tap again to mute.", y, card);
             _tglPtToggle.CheckedChanged += (s,e) => { if (!_loading) {
@@ -1162,8 +1164,9 @@ namespace AngryAudio
             AddText(card, AppVersion.Copyright, 16, y, 8f, TXT2);
             y += 18;
             AddText(card, "Unauthorized copying, modification, or distribution prohibited.", 16, y, 7f, TXT4, FontStyle.Regular, 440);
+            y += 30;
             card.Dock = DockStyle.None;
-            card.Size = new Size(10, Dpi.S(y + 30));
+            card.Size = new Size(10, Dpi.S(y + 40));
             card.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             pane.Controls.Add(card);
             pane.Layout += (s, e) => { if (card != null) card.Width = pane.ClientSize.Width - 1; };
