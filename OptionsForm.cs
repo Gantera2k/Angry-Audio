@@ -27,6 +27,7 @@ namespace AngryAudio
         private int _activePane = 0;
 
         private ToggleSwitch _tglAfkMic, _tglAfkSpk, _tglPtt, _tglPtm, _tglPtToggle, _tglMicEnf, _tglSpkEnf, _tglAppEnf, _tglStartup, _tglNotifyCorr, _tglNotifyDev, _tglOverlay, _tglSoundFeedback;
+        private Label _lblPttWarning;
         private NumericUpDown _nudAfkMicSec, _nudAfkSpkSec;
         private Label _lblPttKey, _lblPttKey2, _lblPttKey3, _lblPtmKey, _lblPtToggleKey;
         private Label _lblKey2Label, _lblKey2Hint, _lblKey3Label, _lblKey3Hint;
@@ -719,7 +720,6 @@ namespace AngryAudio
                     // Snapshot for slider restore
                     try { _micPreLockVol = (int)Audio.GetMicVolume(); } catch { _micPreLockVol = -1; }
                     if (_sliderRestoreMicTimer != null) { _sliderRestoreMicTimer.Stop(); _sliderRestoreMicTimer.Dispose(); _sliderRestoreMicTimer = null; }
-                    // Notify TrayApp BEFORE enforcing so it can snapshot the real pre-lock volume
                     _settings.MicEnforceEnabled = true;
                     if (_onToggle != null) _onToggle("mic_lock_on");
                     try { Audio.SetMicVolume(_trkMicVol.Value); UpdateCurrent(); } catch { }
@@ -728,8 +728,13 @@ namespace AngryAudio
                     if (_onToggle != null) _onToggle("mic_lock_off");
                     AnimateSliderRestore(true);
                 }
+                if (_lblPttWarning != null) _lblPttWarning.Visible = _tglMicEnf.Checked && (_settings.PushToTalkEnabled || _settings.PushToMuteEnabled || _settings.PushToToggleEnabled);
             } };
             y+=48;
+            _lblPttWarning = new Label{Text="Note: Push-to-Talk is active and controls mic muting.",Font=new Font("Segoe UI",7.5f),ForeColor=Color.FromArgb(220,180,80),BackColor=Color.Transparent,AutoSize=true,Location=Dpi.Pt(64,y)};
+            _lblPttWarning.Visible = _settings.MicEnforceEnabled && (_settings.PushToTalkEnabled || _settings.PushToMuteEnabled || _settings.PushToToggleEnabled);
+            card.Controls.Add(_lblPttWarning);
+            y += _lblPttWarning.Visible ? 16 : 0;
             AddText(card, Audio.GetMicName()??"Mic: Unknown", 64, y, 7.5f, TXT4);
             _plMicCur = AddText(card, "Current: --%", 380, y, 7.5f, GREEN); _plMicCur.RightAlign = true;
             y+=22;
@@ -1169,12 +1174,7 @@ namespace AngryAudio
             AddText(card, AppVersion.Copyright, 16, y, 8f, TXT2);
             y += 18;
             AddText(card, "Unauthorized copying, modification, or distribution prohibited.", 16, y, 7f, TXT4, FontStyle.Regular, 440);
-            y += 30;
-            card.Dock = DockStyle.None;
-            card.Size = new Size(10, Dpi.S(y + 40));
-            card.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             pane.Controls.Add(card);
-            pane.Layout += (s, e) => { if (card != null) card.Width = pane.ClientSize.Width - 1; };
         }
 
         void BuildFooter() {
@@ -1327,21 +1327,23 @@ namespace AngryAudio
                 bool on = eye.Checked;
                 Color col = on ? (hover ? Color.FromArgb(140,220,255) : ACC) : (hover ? Color.FromArgb(90,90,90) : Color.FromArgb(55,55,55));
                 float sc = Dpi.S(1);
-                // Eye shape using bezier curves for smooth almond
+                // Ear shape — outer ear curve
                 using (var path = new System.Drawing.Drawing2D.GraphicsPath()) {
-                    // Top lid
-                    path.AddBezier(cx-9*sc, cy, cx-4*sc, cy-6*sc, cx+4*sc, cy-6*sc, cx+9*sc, cy);
-                    // Bottom lid
-                    path.AddBezier(cx+9*sc, cy, cx+4*sc, cy+6*sc, cx-4*sc, cy+6*sc, cx-9*sc, cy);
-                    path.CloseFigure();
+                    path.AddBezier(cx+1*sc, cy+8*sc, cx-7*sc, cy+6*sc, cx-8*sc, cy-4*sc, cx-3*sc, cy-8*sc);
+                    path.AddBezier(cx-3*sc, cy-8*sc, cx+2*sc, cy-10*sc, cx+8*sc, cy-5*sc, cx+6*sc, cy+1*sc);
+                    path.AddBezier(cx+6*sc, cy+1*sc, cx+5*sc, cy+4*sc, cx+3*sc, cy+6*sc, cx+1*sc, cy+8*sc);
                     using (var p = new Pen(col, 1.4f*sc)) g.DrawPath(p, path);
                 }
                 if (on) {
-                    // Simple filled pupil
-                    float pr = 2.5f*sc;
-                    using (var b = new SolidBrush(col)) g.FillEllipse(b, cx-pr, cy-pr, pr*2, pr*2);
+                    // Inner ear detail — small curve
+                    using (var p = new Pen(col, 1.2f*sc))
+                        g.DrawBezier(p, cx+3*sc, cy+2*sc, cx+1*sc, cy-1*sc, cx-2*sc, cy-3*sc, cx-1*sc, cy-5*sc);
+                    // Sound waves
+                    using (var p = new Pen(Color.FromArgb(120, col.R, col.G, col.B), 1f*sc)) {
+                        g.DrawArc(p, cx+5*sc, cy-4*sc, 5*sc, 8*sc, -60, 120);
+                    }
                 } else {
-                    // Diagonal slash
+                    // Diagonal slash (muted)
                     using (var p = new Pen(col, 1.6f*sc)) {
                         p.StartCap = System.Drawing.Drawing2D.LineCap.Round;
                         p.EndCap = System.Drawing.Drawing2D.LineCap.Round;
@@ -1350,9 +1352,9 @@ namespace AngryAudio
                 }
             };
             var tt = new ToolTip();
-            tt.SetToolTip(eye, initialOn ? "Popup visible — click to hide" : "Popup hidden — click to show");
+            tt.SetToolTip(eye, initialOn ? "Sound feedback on — click to mute" : "Sound feedback off — click to enable");
             eye.CheckedChanged += (s,e) => {
-                tt.SetToolTip(eye, eye.Checked ? "Popup visible — click to hide" : "Popup hidden — click to show");
+                tt.SetToolTip(eye, eye.Checked ? "Sound feedback on — click to mute" : "Sound feedback off — click to enable");
                 onChange(eye.Checked);
             };
             card.Controls.Add(eye);

@@ -53,6 +53,7 @@ namespace AngryAudio
         private int _currentPage = 1;
         private Timer _pulseTimer;
         private float _pulsePhase; // 0 to 2*PI, drives the glow animation
+        private int _flickerFrame; // counts up from 0, drives 1-2-3 intro flicker then stops
         private StarBackground _stars;
 
         // Dynamic painted text (no Labels — shooting stars pass through)
@@ -206,9 +207,11 @@ namespace AngryAudio
                 _pulsePhase += 0.08f;
                 if (_pulsePhase > (float)(Math.PI * 2)) _pulsePhase -= (float)(Math.PI * 2);
                 footer.Invalidate();
-                // Invalidate card1 for orbiting star around hotkey
-                if (_pttKeyCode <= 0 && _card1 != null && _card1.Visible)
-                    _card1.Invalidate(false);
+                // 1-2-3 flicker intro: runs for ~90 frames (2.7s at 30ms) then stops
+                if (_flickerFrame < 90) {
+                    _flickerFrame++;
+                    if (_card1 != null && _card1.Visible) _card1.Invalidate(false);
+                }
                 // Invalidate visible tips for zip line animation
                 if (_tipHotkey != null && _tipHotkey.Visible) _tipHotkey.Invalidate();
                 if (_tipFunCallout != null && _tipFunCallout.Visible) _tipFunCallout.Invalidate();
@@ -382,6 +385,25 @@ namespace AngryAudio
                     g.DrawString("seconds", f, b, Dpi.S(266), ay + Dpi.S(103));
                 using (var f = new Font("Segoe UI", 8f)) using (var b = new SolidBrush(DarkTheme.Txt4))
                     g.DrawString("Angry Audio gradually fades your audio back when you return.", f, b, Dpi.S(20), ay + Dpi.S(132));
+
+                // === 1-2-3 intro flicker — sequential glow on each Add Key box ===
+                // Frame timing: 15 delay, then 20 frames per box with 5 gap = 15+20+5+20+5+20 = 85 frames
+                if (_flickerFrame > 0 && _flickerFrame < 90) {
+                    Label[] targets = { _lblPttKey, _lblPtmKey, _lblPtToggleKey };
+                    int[] starts = { 15, 40, 65 }; // frame each box starts glowing
+                    for (int i = 0; i < 3; i++) {
+                        if (targets[i] == null) continue;
+                        int localF = _flickerFrame - starts[i];
+                        if (localF < 0 || localF >= 20) continue;
+                        // Fade in then out over 20 frames
+                        float t = localF < 10 ? localF / 10f : (20 - localF) / 10f;
+                        int alpha = (int)(120 * t);
+                        var r = targets[i].Bounds;
+                        int pad = Dpi.S(4);
+                        using (var pen = new Pen(Color.FromArgb(alpha, ACC.R, ACC.G, ACC.B), Dpi.PenW(2)))
+                            g.DrawRectangle(pen, r.X - pad, r.Y - pad, r.Width + pad * 2, r.Height + pad * 2);
+                    }
+                }
 
             };
 
