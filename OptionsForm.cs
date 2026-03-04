@@ -1157,9 +1157,6 @@ namespace AngryAudio
             _tglOverlay = Tgl("Show Mic Status Overlay", "Floating pill shows mic open/closed \u2014 drag to reposition, right-click to dismiss", y, card);
             _tglOverlay.CheckedChanged += (s,e) => { if (!_loading) { _settings.MicOverlayEnabled = _tglOverlay.Checked; if (_onToggle != null) _onToggle(_tglOverlay.Checked ? "overlay_on" : "overlay_off"); } };
             y += 42;
-            _tglSoundFeedback = Tgl("PTT Sound Feedback", "Play a click when your mic opens or closes \u2014 so you know it worked without looking.", y, card);
-            _tglSoundFeedback.CheckedChanged += (s,e) => { if (!_loading) { _settings.PttSoundFeedback = _tglSoundFeedback.Checked; } };
-            y += 42;
             _tglNotifyCorr = Tgl("Volume Correction Alerts", "Show a toast when Angry Audio resets your audio.", y, card);
             _tglNotifyCorr.CheckedChanged += (s,e) => { if (!_loading) { _settings.NotifyOnCorrection = _tglNotifyCorr.Checked; if (_onToggle != null) _onToggle(_tglNotifyCorr.Checked ? "notify_corr_on" : "notify_corr_off"); } };
             y += 42;
@@ -1299,14 +1296,14 @@ namespace AngryAudio
             _lblPttKey3.Text=KeyName(_pttKeyCode3);_lblPttKey3.BackColor=INPUT_BG;_lblPttKey3.ForeColor=ACC;_capturingKey3=false;_settings.PushToTalkKey3=_pttKeyCode3;_key3ShowOverlay=true;_settings.PttKey3ShowOverlay=true;if(_chkKey3Overlay!=null)_chkKey3Overlay.Checked=true;UpdateKey3Visibility();if(_onToggle!=null)_onToggle("ptt_key3:"+_pttKeyCode3);}
         void UpdateKey3Visibility(){bool hasKey3=_pttKeyCode3>0;_lblPttKey3.Visible=hasKey3;_lblKey3Label.Visible=hasKey3;_lblKey3Hint.Visible=hasKey3;_btnRemoveKey3.Visible=hasKey3;_btnAddKey3.Visible=!hasKey3 && _pttKeyCode2 > 0;if(_chkKey3Overlay!=null)_chkKey3Overlay.Visible=hasKey3;}
         void StartPtmKeyCapture(){if(_capturingKey||_capturingKey2||_capturingKey3||_capturingToggleKey)return;_capturingPtmKey=true;_lblPtmKey.Text="Press...";_lblPtmKey.BackColor=ACC;_lblPtmKey.ForeColor=Color.White;StartCapturePolling();}
-        void OnPtmKeyCapture(object s,KeyEventArgs e){if(!_capturingPtmKey)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){_lblPtmKey.Text=_ptmKeyCode>0?KeyName(_ptmKeyCode):"Add Key";_lblPtmKey.BackColor=INPUT_BG;_lblPtmKey.ForeColor=ACC;_capturingPtmKey=false;return;}
+        void OnPtmKeyCapture(object s,KeyEventArgs e){if(!_capturingPtmKey)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){_ptmKeyCode=0;_settings.PushToMuteKey=0;_lblPtmKey.Text="Add Key";_lblPtmKey.BackColor=INPUT_BG;_lblPtmKey.ForeColor=ACC;_capturingPtmKey=false;if(_tglPtm.Checked){_loading=true;_tglPtm.Checked=false;_loading=false;_settings.PushToMuteEnabled=false;if(_onToggle!=null)_onToggle("ptm_off");}return;}
             int vk=(int)e.KeyCode;if(vk==0x10)vk=IsKeyDown(0xA1)?0xA1:0xA0;if(vk==0x11)vk=IsKeyDown(0xA3)?0xA3:0xA2;if(vk==0x12)vk=IsKeyDown(0xA5)?0xA5:0xA4;
             if(vk==_pttKeyCode||vk==_pttKeyCode2||vk==_pttKeyCode3||vk==_ptToggleKeyCode){_capturingPtmKey=false;_lblPtmKey.Text=_ptmKeyCode>0?KeyName(_ptmKeyCode):"Add Key";_lblPtmKey.BackColor=INPUT_BG;_lblPtmKey.ForeColor=ACC;ShakeReject(_lblPtmKey,null);return;}
             _ptmKeyCode=vk;_lblPtmKey.Text=KeyName(_ptmKeyCode);_lblPtmKey.BackColor=INPUT_BG;_lblPtmKey.ForeColor=ACC;_capturingPtmKey=false;_settings.PushToMuteKey=_ptmKeyCode;
             if(!_tglPtm.Checked){_loading=true;_tglPtm.Checked=true;_loading=false;_settings.PushToMuteEnabled=true;if(_onToggle!=null)_onToggle("ptm_on");}
             if(_onToggle!=null)_onToggle("ptm_key:"+_ptmKeyCode);}
         void StartToggleKeyCapture(){if(_capturingKey||_capturingKey2||_capturingKey3||_capturingPtmKey)return;_capturingToggleKey=true;_lblPtToggleKey.Text="Press...";_lblPtToggleKey.BackColor=ACC;_lblPtToggleKey.ForeColor=Color.White;StartCapturePolling();}
-        void OnToggleKeyCapture(object s,KeyEventArgs e){if(!_capturingToggleKey)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){_lblPtToggleKey.Text=_ptToggleKeyCode>0?KeyName(_ptToggleKeyCode):"Add Key";_lblPtToggleKey.BackColor=INPUT_BG;_lblPtToggleKey.ForeColor=ACC;_capturingToggleKey=false;return;}
+        void OnToggleKeyCapture(object s,KeyEventArgs e){if(!_capturingToggleKey)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){_ptToggleKeyCode=0;_settings.PushToToggleKey=0;_lblPtToggleKey.Text="Add Key";_lblPtToggleKey.BackColor=INPUT_BG;_lblPtToggleKey.ForeColor=ACC;_capturingToggleKey=false;if(_tglPtToggle.Checked){_loading=true;_tglPtToggle.Checked=false;_loading=false;_settings.PushToToggleEnabled=false;if(_onToggle!=null)_onToggle("ptt_toggle_off");}return;}
             int vk=(int)e.KeyCode;if(vk==0x10)vk=IsKeyDown(0xA1)?0xA1:0xA0;if(vk==0x11)vk=IsKeyDown(0xA3)?0xA3:0xA2;if(vk==0x12)vk=IsKeyDown(0xA5)?0xA5:0xA4;
             if(vk==_pttKeyCode||vk==_pttKeyCode2||vk==_pttKeyCode3||vk==_ptmKeyCode){_capturingToggleKey=false;_lblPtToggleKey.Text=_ptToggleKeyCode>0?KeyName(_ptToggleKeyCode):"Add Key";_lblPtToggleKey.BackColor=INPUT_BG;_lblPtToggleKey.ForeColor=ACC;ShakeReject(_lblPtToggleKey,null);return;}
             _ptToggleKeyCode=vk;_lblPtToggleKey.Text=KeyName(_ptToggleKeyCode);_lblPtToggleKey.BackColor=INPUT_BG;_lblPtToggleKey.ForeColor=ACC;_capturingToggleKey=false;_settings.PushToToggleKey=_ptToggleKeyCode;
@@ -1362,7 +1359,7 @@ namespace AngryAudio
             return eye;
         }
         void UpdateKey2Visibility(){bool hasKey2=_pttKeyCode2>0;bool hasKey1=_pttKeyCode>0;_lblPttKey2.Visible=hasKey2;_lblKey2Label.Visible=hasKey2;_lblKey2Hint.Visible=hasKey2;_btnRemoveKey2.Visible=hasKey2;_btnAddKey2.Visible=!hasKey2 && hasKey1;if(_chkKey2Overlay!=null)_chkKey2Overlay.Visible=hasKey2;if(_btnAddKey3!=null)UpdateKey3Visibility();}
-        void OnKeyCapture(object s,KeyEventArgs e){if(!_capturingKey)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){_lblPttKey.Text=KeyName(_pttKeyCode);_lblPttKey.BackColor=INPUT_BG;_lblPttKey.ForeColor=ACC;_capturingKey=false;return;}
+        void OnKeyCapture(object s,KeyEventArgs e){if(!_capturingKey)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){_pttKeyCode=0;_settings.PushToTalkKey=0;_lblPttKey.Text="Add Key";_lblPttKey.BackColor=INPUT_BG;_lblPttKey.ForeColor=ACC;_capturingKey=false;if(_tglPtt.Checked){_loading=true;_tglPtt.Checked=false;_loading=false;_settings.PushToTalkEnabled=false;if(_onToggle!=null)_onToggle("ptt_off");}return;}
             // WinForms gives generic modifier VK codes (0x10=Shift, 0x11=Ctrl, 0x12=Alt)
             // but the low-level keyboard hook sees specific left/right codes (0xA0/0xA1, 0xA2/0xA3, 0xA4/0xA5).
             // Translate generic → left-specific so the hook can match.

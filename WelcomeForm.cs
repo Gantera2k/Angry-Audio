@@ -278,11 +278,11 @@ namespace AngryAudio
             // --- Help circles ---
             int helpX = 350;
             _card1.Controls.Add(MakeHelpCircle(helpX, y + 46,
-                "Best for gaming and voice calls.\nYour mic is completely silent until\nyou hold the key. Just like Discord.", _card1));
+                "Hold the key to unmute.\nRelease to mute.\nMic is silent by default.", _card1));
             _card1.Controls.Add(MakeHelpCircle(helpX, y + 88,
-                "Best if you talk a lot.\nYour mic stays open \u2014 hold the\nkey when you need to mute quickly.", _card1));
+                "Hold the key to mute.\nRelease to unmute.\nMic is open by default.", _card1));
             _card1.Controls.Add(MakeHelpCircle(helpX, y + 130,
-                "Best for meetings and streams.\nTap once to unmute, tap again\nto mute. No holding needed.", _card1));
+                "Tap to unmute. Tap again to mute.\nNo holding required.\nMic is silent by default.", _card1));
 
             CreateTips();
 
@@ -383,21 +383,6 @@ namespace AngryAudio
                 using (var f = new Font("Segoe UI", 8f)) using (var b = new SolidBrush(DarkTheme.Txt4))
                     g.DrawString("Angry Audio gradually fades your audio back when you return.", f, b, Dpi.S(20), ay + Dpi.S(132));
 
-                // === Subtle glow on first unset hotkey ===
-                // Draws a pulsing glow border around the first "Add Key" that needs setting
-                Label glowTarget = null;
-                if (_tglPtt.Checked && _pttKeyCode <= 0 && _lblPttKey != null) glowTarget = _lblPttKey;
-                else if (_tglPtm.Checked && _ptmKeyCode <= 0 && _lblPtmKey != null) glowTarget = _lblPtmKey;
-                else if (_tglPtToggle.Checked && _ptToggleKeyCode <= 0 && _lblPtToggleKey != null) glowTarget = _lblPtToggleKey;
-                else if (!_modeChosen && _lblPttKey != null) glowTarget = _lblPttKey;
-                if (glowTarget != null) {
-                    var r = glowTarget.Bounds;
-                    int pad = Dpi.S(3);
-                    float pulse = (float)((Math.Sin(_pulsePhase * 2.5) + 1.0) / 2.0); // faster pulse
-                    int alpha = (int)(40 + 60 * pulse);
-                    using (var pen = new Pen(Color.FromArgb(alpha, ACC.R, ACC.G, ACC.B), Dpi.PenW(2)))
-                        g.DrawRectangle(pen, r.X - pad, r.Y - pad, r.Width + pad * 2, r.Height + pad * 2);
-                }
             };
 
             var tip1 = MakeTipPanel();
