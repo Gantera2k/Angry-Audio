@@ -208,7 +208,7 @@ namespace AngryAudio
                 if (_pulsePhase > (float)(Math.PI * 2)) _pulsePhase -= (float)(Math.PI * 2);
                 footer.Invalidate();
                 // 1-2-3 flicker intro: runs for ~90 frames (2.7s at 30ms) then stops
-                if (_flickerFrame < 90) {
+                if (_flickerFrame < 170) {
                     _flickerFrame++;
                     if (_card1 != null && _card1.Visible) _card1.Invalidate(false);
                 }
@@ -386,22 +386,28 @@ namespace AngryAudio
                 using (var f = new Font("Segoe UI", 8f)) using (var b = new SolidBrush(DarkTheme.Txt4))
                     g.DrawString("Angry Audio gradually fades your audio back when you return.", f, b, Dpi.S(20), ay + Dpi.S(132));
 
-                // === 1-2-3 intro flicker — sequential glow on each Add Key box ===
-                // Frame timing: 15 delay, then 20 frames per box with 5 gap = 15+20+5+20+5+20 = 85 frames
-                if (_flickerFrame > 0 && _flickerFrame < 90) {
+                // === 1-2-3 intro glow — soft bloom on each Add Key box ===
+                // At 30ms/frame: 20 frame delay, then 40 frames per box (1.2s each), 10 frame gap
+                // Total: 20 + 40 + 10 + 40 + 10 + 40 = 160 frames (~4.8 seconds)
+                if (_flickerFrame > 0 && _flickerFrame < 170) {
                     Label[] targets = { _lblPttKey, _lblPtmKey, _lblPtToggleKey };
-                    int[] starts = { 15, 40, 65 }; // frame each box starts glowing
+                    int[] starts = { 20, 70, 120 };
+                    int dur = 40;
                     for (int i = 0; i < 3; i++) {
                         if (targets[i] == null) continue;
                         int localF = _flickerFrame - starts[i];
-                        if (localF < 0 || localF >= 20) continue;
-                        // Fade in then out over 20 frames
-                        float t = localF < 10 ? localF / 10f : (20 - localF) / 10f;
-                        int alpha = (int)(120 * t);
+                        if (localF < 0 || localF >= dur) continue;
+                        // Smooth sine curve: 0 → 1 → 0 over duration
+                        float t = (float)Math.Sin(localF * Math.PI / dur);
                         var r = targets[i].Bounds;
-                        int pad = Dpi.S(4);
-                        using (var pen = new Pen(Color.FromArgb(alpha, ACC.R, ACC.G, ACC.B), Dpi.PenW(2)))
-                            g.DrawRectangle(pen, r.X - pad, r.Y - pad, r.Width + pad * 2, r.Height + pad * 2);
+                        // Multi-layer soft glow — 4 layers expanding outward with decreasing opacity
+                        for (int layer = 0; layer < 4; layer++) {
+                            int pad = Dpi.S(3 + layer * 3);
+                            int alpha = (int)(t * (80 - layer * 18));
+                            if (alpha <= 0) continue;
+                            using (var brush = new SolidBrush(Color.FromArgb(alpha, ACC.R, ACC.G, ACC.B)))
+                                g.FillRectangle(brush, r.X - pad, r.Y - pad, r.Width + pad * 2, r.Height + pad * 2);
+                        }
                     }
                 }
 
