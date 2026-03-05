@@ -609,7 +609,7 @@ namespace AngryAudio
                 _settings.PushToTalkEnabled = _tglPtt.Checked; _settings.PushToTalkKey = _pttKeyCode; _settings.PushToTalkKey2 = _pttKeyCode2; _settings.PushToTalkKey3 = _pttKeyCode3;
                 if (_onToggle != null) _onToggle(_tglPtt.Checked ? "ptt_on" : "ptt_off");
             } };
-            y += 40;
+            y += 36;
             AddText(card, "Hotkey:", 64, y+3, 8f, TXT3);
             _lblPttKey = new Label{Text=_pttKeyCode > 0 ? PushToTalk.GetKeyName(_pttKeyCode) : "Add Key",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(100,28),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(120,y)};
             _lblPttKey.Paint += (s,e) => { using(var p=new Pen(Color.FromArgb(60,ACC.R,ACC.G,ACC.B))) e.Graphics.DrawRectangle(p,0,0,_lblPttKey.Width-1,_lblPttKey.Height-1); };
@@ -668,8 +668,8 @@ namespace AngryAudio
             _lblKey3Hint = new Label{Text="",Font=new Font("Segoe UI",7f),ForeColor=TXT4,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(258,y+6)}; card.Controls.Add(_lblKey3Hint);
             UpdateKey3Visibility();
 
-            y += 38;
-            AddLine(card, y); y += 16;
+            y += 30;
+            AddLine(card, y); y += 12;
 
             // --- PTM SECTION ---
             _tglPtm = Tgl("Enable Push-to-Mute", "Mic stays open \u2014 hold the hotkey to mute.", y, card);
@@ -678,7 +678,7 @@ namespace AngryAudio
                 _settings.PushToMuteEnabled = _tglPtm.Checked; _settings.PushToMuteKey = _ptmKeyCode;
                 if (_onToggle != null) _onToggle(_tglPtm.Checked ? "ptm_on" : "ptm_off");
             } };
-            y += 40;
+            y += 36;
             AddText(card, "Hotkey:", 64, y+3, 8f, TXT3);
             _lblPtmKey = new Label{Text=_ptmKeyCode > 0 ? PushToTalk.GetKeyName(_ptmKeyCode) : "Add Key",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(100,28),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(120,y)};
             _lblPtmKey.Paint += (s,e) => { using(var p=new Pen(Color.FromArgb(60,ACC.R,ACC.G,ACC.B))) e.Graphics.DrawRectangle(p,0,0,_lblPtmKey.Width-1,_lblPtmKey.Height-1); };
@@ -687,8 +687,8 @@ namespace AngryAudio
             _lblPtmKey.Click += (s,e) => StartPtmKeyCapture(); card.Controls.Add(_lblPtmKey);
             AddText(card, "Click to change", 226, y+6, 7f, TXT3);
 
-            y += 38;
-            AddLine(card, y); y += 16;
+            y += 30;
+            AddLine(card, y); y += 12;
 
             // --- TOGGLE SECTION ---
             _tglPtToggle = Tgl("Enable Push-to-Toggle", "Tap once to unmute, tap again to mute.", y, card);
@@ -697,7 +697,7 @@ namespace AngryAudio
                 _settings.PushToToggleEnabled = _tglPtToggle.Checked; _settings.PushToToggleKey = _ptToggleKeyCode;
                 if (_onToggle != null) _onToggle(_tglPtToggle.Checked ? "ptt_toggle_on" : "ptt_toggle_off");
             } };
-            y += 40;
+            y += 36;
             AddText(card, "Hotkey:", 64, y+3, 8f, TXT3);
             _lblPtToggleKey = new Label{Text=_ptToggleKeyCode > 0 ? PushToTalk.GetKeyName(_ptToggleKeyCode) : "Add Key",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(100,28),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(120,y)};
             _lblPtToggleKey.Paint += (s,e) => { using(var p=new Pen(Color.FromArgb(60,ACC.R,ACC.G,ACC.B))) e.Graphics.DrawRectangle(p,0,0,_lblPtToggleKey.Width-1,_lblPtToggleKey.Height-1); };

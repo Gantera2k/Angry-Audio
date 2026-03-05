@@ -242,7 +242,7 @@ namespace AngryAudio
             // ============================================================
             // Page 1: Single card — PTT + AFK (free features)
             // ============================================================
-            _card1 = MakeRoundCard(); _card1.Dock = DockStyle.Top; _card1.Height = Dpi.S(444);
+            _card1 = MakeRoundCard(); _card1.Dock = DockStyle.Top; _card1.Height = Dpi.S(396);
             int y = 14;
 
             // --- PTT row: toggle + inline key ---
@@ -289,7 +289,7 @@ namespace AngryAudio
 
             CreateTips();
 
-            int afkY = 262;
+            int afkY = 214;
             _tglAfkMic = new ToggleSwitch { Checked = true, Location = Dpi.Pt(20, afkY + 44) };
             _tglAfkMic.CheckedChanged += (s2, e2) => {
                 if (_onToggle != null) { _onToggle("afk_mic_sec:" + (int)_nudAfkMic.Value); _onToggle(_tglAfkMic.Checked ? "afk_mic_on" : "afk_mic_off"); }
@@ -354,10 +354,10 @@ namespace AngryAudio
                 using (var f = new Font("Segoe UI", 7f)) using (var b = new SolidBrush(Color.FromArgb(90, ACC.R, ACC.G, ACC.B)))
                     g.DrawString("Controls every mic on your system \u2014 headset, camera mic, USB devices.", f, b, Dpi.S(20), py + Dpi.S(170));
                 // Separator
-                int sepY = Dpi.S(248);
+                int sepY = Dpi.S(200);
                 using (var p = new Pen(CARD_BDR)) g.DrawLine(p, Dpi.S(20), sepY, _card1.Width - Dpi.S(20), sepY);
                 // AFK section
-                int ay = Dpi.S(262);
+                int ay = Dpi.S(214);
                 using (var f = new Font("Segoe UI", 10f, FontStyle.Bold)) using (var b = new SolidBrush(ACC))
                     g.DrawString("AFK Protection", f, b, Dpi.S(20), ay);
                 // Green shield badge — matches splash screen style
