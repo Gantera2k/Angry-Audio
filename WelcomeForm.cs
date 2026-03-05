@@ -386,27 +386,31 @@ namespace AngryAudio
                 using (var f = new Font("Segoe UI", 8f)) using (var b = new SolidBrush(DarkTheme.Txt4))
                     g.DrawString("Angry Audio gradually fades your audio back when you return.", f, b, Dpi.S(20), ay + Dpi.S(132));
 
-                // === 1-2-3 intro glow — soft bloom on each Add Key box ===
-                // At 30ms/frame: 20 frame delay, then 40 frames per box (1.2s each), 10 frame gap
-                // Total: 20 + 40 + 10 + 40 + 10 + 40 = 160 frames (~4.8 seconds)
+                // === 1-2-3 intro glow — soft bloom on each MODE SEGMENT ===
+                // Highlights the entire toggle row (toggle + label + hotkey) not just the key box
                 if (_flickerFrame > 0 && _flickerFrame < 170) {
-                    Label[] targets = { _lblPttKey, _lblPtmKey, _lblPtToggleKey };
+                    // Segment bounds: toggle.Top to key.Bottom, full card width
+                    ToggleSwitch[] toggles = { _tglPtt, _tglPtm, _tglPtToggle };
+                    Label[] keys = { _lblPttKey, _lblPtmKey, _lblPtToggleKey };
                     int[] starts = { 20, 70, 120 };
                     int dur = 40;
                     for (int i = 0; i < 3; i++) {
-                        if (targets[i] == null) continue;
+                        if (toggles[i] == null || keys[i] == null) continue;
                         int localF = _flickerFrame - starts[i];
                         if (localF < 0 || localF >= dur) continue;
-                        // Smooth sine curve: 0 → 1 → 0 over duration
                         float t = (float)Math.Sin(localF * Math.PI / dur);
-                        var r = targets[i].Bounds;
-                        // Multi-layer soft glow — 4 layers expanding outward with decreasing opacity
-                        for (int layer = 0; layer < 4; layer++) {
-                            int pad = Dpi.S(3 + layer * 3);
-                            int alpha = (int)(t * (80 - layer * 18));
+                        // Segment rectangle: from toggle top to key bottom, padded
+                        int segTop = toggles[i].Top - Dpi.S(4);
+                        int segBot = keys[i].Bottom + Dpi.S(4);
+                        int segLeft = Dpi.S(10);
+                        int segRight = _card1.Width - Dpi.S(10);
+                        // Multi-layer soft glow
+                        for (int layer = 0; layer < 3; layer++) {
+                            int expand = Dpi.S(layer * 2);
+                            int alpha = (int)(t * (50 - layer * 14));
                             if (alpha <= 0) continue;
                             using (var brush = new SolidBrush(Color.FromArgb(alpha, ACC.R, ACC.G, ACC.B)))
-                                g.FillRectangle(brush, r.X - pad, r.Y - pad, r.Width + pad * 2, r.Height + pad * 2);
+                                g.FillRectangle(brush, segLeft - expand, segTop - expand, segRight - segLeft + expand * 2, segBot - segTop + expand * 2);
                         }
                     }
                 }

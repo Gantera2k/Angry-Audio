@@ -1327,27 +1327,25 @@ namespace AngryAudio
                 bool on = eye.Checked;
                 Color col = on ? (hover ? Color.FromArgb(140,220,255) : ACC) : (hover ? Color.FromArgb(90,90,90) : Color.FromArgb(55,55,55));
                 float sc = Dpi.S(1);
-                // Ear shape — outer ear curve
-                using (var path = new System.Drawing.Drawing2D.GraphicsPath()) {
-                    path.AddBezier(cx+1*sc, cy+8*sc, cx-7*sc, cy+6*sc, cx-8*sc, cy-4*sc, cx-3*sc, cy-8*sc);
-                    path.AddBezier(cx-3*sc, cy-8*sc, cx+2*sc, cy-10*sc, cx+8*sc, cy-5*sc, cx+6*sc, cy+1*sc);
-                    path.AddBezier(cx+6*sc, cy+1*sc, cx+5*sc, cy+4*sc, cx+3*sc, cy+6*sc, cx+1*sc, cy+8*sc);
-                    using (var p = new Pen(col, 1.4f*sc)) g.DrawPath(p, path);
+                // Simple ear: C-shape arc + inner arc + optional sound wave
+                using (var p = new Pen(col, 1.5f*sc)) {
+                    // Outer ear — open arc facing right
+                    g.DrawArc(p, cx-8*sc, cy-8*sc, 14*sc, 16*sc, -120, 240);
+                    // Inner ear detail
+                    g.DrawArc(p, cx-4*sc, cy-4*sc, 7*sc, 8*sc, -100, 200);
                 }
                 if (on) {
-                    // Inner ear detail — small curve
-                    using (var p = new Pen(col, 1.2f*sc))
-                        g.DrawBezier(p, cx+3*sc, cy+2*sc, cx+1*sc, cy-1*sc, cx-2*sc, cy-3*sc, cx-1*sc, cy-5*sc);
-                    // Sound waves
-                    using (var p = new Pen(Color.FromArgb(120, col.R, col.G, col.B), 1f*sc)) {
-                        g.DrawArc(p, cx+5*sc, cy-4*sc, 5*sc, 8*sc, -60, 120);
+                    // Sound waves to the right
+                    using (var p = new Pen(Color.FromArgb(150, col.R, col.G, col.B), 1.2f*sc)) {
+                        g.DrawArc(p, cx+3*sc, cy-4*sc, 6*sc, 8*sc, -50, 100);
+                        g.DrawArc(p, cx+6*sc, cy-6*sc, 6*sc, 12*sc, -50, 100);
                     }
                 } else {
                     // Diagonal slash (muted)
-                    using (var p = new Pen(col, 1.6f*sc)) {
+                    using (var p = new Pen(col, 1.8f*sc)) {
                         p.StartCap = System.Drawing.Drawing2D.LineCap.Round;
                         p.EndCap = System.Drawing.Drawing2D.LineCap.Round;
-                        g.DrawLine(p, cx-7*sc, cy+5*sc, cx+7*sc, cy-5*sc);
+                        g.DrawLine(p, cx-6*sc, cy+6*sc, cx+8*sc, cy-6*sc);
                     }
                 }
             };
