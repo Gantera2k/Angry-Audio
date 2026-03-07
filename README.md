@@ -76,7 +76,7 @@ Angry Audio runs in your system tray as a small kitty icon. Double-click the kit
 
 ## Building from Source
 
-Angry Audio is written in C# using WinForms. It can be compiled with either Mono's `mcs` compiler or Microsoft's `csc.exe`.
+Angry Audio is written in C# using WinForms. It can be compiled with either Mono's `mcs` compiler or Microsoft's `csc.exe`. On Windows, just run `BUILD.bat`.
 
 ### Build the Application
 ```bash
