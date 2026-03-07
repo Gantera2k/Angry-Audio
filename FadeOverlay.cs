@@ -41,7 +41,7 @@ namespace AngryAudio
             DoubleBuffered = true;
             AutoScaleMode = AutoScaleMode.None;
             Opacity = 0;
-            ClientSize = Dpi.Size(300, 82);
+            ClientSize = Dpi.Size(300, 88);
 
             Resize += (s, e2) => ApplyRoundedRegion();
             Load += (s, e2) => ApplyRoundedRegion();
@@ -72,6 +72,9 @@ namespace AngryAudio
             if (!IsHandleCreated) CreateHandle();
             ShowWindow(Handle, 4);
             SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, 0x0010 | 0x0001 | 0x0002 | 0x0040);
+            var _reTop = new Timer { Interval = 100 };
+            _reTop.Tick += (s, e) => { _reTop.Stop(); _reTop.Dispose(); try { if (!IsDisposed) SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, 0x0010 | 0x0001 | 0x0002 | 0x0040); } catch { } };
+            _reTop.Start();
             _fadeInTimer.Start();
             _tickTimer.Start();
         }
@@ -151,7 +154,7 @@ namespace AngryAudio
                 g.DrawString(subtitle, f, b, textX, Dpi.S(23));
 
             // Volume progress bar — pill-shaped
-            int barX = textX, barY = Dpi.S(40), barW = w - textX - Dpi.S(12), barH = Dpi.S(8);
+            int barX = textX, barY = Dpi.S(42), barW = w - textX - Dpi.S(12), barH = Dpi.S(8);
             int barR = barH / 2;
 
             var trackPath = MakeRoundBar(barX, barY, barW, barH, barR);
@@ -164,12 +167,13 @@ namespace AngryAudio
             using (var b = new SolidBrush(accentColor)) g.FillPath(b, fillPath);
             fillPath.Dispose();
 
-            // Volume percentage
+            // Volume percentage + status on same line with proper spacing
+            int infoY = barY + barH + Dpi.S(6);
             Color pctColor = _isFadeOut ? AMBER : GREEN;
             string pctText = _isFadeOut ? (int)_current + "%" : (int)_current + "% / " + (int)_target + "%";
             using (var f = new Font("Segoe UI", 7.5f, FontStyle.Bold))
             using (var b = new SolidBrush(pctColor))
-                g.DrawString(pctText, f, b, barX, barY + barH + Dpi.S(3));
+                g.DrawString(pctText, f, b, barX, infoY);
 
             // Status text at bottom-right
             string statusText = _isFadeOut ? "Fading Out" : "Fading In";
@@ -177,7 +181,7 @@ namespace AngryAudio
             using (var b = new SolidBrush(TXT2))
             {
                 var sz = g.MeasureString(statusText, f);
-                g.DrawString(statusText, f, b, w - sz.Width - Dpi.S(10), barY + barH + Dpi.S(3));
+                g.DrawString(statusText, f, b, w - sz.Width - Dpi.S(10), infoY);
             }
         }
 

@@ -243,13 +243,15 @@ namespace AngryAudioInstaller
         {
             try
             {
-                using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("version.txt"))
+                // Try namespaced resource name first (mcs embeds as AngryAudio.version.txt)
+                var asm = Assembly.GetExecutingAssembly();
+                using (var stream = asm.GetManifestResourceStream("AngryAudio.version.txt") ?? asm.GetManifestResourceStream("version.txt"))
                     if (stream != null)
                         using (var reader = new StreamReader(stream))
                             return reader.ReadToEnd().Trim();
             }
             catch { }
-            return "53.8";
+            return AppVersion.Version;
         }
 
         string ReadRegistryInstallDir()
@@ -1067,7 +1069,7 @@ namespace AngryAudioInstaller
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) { _paintTimer?.Dispose(); _stars?.Dispose(); }
+            if (disposing) { if (_paintTimer != null) _paintTimer.Dispose(); if (_stars != null) _stars.Dispose(); }
             base.Dispose(disposing);
         }
     }

@@ -112,8 +112,7 @@ namespace AngryAudio
             }
             finally
             {
-                _mutex?.ReleaseMutex();
-                _mutex?.Dispose();
+                if (_mutex != null) { _mutex.ReleaseMutex(); _mutex.Dispose(); }
             }
         }
 
@@ -121,8 +120,7 @@ namespace AngryAudio
         {
             Logger.Error("Unhandled UI thread exception.", e.Exception);
             // Don't let the process become a zombie
-            try { _mutex?.ReleaseMutex(); } catch { }
-            try { _mutex?.Dispose(); } catch { }
+            if (_mutex != null) { try { _mutex.ReleaseMutex(); } catch { } try { _mutex.Dispose(); } catch { } }
             Environment.Exit(1);
         }
 
@@ -132,8 +130,7 @@ namespace AngryAudio
             if (ex != null) Logger.Error("Unhandled domain exception.", ex);
             else Logger.Error("Unhandled domain exception (non-Exception object).");
             // Don't let the process become a zombie
-            try { _mutex?.ReleaseMutex(); } catch { }
-            try { _mutex?.Dispose(); } catch { }
+            if (_mutex != null) { try { _mutex.ReleaseMutex(); } catch { } try { _mutex.Dispose(); } catch { } }
             Environment.Exit(1);
         }
     }

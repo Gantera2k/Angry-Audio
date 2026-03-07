@@ -34,6 +34,7 @@ namespace AngryAudio
         /// <summary>Delegate to paint parent card background for true transparency on starfield cards.</summary>
         public Action<Graphics, Control> PaintParentBg;
 
+
         void UpdateRegion() {
             int w = Width, h = Height;
             var path = new GraphicsPath();
@@ -92,6 +93,8 @@ namespace AngryAudio
         public event EventHandler ValueChanged;
         /// <summary>Fires once when the user releases the slider thumb — use for heavy operations like COM enforcement.</summary>
         public event EventHandler DragCompleted;
+        /// <summary>Fire DragCompleted from external card mouse handler.</summary>
+        public void FireDragCompleted() { if (DragCompleted != null) DragCompleted(this, EventArgs.Empty); }
         public int Minimum { get { return _min; } set { _min = value; InvalidateWithParent(); } }
         public int Maximum { get { return _max; } set { _max = value; InvalidateWithParent(); } }
         public int Value {
@@ -111,6 +114,7 @@ namespace AngryAudio
 
         // Delegate to paint parent card background for seamless transparency
         public Action<Graphics, Control> PaintParentBg;
+
 
         void InvalidateWithParent() {
             Invalidate();
@@ -279,7 +283,265 @@ namespace AngryAudio
         }
     }
 
-    class NudDefocusFilter : IMessageFilter {
+    /// <summary>CheckBox that draws ONLY its icon with no background. Parent content shows through because
+    /// we skip double-buffering (no private back buffer) and skip all background painting.</summary>
+    public class TransparentCheckBox : CheckBox
+    {
+        public Action<Graphics, Control> PaintParentBg;
+        /// <summary>Use this instead of Paint += to render the icon.</summary>
+        public event PaintEventHandler CardPaint;
+        public TransparentCheckBox()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.SupportsTransparentBackColor, true);
+            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.Opaque, false);
+            BackColor = Color.Transparent;
+            Appearance = Appearance.Button;
+            FlatStyle = FlatStyle.Flat;
+            FlatAppearance.BorderSize = 0;
+            FlatAppearance.CheckedBackColor = Color.Transparent;
+            FlatAppearance.MouseDownBackColor = Color.Transparent;
+            FlatAppearance.MouseOverBackColor = Color.Transparent;
+        }
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            // Skip — let parent content show through
+        }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            // Skip PaintParentBg — parent already painted the background including flash/effects
+            // Just draw the icon
+            if (CardPaint != null) CardPaint(this, e);
+        }
+    }
+
+    /// <summary>Lightweight icon button painted directly on a card — no child control, no compositing issues.
+    /// The card's Paint handler draws it, the card's mouse events handle clicks and hover.</summary>
+    public class CardIcon
+    {
+        public int W, H; // unscaled size
+        public bool Checked;
+        public bool Hover;
+        public bool IsEye; // true = eye icon, false = speaker icon
+        public bool IsLock; // true = lock icon (Checked=locked, unchecked=unlocked)
+        public Action<bool> OnChange;
+        public Panel Card;
+        // Pixel position (already DPI-scaled)
+        public int PixelX, PixelY;
+
+        public Rectangle Bounds { get { return new Rectangle(PixelX, PixelY, Dpi.S(W), Dpi.S(H)); } }
+
+        /// <summary>Set position from unscaled design coords (same as Dpi.Pt)</summary>
+        public void SetPos(int x, int y) { PixelX = Dpi.S(x); PixelY = Dpi.S(y); }
+
+        public bool HitTest(Point p) { return Bounds.Contains(p); }
+
+        public void Toggle() { Checked = !Checked; if (OnChange != null) OnChange(Checked); if (Card != null) Card.Invalidate(); }
+
+        public void Paint(Graphics g, Color accent) {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            var b = Bounds;
+            float cx = b.X + b.Width / 2f, cy = b.Y + b.Height / 2f;
+            Color col = Checked ? (Hover ? Color.FromArgb(140, 220, 255) : accent) : (Hover ? Color.FromArgb(90, 90, 90) : Color.FromArgb(55, 55, 55));
+            float sc = Dpi.S(1);
+            if (IsLock) PaintLock(g, cx, cy, Checked, col, sc);
+            else if (IsEye) PaintEye(g, cx, cy, Checked, col, sc);
+            else PaintSpeaker(g, cx, cy, Checked, col, sc);
+        }
+
+        static void PaintLock(Graphics g, float cx, float cy, bool locked, Color col, float sc) {
+            // Body: rounded rectangle
+            float bw = 8 * sc, bh = 6 * sc;
+            float bx = cx - bw / 2, by = cy - 1 * sc;
+            using (var br = new SolidBrush(col)) {
+                g.FillRectangle(br, bx, by, bw, bh);
+                // Rounded top corners
+                g.FillEllipse(br, bx, by - 0.5f * sc, 2 * sc, 2 * sc);
+                g.FillEllipse(br, bx + bw - 2 * sc, by - 0.5f * sc, 2 * sc, 2 * sc);
+            }
+            // Shackle: arc above body
+            float shW = 5 * sc, shH = 5 * sc;
+            float shX = cx - shW / 2, shY = by - shH + 1 * sc;
+            using (var p = new Pen(col, 1.5f * sc)) {
+                p.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                p.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                if (locked) {
+                    // Closed shackle — full arc
+                    g.DrawArc(p, shX, shY, shW, shH, 180, 180);
+                    g.DrawLine(p, shX, shY + shH / 2, shX, by);
+                    g.DrawLine(p, shX + shW, shY + shH / 2, shX + shW, by);
+                } else {
+                    // Open shackle — arc + right leg lifted
+                    g.DrawArc(p, shX, shY - 2 * sc, shW, shH, 180, 180);
+                    g.DrawLine(p, shX, shY - 2 * sc + shH / 2, shX, by);
+                }
+            }
+            // Keyhole dot
+            float kr = 1 * sc;
+            using (var br = new SolidBrush(Color.FromArgb(20, 20, 20)))
+                g.FillEllipse(br, cx - kr, by + bh * 0.3f, kr * 2, kr * 2);
+        }
+
+        static void PaintEye(Graphics g, float cx, float cy, bool on, Color col, float sc) {
+            float ew = 7 * sc;
+            using (var path = new System.Drawing.Drawing2D.GraphicsPath()) {
+                path.AddBezier(cx - ew, cy, cx - ew * 0.4f, cy - 6 * sc, cx + ew * 0.4f, cy - 6 * sc, cx + ew, cy);
+                path.AddBezier(cx + ew, cy, cx + ew * 0.4f, cy + 6 * sc, cx - ew * 0.4f, cy + 6 * sc, cx - ew, cy);
+                using (var p = new Pen(col, 1.5f * sc)) { p.StartCap = System.Drawing.Drawing2D.LineCap.Round; p.EndCap = System.Drawing.Drawing2D.LineCap.Round; g.DrawPath(p, path); }
+            }
+            if (on) { float pr = 2.5f * sc; using (var b = new SolidBrush(col)) g.FillEllipse(b, cx - pr, cy - pr, pr * 2, pr * 2); }
+            else { using (var p = new Pen(col, 1.5f * sc)) { p.StartCap = System.Drawing.Drawing2D.LineCap.Round; p.EndCap = System.Drawing.Drawing2D.LineCap.Round; g.DrawLine(p, cx - 6 * sc, cy + 6 * sc, cx + 6 * sc, cy - 6 * sc); } }
+        }
+
+        static void PaintSpeaker(Graphics g, float cx, float cy, bool on, Color col, float sc) {
+            float bx = cx - 7 * sc;
+            using (var b = new SolidBrush(col)) g.FillRectangle(b, bx, cy - 2 * sc, 2.5f * sc, 4 * sc);
+            var cone = new PointF[] { new PointF(bx + 2 * sc, cy - 2 * sc), new PointF(bx + 5.5f * sc, cy - 4.5f * sc), new PointF(bx + 5.5f * sc, cy + 4.5f * sc), new PointF(bx + 2 * sc, cy + 2 * sc) };
+            using (var b = new SolidBrush(col)) g.FillPolygon(b, cone);
+            if (on) {
+                using (var p = new Pen(Color.FromArgb(200, col.R, col.G, col.B), 1.2f * sc)) { p.StartCap = System.Drawing.Drawing2D.LineCap.Round; p.EndCap = System.Drawing.Drawing2D.LineCap.Round; g.DrawArc(p, bx + 6.5f * sc, cy - 2.5f * sc, 3 * sc, 5 * sc, -70, 140); }
+                using (var p = new Pen(Color.FromArgb(160, col.R, col.G, col.B), 1.1f * sc)) { p.StartCap = System.Drawing.Drawing2D.LineCap.Round; p.EndCap = System.Drawing.Drawing2D.LineCap.Round; g.DrawArc(p, bx + 8.5f * sc, cy - 4 * sc, 4 * sc, 8 * sc, -70, 140); }
+                using (var p = new Pen(Color.FromArgb(110, col.R, col.G, col.B), 1f * sc)) { p.StartCap = System.Drawing.Drawing2D.LineCap.Round; p.EndCap = System.Drawing.Drawing2D.LineCap.Round; g.DrawArc(p, bx + 10.5f * sc, cy - 5.5f * sc, 5 * sc, 11 * sc, -70, 140); }
+            } else {
+                using (var p = new Pen(col, 1.5f * sc)) { p.StartCap = System.Drawing.Drawing2D.LineCap.Round; p.EndCap = System.Drawing.Drawing2D.LineCap.Round; g.DrawLine(p, cx - 6 * sc, cy + 6 * sc, cx + 6 * sc, cy - 6 * sc); }
+            }
+        }
+    }
+
+    /// <summary>Visual toggle painted in card's Paint handler. Linked to a real (hidden) ToggleSwitch for state and events.</summary>
+    public class CardToggle
+    {
+        public int PixelX, PixelY;
+        public ToggleSwitch Source; // hidden control that holds state + events
+        public bool Hover;
+        public Panel Card;
+
+        public Rectangle Bounds { get { return new Rectangle(PixelX, PixelY, Dpi.S(40), Dpi.S(20)); } }
+        public bool HitTest(Point p) { return Bounds.Contains(p); }
+        public void Click() { if (Source != null) Source.Checked = !Source.Checked; if (Card != null) Card.Invalidate(); }
+
+        public void Paint(Graphics g, Color accent) {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            var r = Bounds;
+            int w = r.Width, h = r.Height;
+            bool on = Source != null && Source.Checked;
+            Color bg = on ? (Hover ? Color.FromArgb(130, 210, 255) : accent) : (Hover ? Color.FromArgb(90, 90, 90) : Color.FromArgb(55, 55, 55));
+            using (var b = new SolidBrush(bg)) {
+                g.FillEllipse(b, r.X, r.Y, h, h);
+                g.FillEllipse(b, r.X + w - h, r.Y, h, h);
+                g.FillRectangle(b, r.X + h / 2f, r.Y, w - h, h);
+            }
+            if (Hover) {
+                Color glowC = on ? accent : Color.FromArgb(120, 120, 120);
+                using (var p = new Pen(Color.FromArgb(50, glowC.R, glowC.G, glowC.B), 2f)) {
+                    g.DrawEllipse(p, r.X - 1, r.Y - 1, h + 2, h + 2);
+                    g.DrawEllipse(p, r.X + w - h - 1, r.Y - 1, h + 2, h + 2);
+                }
+            }
+            float kd = h - Dpi.S(4), kx = on ? r.X + w - kd - Dpi.S(2) : r.X + Dpi.S(2);
+            using (var b = new SolidBrush(Color.FromArgb(50, 0, 0, 0)))
+                g.FillEllipse(b, kx + 1, r.Y + Dpi.S(3), kd, kd);
+            using (var b = new SolidBrush(Color.White))
+                g.FillEllipse(b, kx, r.Y + Dpi.S(2), kd, kd);
+        }
+    }
+
+    /// <summary>Slider painted in card's Paint handler. Linked to a real (hidden) SlickSlider for state and events.
+    /// Card mouse handlers manage drag/hover — no child control, no stale background during animations.</summary>
+    public class CardSlider
+    {
+        public int PixelX, PixelY, PixelW, PixelH;
+        public SlickSlider Source; // hidden control that holds state + events
+        public bool Hover;
+        public bool Dragging;
+        public Panel Card;
+
+        static readonly Color TRACK_BG = Color.FromArgb(36, 36, 36);
+        static readonly Color FILL_CLR = DarkTheme.Accent;
+        static readonly Color THUMB_CLR = Color.White;
+
+        public Rectangle Bounds { get { return new Rectangle(PixelX, PixelY, PixelW, PixelH); } }
+        public bool HitTest(Point p) { return Bounds.Contains(p); }
+
+        int ThumbR { get { return Dpi.S(7); } }
+        int TrackH { get { return Dpi.S(4); } }
+        int TrackY { get { return PixelY + PixelH / 2; } }
+        int TrackLeft { get { return PixelX + ThumbR + 2; } }
+        int TrackRight { get { return PixelX + PixelW - ThumbR - 2; } }
+        float Pct { get { return Source != null && Source.Maximum > Source.Minimum ? (float)(Source.Value - Source.Minimum) / (Source.Maximum - Source.Minimum) : 0f; } }
+        int ThumbX { get { return TrackLeft + (int)((TrackRight - TrackLeft) * Pct); } }
+
+        public int XToValue(int x) {
+            float pct = (float)(x - TrackLeft) / Math.Max(1, TrackRight - TrackLeft);
+            pct = Math.Max(0f, Math.Min(1f, pct));
+            return Source.Minimum + (int)(pct * (Source.Maximum - Source.Minimum));
+        }
+
+        /// <summary>Returns true if point is near the thumb (for hover detection).</summary>
+        public bool ThumbHitTest(Point p) {
+            int dx = p.X - ThumbX, dy = p.Y - TrackY;
+            return dx * dx + dy * dy <= (ThumbR + Dpi.S(4)) * (ThumbR + Dpi.S(4));
+        }
+
+        public void Paint(Graphics g, Color accent) {
+            if (Source == null) return;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            int tl = TrackLeft, tr = TrackRight, ty = TrackY, th = TrackH, thr = ThumbR;
+            int tx = ThumbX;
+            bool enabled = Source.Enabled;
+            float dim = enabled ? 1.0f : 0.35f;
+
+            // Track background (pill shape)
+            using (var b = new SolidBrush(Color.FromArgb((int)(TRACK_BG.A * dim), TRACK_BG.R, TRACK_BG.G, TRACK_BG.B)))
+                FillPill(g, b, tl, ty - th/2, tr - tl, th);
+
+            // Filled portion
+            if (tx > tl + 2) {
+                using (var b = new SolidBrush(Color.FromArgb((int)(255 * dim), FILL_CLR.R, FILL_CLR.G, FILL_CLR.B)))
+                    FillPill(g, b, tl, ty - th/2, tx - tl, th);
+            }
+
+            // Thumb shadow
+            if (enabled) {
+                using (var b = new SolidBrush(Color.FromArgb(40, 0, 0, 0)))
+                    g.FillEllipse(b, tx - thr + 1, ty - thr + 1, thr * 2, thr * 2);
+            }
+
+            // Thumb hover glow
+            if (enabled && (Hover || Dragging)) {
+                int maxGlow = PixelH / 2 - 1;
+                int glowR = Math.Min(thr + Dpi.S(4), maxGlow);
+                using (var b = new SolidBrush(Color.FromArgb(60, accent.R, accent.G, accent.B)))
+                    g.FillEllipse(b, tx - glowR, ty - glowR, glowR * 2, glowR * 2);
+            }
+
+            // Thumb
+            int thumbAlpha = enabled ? 255 : 90;
+            using (var b = new SolidBrush(Color.FromArgb(thumbAlpha, THUMB_CLR.R, THUMB_CLR.G, THUMB_CLR.B)))
+                g.FillEllipse(b, tx - thr, ty - thr, thr * 2, thr * 2);
+
+            // Thumb accent dot
+            if (enabled) {
+                int dotR = Dpi.S(2);
+                using (var b = new SolidBrush(FILL_CLR))
+                    g.FillEllipse(b, tx - dotR, ty - dotR, dotR * 2, dotR * 2);
+            }
+        }
+
+        static void FillPill(Graphics g, Brush b, int x, int y, int w, int h) {
+            if (w < h) w = h;
+            if (w <= 0 || h <= 0) return;
+            var path = new System.Drawing.Drawing2D.GraphicsPath();
+            path.AddArc(x, y, h, h, 90, 180);
+            path.AddArc(x + w - h, y, h, h, 270, 180);
+            path.CloseFigure();
+            g.FillPath(b, path);
+            path.Dispose();
+        }
+    }
+
+    /// <summary>Message filter to defocus NumericUpDown when clicking elsewhere.</summary>
+    public class NudDefocusFilter : IMessageFilter
+    {
         private Form _form;
         public NudDefocusFilter(Form form) { _form = form; }
         public bool PreFilterMessage(ref Message m) {
@@ -392,7 +654,7 @@ namespace AngryAudio
                 using (var b = new SolidBrush(DarkTheme.Accent)) g.DrawString("Audio", f, b, tx + sz1.Width, titleY);
             }
 
-            // Version pill + copyright on same line
+            // Version pill + copyright
             int infoY = titleY + Dpi.S(28);
             using (var f = new Font("Segoe UI", 6.5f)) {
                 string vTxt = "v" + AppVersion.Version + "  \u00B7  " + AppVersion.Copyright;
@@ -423,7 +685,7 @@ namespace AngryAudio
             }
 
             // Two-column status: AFK PROTECTION | ENFORCEMENT
-            int colY = pttY + Dpi.S(42);
+            int colY = pttY + Dpi.S(46);
             int colMargin = Dpi.S(12);
             int colW = (w - colMargin * 2) / 2;
             int col1X = colMargin;
@@ -522,7 +784,7 @@ namespace AngryAudio
         }
         protected override bool ShowWithoutActivation { get { return true; } }
         protected override CreateParams CreateParams { get { var cp = base.CreateParams; cp.ExStyle |= 0x00000008 | 0x08000000 | 0x00000080; return cp; } }
-        protected override void Dispose(bool d) { if (d) { _fadeTimer?.Dispose(); _closeTimer?.Dispose(); } base.Dispose(d); }
+        protected override void Dispose(bool d) { if (d) { if (_fadeTimer != null) _fadeTimer.Dispose(); if (_closeTimer != null) _closeTimer.Dispose(); } base.Dispose(d); }
     }
 
 }

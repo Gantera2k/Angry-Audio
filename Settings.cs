@@ -36,15 +36,25 @@ namespace AngryAudio
         public int PushToTalkKey2 { get; set; }
         public int PushToTalkKey3 { get; set; }
         public int PushToMuteKey { get; set; }
+        public int PushToMuteKey2 { get; set; }
+        public int PushToMuteKey3 { get; set; }
         public int PushToToggleKey { get; set; }
+        public int PushToToggleKey2 { get; set; }
+        public int PushToToggleKey3 { get; set; }
         public bool PttKey1ShowOverlay { get; set; }
         public bool PttKey2ShowOverlay { get; set; }
         public bool PttKey3ShowOverlay { get; set; }
+        public bool PtmShowOverlay { get; set; }
+        public bool PtToggleShowOverlay { get; set; }
         public bool PushToTalkConsumeKey { get; set; }
         public bool PushToToggleEnabled { get; set; }
         public bool PushToMuteEnabled { get; set; }
         public bool MicOverlayEnabled { get; set; }
         public bool PttSoundFeedback { get; set; }
+        public bool PtmSoundFeedback { get; set; }
+        public bool PtToggleSoundFeedback { get; set; }
+        public int SoundFeedbackType { get; set; } // 0=soft click, 1=double tap, 2=chirp, 3=radio, 4=chime, 5=subtle pop, 6=custom
+        public string CustomSoundPath { get; set; }
 
         // Per-app volume enforcement
         // Key = process name (lowercase, no .exe), Value = target volume percent
@@ -52,8 +62,8 @@ namespace AngryAudio
         public bool AppVolumeEnforceEnabled { get; set; }
         public int AppVolumeEnforceIntervalSec { get; set; }
         public int LastActivePane { get; set; }
-        public int LastWindowX { get; set; } = -1;
-        public int LastWindowY { get; set; } = -1;
+        public int LastWindowX { get; set; }
+        public int LastWindowY { get; set; }
 
         private static readonly string AppDataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -76,7 +86,7 @@ namespace AngryAudio
             SpeakerEnforceEnabled = false;
             SpeakerVolumePercent = 100;
             SpeakerEnforceIntervalSec = 60;
-            AfkMicMuteEnabled = true;
+            AfkMicMuteEnabled = false;
             AfkMicMuteSec = 10;
             AfkSpeakerMuteEnabled = false;
             AfkSpeakerMuteSec = 10;
@@ -89,18 +99,30 @@ namespace AngryAudio
             PushToTalkKey2 = 0;  // disabled by default
             PushToTalkKey3 = 0;
             PushToMuteKey = 0;
+            PushToMuteKey2 = 0;
+            PushToMuteKey3 = 0;
             PushToToggleKey = 0;
+            PushToToggleKey2 = 0;
+            PushToToggleKey3 = 0;
             PttKey1ShowOverlay = true;
             PttKey2ShowOverlay = true;
             PttKey3ShowOverlay = true;
+            PtmShowOverlay = true;
+            PtToggleShowOverlay = true;
             PushToTalkConsumeKey = false;
             PushToToggleEnabled = false;
             PushToMuteEnabled = false;
             MicOverlayEnabled = true;
             PttSoundFeedback = false;
+            PtmSoundFeedback = false;
+            PtToggleSoundFeedback = false;
+            SoundFeedbackType = 0;
+            CustomSoundPath = "";
             AppVolumeRules = new Dictionary<string, int>();
             AppVolumeEnforceEnabled = false;
             AppVolumeEnforceIntervalSec = 5;
+            LastWindowX = -1;
+            LastWindowY = -1;
         }
 
         public void Validate()
@@ -163,16 +185,29 @@ namespace AngryAudio
                 if (values.ContainsKey("pttKey1ShowOverlay")) settings.PttKey1ShowOverlay = ParseBool(values["pttKey1ShowOverlay"]);
                 if (values.ContainsKey("pttKey2ShowOverlay")) settings.PttKey2ShowOverlay = ParseBool(values["pttKey2ShowOverlay"]);
                 if (values.ContainsKey("pttKey3ShowOverlay")) settings.PttKey3ShowOverlay = ParseBool(values["pttKey3ShowOverlay"]);
+                if (values.ContainsKey("ptmShowOverlay")) settings.PtmShowOverlay = ParseBool(values["ptmShowOverlay"]);
+                if (values.ContainsKey("ptToggleShowOverlay")) settings.PtToggleShowOverlay = ParseBool(values["ptToggleShowOverlay"]);
                 if (values.ContainsKey("pushToTalkConsumeKey")) settings.PushToTalkConsumeKey = ParseBool(values["pushToTalkConsumeKey"]);
                 if (values.ContainsKey("pushToToggleEnabled")) settings.PushToToggleEnabled = ParseBool(values["pushToToggleEnabled"]);
                 if (values.ContainsKey("pushToMuteEnabled")) settings.PushToMuteEnabled = ParseBool(values["pushToMuteEnabled"]);
                 if (values.ContainsKey("pushToMuteKey")) settings.PushToMuteKey = ParseInt(values["pushToMuteKey"], 0);
+                if (values.ContainsKey("pushToMuteKey2")) settings.PushToMuteKey2 = ParseInt(values["pushToMuteKey2"], 0);
+                if (values.ContainsKey("pushToMuteKey3")) settings.PushToMuteKey3 = ParseInt(values["pushToMuteKey3"], 0);
                 if (values.ContainsKey("pushToToggleKey")) settings.PushToToggleKey = ParseInt(values["pushToToggleKey"], 0);
+                if (values.ContainsKey("pushToToggleKey2")) settings.PushToToggleKey2 = ParseInt(values["pushToToggleKey2"], 0);
+                if (values.ContainsKey("pushToToggleKey3")) settings.PushToToggleKey3 = ParseInt(values["pushToToggleKey3"], 0);
                 if (values.ContainsKey("micOverlayEnabled")) settings.MicOverlayEnabled = ParseBool(values["micOverlayEnabled"]);
                 if (values.ContainsKey("pttSoundFeedback")) settings.PttSoundFeedback = ParseBool(values["pttSoundFeedback"]);
+                if (values.ContainsKey("ptmSoundFeedback")) settings.PtmSoundFeedback = ParseBool(values["ptmSoundFeedback"]);
+                if (values.ContainsKey("ptToggleSoundFeedback")) settings.PtToggleSoundFeedback = ParseBool(values["ptToggleSoundFeedback"]);
+                if (values.ContainsKey("soundFeedbackType")) settings.SoundFeedbackType = ParseInt(values["soundFeedbackType"], 0);
+                if (values.ContainsKey("customSoundPath")) settings.CustomSoundPath = values["customSoundPath"].Trim(new char[]{'"'});
                 if (values.ContainsKey("appVolumeEnforceEnabled")) settings.AppVolumeEnforceEnabled = ParseBool(values["appVolumeEnforceEnabled"]);
                 if (values.ContainsKey("appVolumeEnforceIntervalSec")) settings.AppVolumeEnforceIntervalSec = ParseInt(values["appVolumeEnforceIntervalSec"], 5);
                 if (values.ContainsKey("appVolumeRules")) settings.AppVolumeRules = ParseAppRules(values["appVolumeRules"]);
+                if (values.ContainsKey("lastWindowX")) settings.LastWindowX = ParseInt(values["lastWindowX"], -1);
+                if (values.ContainsKey("lastWindowY")) settings.LastWindowY = ParseInt(values["lastWindowY"], -1);
+                if (values.ContainsKey("lastActivePane")) settings.LastActivePane = ParseInt(values["lastActivePane"], 0);
 
                 settings.Validate();
                 Logger.Info("Settings loaded from " + SettingsFilePath);
@@ -228,15 +263,28 @@ namespace AngryAudio
                 sb.AppendLine(JsonField("pttKey1ShowOverlay", PttKey1ShowOverlay) + ",");
                 sb.AppendLine(JsonField("pttKey2ShowOverlay", PttKey2ShowOverlay) + ",");
                 sb.AppendLine(JsonField("pttKey3ShowOverlay", PttKey3ShowOverlay) + ",");
+                sb.AppendLine(JsonField("ptmShowOverlay", PtmShowOverlay) + ",");
+                sb.AppendLine(JsonField("ptToggleShowOverlay", PtToggleShowOverlay) + ",");
                 sb.AppendLine(JsonField("pushToTalkConsumeKey", PushToTalkConsumeKey) + ",");
                 sb.AppendLine(JsonField("pushToToggleEnabled", PushToToggleEnabled) + ",");
                 sb.AppendLine(JsonField("pushToMuteEnabled", PushToMuteEnabled) + ",");
                 sb.AppendLine(JsonField("pushToMuteKey", PushToMuteKey) + ",");
+                sb.AppendLine(JsonField("pushToMuteKey2", PushToMuteKey2) + ",");
+                sb.AppendLine(JsonField("pushToMuteKey3", PushToMuteKey3) + ",");
                 sb.AppendLine(JsonField("pushToToggleKey", PushToToggleKey) + ",");
+                sb.AppendLine(JsonField("pushToToggleKey2", PushToToggleKey2) + ",");
+                sb.AppendLine(JsonField("pushToToggleKey3", PushToToggleKey3) + ",");
                 sb.AppendLine(JsonField("micOverlayEnabled", MicOverlayEnabled) + ",");
                 sb.AppendLine(JsonField("pttSoundFeedback", PttSoundFeedback) + ",");
+                sb.AppendLine(JsonField("ptmSoundFeedback", PtmSoundFeedback) + ",");
+                sb.AppendLine(JsonField("ptToggleSoundFeedback", PtToggleSoundFeedback) + ",");
+                sb.AppendLine(JsonField("soundFeedbackType", SoundFeedbackType) + ",");
+                sb.AppendLine(JsonFieldStr("customSoundPath", CustomSoundPath ?? "") + ",");
                 sb.AppendLine(JsonField("appVolumeEnforceEnabled", AppVolumeEnforceEnabled) + ",");
                 sb.AppendLine(JsonField("appVolumeEnforceIntervalSec", AppVolumeEnforceIntervalSec) + ",");
+                sb.AppendLine(JsonField("lastWindowX", LastWindowX) + ",");
+                sb.AppendLine(JsonField("lastWindowY", LastWindowY) + ",");
+                sb.AppendLine(JsonField("lastActivePane", LastActivePane) + ",");
                 sb.AppendLine(JsonFieldStr("appVolumeRules", SerializeAppRules(AppVolumeRules)));
                 sb.AppendLine("}");
 
@@ -340,7 +388,7 @@ namespace AngryAudio
         private static int ParseInt(string value, int defaultValue)
         {
             int result;
-            if (int.TryParse(value?.Trim(), out result))
+            if (value != null && int.TryParse(value.Trim(), out result))
                 return result;
             return defaultValue;
         }

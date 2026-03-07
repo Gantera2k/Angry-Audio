@@ -78,27 +78,23 @@ Angry Audio runs in your system tray as a small kitty icon. Double-click the kit
 
 Angry Audio is written in C# using WinForms. It can be compiled with either Mono's `mcs` compiler or Microsoft's `csc.exe`.
 
-### Quick Build (Windows with .NET SDK)
-```
-BUILD.bat
-```
-
-### Manual Build (Mono)
+### Build the Application
 ```bash
 mcs -target:winexe -out:"Angry Audio.exe" \
-  -r:System.dll -r:System.Drawing.dll -r:System.Windows.Forms.dll \
+  -r:System.dll -r:System.Drawing.dll -r:System.Windows.Forms.dll -r:Microsoft.CSharp.dll \
   -win32icon:"Angry Audio.ico" \
-  AppVersion.cs Audio.cs Controls.cs CorrectionToast.cs \
+  Toast.cs AudioSettings.cs AppVersion.cs Audio.cs Controls.cs CorrectionToast.cs \
   DarkTheme.cs DarkMessage.cs StarRenderer.cs StarBackground.cs \
   Dpi.cs FadeOverlay.cs InstanceDialog.cs Logger.cs Mascot.cs \
   MicStatusOverlay.cs OptionsForm.cs Program.cs PushToTalk.cs \
   Settings.cs ToastStack.cs TrayApp.cs UpdateDialog.cs WelcomeForm.cs
 ```
 
-### Building the Installer
+### Build the Installer
+Build the main exe first — the installer embeds it as a resource.
 ```bash
 mcs -target:winexe -out:"Angry_Audio_Setup.exe" \
-  -r:System.dll -r:System.Drawing.dll -r:System.Windows.Forms.dll \
+  -r:System.dll -r:System.Drawing.dll -r:System.Windows.Forms.dll -r:Microsoft.CSharp.dll \
   -win32icon:"Angry Audio.ico" \
   -resource:"Angry Audio.exe",app.exe \
   -resource:"Angry Audio.ico",app.ico \

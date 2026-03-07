@@ -101,7 +101,7 @@ namespace AngryAudio
             var wa = Screen.PrimaryScreen.WorkingArea;
             int gap = Dpi.S(Gap);
             int margin = Dpi.S(4);
-            int bottomMargin = Dpi.S(4); // tight margin from bottom of working area
+            int bottomMargin = Dpi.S(8); // margin from bottom of working area (above taskbar)
             int y = wa.Bottom - bottomMargin;
 
             // Stack from bottom: newest toast at bottom, older ones pushed up

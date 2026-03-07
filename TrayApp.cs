@@ -37,6 +37,7 @@ namespace AngryAudio
         private System.Threading.Timer _pttSafetyTimer;
         private bool _pollFast;
         private Settings _settings;
+        private AudioSettings _audio;
         private bool _isPaused;
         private bool _disposed;
         private bool _openSettingsOnStart;
@@ -77,9 +78,9 @@ namespace AngryAudio
         private int _spkPreLockVol = -1;
         private System.Threading.Timer _restoreMicTimer;
         private System.Threading.Timer _restoreSpkTimer;
-        private const int FadeSteps = 20;             // 20 steps (5% per step) — smooth
-        private const int FadeInStepMs = 100;         // 2 seconds total fade-in (100ms * 20)
-        private const int FadeOutStepMs = 100;        // 2 seconds total fade-out (100ms * 20)
+        private const int FadeSteps = 10;              // 10 steps (10% per step) — clean
+        private const int FadeInStepMs = 300;          // 3 seconds total fade-in (300ms * 10)
+        private const int FadeOutStepMs = 300;         // 3 seconds total fade-out (300ms * 10)
         private float _fadeOutStepSize;               // Calculated per-fade from pre-fade volume
         private float _fadeInStepSize;                // Calculated per-fade from target volume
         private DateTime _lastMicFadeStep = DateTime.MinValue;
@@ -114,6 +115,9 @@ namespace AngryAudio
 
             // Load settings
             _settings = Settings.Load();
+            _audio = new AudioSettings(_settings);
+            _audio.Changed += OnAudioSettingsChanged;
+            _audio.CaptureStateChanged += (capturing) => { if (_pushToTalk != null) _pushToTalk.SuspendHook = capturing; };
 
             // Build icons and tray icon FIRST — user needs to see we're alive
             BuildIcons();
@@ -202,6 +206,9 @@ namespace AngryAudio
                 EnablePtt();
             }
 
+            // Mic warning poller — checks every 500ms if mic is unprotected, shows/hides warning
+            StartMicWarningPoller();
+
             // Set up the kill event for --kill support
             _killEvent = new EventWaitHandle(false, EventResetMode.AutoReset, "Global\\Angry_Audio_Kill_Event");
             var killThread = new System.Threading.Thread(WaitForKillSignal)
@@ -214,6 +221,9 @@ namespace AngryAudio
             // Enforce immediately on startup (Rule #3)
             if (!_isPaused)
             {
+                // Snapshot current volumes before enforcement locks them
+                if (_settings.MicEnforceEnabled) { try { _micPreLockVol = (int)Audio.GetMicVolume(); } catch { _micPreLockVol = -1; } }
+                if (_settings.SpeakerEnforceEnabled) { try { _spkPreLockVol = (int)Audio.GetSpeakerVolume(); } catch { _spkPreLockVol = -1; } }
                 EnforceMic(true);
                 EnforceSpeaker(true);
             }
@@ -332,36 +342,8 @@ namespace AngryAudio
                     catch (Exception ex) { Logger.Error("Mic listener check failed", ex); }
                 }
 
-                // Push-to-talk auto-sync (detect live setting changes from Options)
-                if (_pushToTalk != null)
-                {
-                    bool pttWanted = _settings.PushToTalkEnabled || _settings.PushToToggleEnabled || _settings.PushToMuteEnabled;
-                    bool pttActive = _pushToTalk.Enabled;
-                    if (pttWanted && !pttActive)
-                    {
-                        EnablePtt();
-                    }
-                    else if (!pttWanted && pttActive)
-                    {
-                        DisablePtt();
-                        Audio.SetMicMute(false);
-                        if (_micStatus != null && !_micStatus.IsDisposed)
-                            _micStatus.ShowMicOpenIdle();
-                    }
-                    else if (pttActive)
-                    {
-                        // Detect mode change — restart if mode doesn't match settings
-                        bool needRestart = false;
-                        if (_settings.PushToToggleEnabled && !_pushToTalk.IsToggleMode) needRestart = true;
-                        if (_settings.PushToMuteEnabled && !_pushToTalk.IsPushToMuteMode) needRestart = true;
-                        if (_settings.PushToTalkEnabled && (_pushToTalk.IsToggleMode || _pushToTalk.IsPushToMuteMode)) needRestart = true;
-                        if (needRestart)
-                        {
-                            DisablePtt();
-                            EnablePtt();
-                        }
-                    }
-                }
+                // Push-to-talk auto-sync removed — OnAudioSettingsChanged handles all mode changes now.
+                // Only keep the safety check for EnforceMute.
 
                 // Push-to-talk enforcement — keeps mic muted when key not held
                 if (_pushToTalk != null && _pushToTalk.Enabled)
@@ -379,11 +361,11 @@ namespace AngryAudio
             bool enforceEnabled, int enforcePercent,
             bool afkEnabled, int afkSec)
         {
-            ref AfkState afkState = ref (isMic ? ref _micAfkState : ref _speakerAfkState);
-            ref DateTime lastEnforce = ref (isMic ? ref _lastMicEnforce : ref _lastSpeakerEnforce);
-            ref float fadeCurrentPercent = ref (isMic ? ref _micFadeCurrentPercent : ref _speakerFadeCurrentPercent);
-            ref float fadeTargetPercent = ref (isMic ? ref _micFadeTargetPercent : ref _speakerFadeTargetPercent);
-            ref DateTime lastFadeStep = ref (isMic ? ref _lastMicFadeStep : ref _lastSpeakerFadeStep);
+            AfkState afkState = isMic ? _micAfkState : _speakerAfkState;
+            DateTime lastEnforce = isMic ? _lastMicEnforce : _lastSpeakerEnforce;
+            float fadeCurrentPercent = isMic ? _micFadeCurrentPercent : _speakerFadeCurrentPercent;
+            float fadeTargetPercent = isMic ? _micFadeTargetPercent : _speakerFadeTargetPercent;
+            DateTime lastFadeStep = isMic ? _lastMicFadeStep : _lastSpeakerFadeStep;
 
             long afkThresholdMs = afkSec * 1000L;
             bool userIsIdle = afkEnabled && afkSec > 0 && idleMs >= afkThresholdMs;
@@ -567,6 +549,10 @@ namespace AngryAudio
             }
             }
             catch (Exception ex) { Logger.Error("ProcessDevice(" + (isMic ? "mic" : "spk") + ") failed.", ex); }
+
+            // Write back modified state to fields
+            if (isMic) { _micAfkState = afkState; _lastMicEnforce = lastEnforce; _micFadeCurrentPercent = fadeCurrentPercent; _micFadeTargetPercent = fadeTargetPercent; _lastMicFadeStep = lastFadeStep; }
+            else { _speakerAfkState = afkState; _lastSpeakerEnforce = lastEnforce; _speakerFadeCurrentPercent = fadeCurrentPercent; _speakerFadeTargetPercent = fadeTargetPercent; _lastSpeakerFadeStep = lastFadeStep; }
         }
 
         // --- Enforcement ---
@@ -585,22 +571,20 @@ namespace AngryAudio
 
                 float targetVol = _settings.MicVolumePercent;
 
-                // Only enforce volume if PTT/Toggle isn't actively muting
-                if (!pttMuting && Math.Abs(currentVol - targetVol) > 0.5f)
+                // Always enforce volume level (even during PTT mute — so volume is correct when mic opens)
+                if (Math.Abs(currentVol - targetVol) > 0.5f)
                 {
                     Audio.SetMicVolume(targetVol);
 
-                    if (!isStartup && _settings.NotifyOnCorrection && CanNotify(ref _lastMicCorrectionNotify))
+                    if (!isStartup && !pttMuting && _settings.NotifyOnCorrection && CanNotify(ref _lastMicCorrectionNotify))
                     {
-                        ShowCorrectionToast("Mic Volume Locked at " + (int)targetVol + "%" + " \u2014 Another app tried to change it");
+                        ShowCorrectionToast("Mic Volume Locked at " + (int)targetVol + "%" + " \u2014 Another app tried to change it", false, true, false);
                     }
 
                     Logger.Info("Mic enforced: " + (int)currentVol + "% → " + (int)targetVol + "%");
                 }
 
-                // Always clear mute flag when enforcing (unless AFK/PTT is intentionally muting)
-                // Bug fix: GetMicMute() checks mute AND volume, so after SetMicVolume(100%)
-                // it returns false even when the mute FLAG is still set. Use IsMicMuteFlagSet() instead.
+                // Clear mute flag ONLY if PTT isn't actively muting and AFK isn't muting
                 if (!pttMuting && Audio.IsMicMuteFlagSet())
                 {
                     if (_micAfkState != AfkState.AfkMuted && _micAfkState != AfkState.FadingOut)
@@ -629,7 +613,7 @@ namespace AngryAudio
 
                     if (!isStartup && _settings.NotifyOnCorrection && CanNotify(ref _lastSpeakerCorrectionNotify))
                     {
-                        ShowCorrectionToast("Speaker Volume Locked at " + (int)targetVol + "%" + " \u2014 Another app tried to change it");
+                        ShowCorrectionToast("Speaker Volume Locked at " + (int)targetVol + "%" + " \u2014 Another app tried to change it", false, false, true);
                     }
 
                     Logger.Info("Speaker enforced: " + (int)currentVol + "% → " + (int)targetVol + "%");
@@ -660,8 +644,8 @@ namespace AngryAudio
             if (target < 0) return; // No snapshot — nothing to restore
 
             // Kill any existing restore timer for this channel
-            if (isMic) { _restoreMicTimer?.Dispose(); _restoreMicTimer = null; }
-            else { _restoreSpkTimer?.Dispose(); _restoreSpkTimer = null; }
+            if (isMic) { if (_restoreMicTimer != null) { _restoreMicTimer.Dispose(); _restoreMicTimer = null; } }
+            else { if (_restoreSpkTimer != null) { _restoreSpkTimer.Dispose(); _restoreSpkTimer = null; } }
 
             float current;
             try { current = isMic ? Audio.GetMicVolume() : Audio.GetSpeakerVolume(); }
@@ -693,8 +677,8 @@ namespace AngryAudio
                     }
                     catch { }
 
-                    if (isMic) { _micPreLockVol = -1; _restoreMicTimer?.Dispose(); _restoreMicTimer = null; }
-                    else { _spkPreLockVol = -1; _restoreSpkTimer?.Dispose(); _restoreSpkTimer = null; }
+                    if (isMic) { _micPreLockVol = -1; if (_restoreMicTimer != null) { _restoreMicTimer.Dispose(); _restoreMicTimer = null; } }
+                    else { _spkPreLockVol = -1; if (_restoreSpkTimer != null) { _restoreSpkTimer.Dispose(); _restoreSpkTimer = null; } }
                     return;
                 }
 
@@ -902,7 +886,7 @@ namespace AngryAudio
                         {
                             overlay.FadeOutAndClose();
                             // ExitThread after a delay to let fade complete
-                            _ = new System.Threading.Timer(_ => { try { Application.ExitThread(); } catch { } }, null, 500, System.Threading.Timeout.Infinite);
+                            var dummy = new System.Threading.Timer((state) => { try { Application.ExitThread(); } catch { } }, null, 500, System.Threading.Timeout.Infinite);
                         }
                         catch { }
                         Logger.Info("FadeOverlay disposed.");
@@ -1184,21 +1168,51 @@ namespace AngryAudio
             int pttKey = _settings.PushToTalkEnabled ? _settings.PushToTalkKey : 0;
             int ptmKey = _settings.PushToMuteEnabled ? _settings.PushToMuteKey : 0;
             int toggleKey = _settings.PushToToggleEnabled ? _settings.PushToToggleKey : 0;
-            _pushToTalk.EnableMultiMode(pttKey, ptmKey, toggleKey, _settings.PushToTalkConsumeKey, _settings.PushToTalkKey2, _settings.PushToTalkKey3);
+            _pushToTalk.EnableMultiMode(pttKey, ptmKey, toggleKey, _settings.PushToTalkConsumeKey, _settings.PushToTalkKey2, _settings.PushToTalkKey3, _settings.PushToMuteKey2, _settings.PushToMuteKey3, _settings.PushToToggleKey2, _settings.PushToToggleKey3);
+            // Explicitly sync system mic state to match chosen mode
+            try {
+                if (_settings.PushToTalkEnabled || _settings.PushToToggleEnabled) {
+                    Audio.SetMicMute(true);
+                } else if (_settings.PushToMuteEnabled) {
+                    Audio.SetMicMute(false);
+                }
+            } catch { }
             // Show correct overlay state
             if (_micStatus != null && !_micStatus.IsDisposed)
             {
-                if (ptmKey > 0 && pttKey <= 0)
-                    _micStatus.ShowMicOpenIdle();
+                _micStatus.UseExtendedDelay();
+                bool hasPtt = pttKey > 0 || _settings.PushToTalkKey2 > 0 || _settings.PushToTalkKey3 > 0;
+                bool hasPtm = ptmKey > 0 || _settings.PushToMuteKey2 > 0;
+                bool hasToggle = toggleKey > 0 || _settings.PushToToggleKey2 > 0;
+
+                bool idleEnabled = false;
+                if (hasPtt && _settings.PttKey1ShowOverlay) idleEnabled = true;
+                if (hasPtm && _settings.PtmShowOverlay) idleEnabled = true;
+                if (hasToggle && _settings.PtToggleShowOverlay) idleEnabled = true;
+
+                if (!idleEnabled)
+                {
+                    _micStatus.HideOverlay();
+                }
                 else
-                    _micStatus.ShowMicClosed();
+                {
+                    if (hasPtm && !hasPtt && !hasToggle)
+                        _micStatus.ShowMicOpenIdle();
+                    else
+                        _micStatus.ShowMicClosed();
+                }
             }
         }
 
         private void DisablePtt()
         {
             if (_pushToTalk == null) return;
+            _pushToTalk.OnTalkStart -= OnPttTalkStart;
+            _pushToTalk.OnTalkStop -= OnPttTalkStop;
             _pushToTalk.Disable();
+            // Safety: always unmute when engine stops
+            try { Audio.SetMicMute(false); } catch { }
+            Logger.Info("PTT engine disabled + mic unmuted.");
         }
 
         // --- Push-to-Talk Events ---
@@ -1210,19 +1224,25 @@ namespace AngryAudio
 
         private bool ShouldShowOverlayForKey()
         {
-            if (_pushToTalk == null) return true;
-            int key = _pushToTalk.LastTriggeredKey;
-            if (key == _settings.PushToTalkKey) return _settings.PttKey1ShowOverlay;
-            if (key == _settings.PushToTalkKey2) return _settings.PttKey2ShowOverlay;
-            if (key == _settings.PushToTalkKey3) return _settings.PttKey3ShowOverlay;
+            if (_pushToTalk == null) return false;
+            int mode = _pushToTalk.ActiveMode;
+            if (mode == 0) return _settings.PttKey1ShowOverlay;
+            if (mode == 1) return _settings.PtmShowOverlay;
+            if (mode == 2) return _settings.PtToggleShowOverlay;
             return true;
         }
 
         private void OnPttTalkStart()
         {
-            // Sound feedback — high pitch click for mic open
-            if (_settings.PttSoundFeedback)
-                System.Threading.ThreadPool.QueueUserWorkItem(_ => { try { Console.Beep(1200, 40); } catch { } });
+            // Sound feedback — check the specific mode's setting
+            bool shouldPlaySound = false;
+            if (_pushToTalk != null) {
+                int mode = _pushToTalk.ActiveMode;
+                if (mode == 0) shouldPlaySound = _settings.PttSoundFeedback;
+                else if (mode == 1) shouldPlaySound = _settings.PtmSoundFeedback;
+                else if (mode == 2) shouldPlaySound = _settings.PtToggleSoundFeedback;
+            }
+            if (shouldPlaySound) PlayFeedbackSound(true);
 
             // If mic is AFK muted, break out of AFK immediately
             if (_micAfkState == AfkState.AfkMuted || _micAfkState == AfkState.FadingIn || _micAfkState == AfkState.FadingOut)
@@ -1242,9 +1262,12 @@ namespace AngryAudio
             UpdateTrayState();
             try
             {
-                if (_micStatus != null && !_micStatus.IsDisposed && ShouldShowOverlayForKey())
+                if (_micStatus != null && !_micStatus.IsDisposed)
                 {
-                    _micStatus.ShowMicOpen();
+                    if (ShouldShowOverlayForKey())
+                        _micStatus.ShowMicOpen();
+                    else
+                        _micStatus.HideOverlay();
                 }
             }
             catch (Exception ex)
@@ -1256,15 +1279,26 @@ namespace AngryAudio
 
         private void OnPttTalkStop()
         {
-            // Sound feedback — lower pitch click for mic muted
-            if (_settings.PttSoundFeedback)
-                System.Threading.ThreadPool.QueueUserWorkItem(_ => { try { Console.Beep(800, 40); } catch { } });
+            // Sound feedback — check the specific mode's setting
+            bool shouldPlaySound = false;
+            if (_pushToTalk != null) {
+                int mode = _pushToTalk.ActiveMode;
+                if (mode == 0) shouldPlaySound = _settings.PttSoundFeedback;
+                else if (mode == 1) shouldPlaySound = _settings.PtmSoundFeedback;
+                else if (mode == 2) shouldPlaySound = _settings.PtToggleSoundFeedback;
+            }
+            if (shouldPlaySound) PlayFeedbackSound(false);
 
             UpdateTrayState();
             try
             {
-                if (_micStatus != null && !_micStatus.IsDisposed && ShouldShowOverlayForKey())
-                    _micStatus.ShowMicClosed();
+                if (_micStatus != null && !_micStatus.IsDisposed)
+                {
+                    if (ShouldShowOverlayForKey())
+                        _micStatus.ShowMicClosed();
+                    else
+                        _micStatus.HideOverlay();
+                }
             }
             catch (Exception ex)
             {
@@ -1277,6 +1311,53 @@ namespace AngryAudio
         /// Schedules a delayed check to reconcile overlay state with actual PTT state.
         /// Fixes stuck overlay when rapid key spamming causes event ordering issues.
         /// </summary>
+        /// <summary>Play audio feedback sound based on user's selected type.</summary>
+        private void PlayFeedbackSound(bool micOpen)
+        {
+            int type = _settings.SoundFeedbackType;
+            string customPath = _settings.CustomSoundPath;
+            System.Threading.ThreadPool.QueueUserWorkItem(_ => {
+                try {
+                    if (type == 6 && !string.IsNullOrEmpty(customPath) && System.IO.File.Exists(customPath)) {
+                        // Custom sound file — use SoundPlayer for WAV
+                        try { using (var player = new System.Media.SoundPlayer(customPath)) player.Play(); } catch { Console.Beep(800, 15); }
+                        return;
+                    }
+                    switch (type) {
+                        case 0: Console.Beep(micOpen ? 800 : 600, 15); break;
+                        case 1: Console.Beep(micOpen ? 700 : 500, 10); System.Threading.Thread.Sleep(30); Console.Beep(micOpen ? 900 : 600, 10); break;
+                        case 2: Console.Beep(micOpen ? 600 : 900, 8); Console.Beep(micOpen ? 900 : 600, 12); break;
+                        case 3: Console.Beep(micOpen ? 1000 : 700, 20); break;
+                        case 4: Console.Beep(micOpen ? 523 : 659, 25); System.Threading.Thread.Sleep(20); Console.Beep(micOpen ? 659 : 523, 25); break;
+                        case 5: Console.Beep(micOpen ? 500 : 400, 8); break;
+                        default: Console.Beep(micOpen ? 800 : 600, 15); break;
+                    }
+                } catch { }
+            });
+        }
+
+        /// <summary>Play a preview of a feedback sound type (for Options page).</summary>
+        public static void PreviewFeedbackSound(int type, string customPath = null)
+        {
+            System.Threading.ThreadPool.QueueUserWorkItem(_ => {
+                try {
+                    if (type == 6 && !string.IsNullOrEmpty(customPath) && System.IO.File.Exists(customPath)) {
+                        try { using (var player = new System.Media.SoundPlayer(customPath)) player.Play(); } catch { Console.Beep(800, 15); }
+                        return;
+                    }
+                    switch (type) {
+                        case 0: Console.Beep(800, 15); break;
+                        case 1: Console.Beep(700, 10); System.Threading.Thread.Sleep(30); Console.Beep(900, 10); break;
+                        case 2: Console.Beep(600, 8); Console.Beep(900, 12); break;
+                        case 3: Console.Beep(1000, 20); break;
+                        case 4: Console.Beep(523, 25); System.Threading.Thread.Sleep(20); Console.Beep(659, 25); break;
+                        case 5: Console.Beep(500, 8); break;
+                        default: Console.Beep(800, 15); break;
+                    }
+                } catch { }
+            });
+        }
+
         private void SchedulePttSafetyCheck()
         {
             if (_pttSafetyTimer != null) { try { _pttSafetyTimer.Dispose(); } catch { } }
@@ -1286,6 +1367,7 @@ namespace AngryAudio
                 {
                     if (_pushToTalk == null || !_pushToTalk.Enabled) return;
                     if (_micStatus == null || _micStatus.IsDisposed) return;
+                    if (!ShouldShowOverlayForKey()) return; // eyeball is off — don't force overlay
                     bool talking = _pushToTalk.IsTalking;
                     bool overlayShowsMicOpen = _micStatus.IsMicOpen;
                     if (!talking && overlayShowsMicOpen)
@@ -1356,12 +1438,14 @@ namespace AngryAudio
                 {
                     if (paneIndex >= 0) _openOptionsForm.NavigateToPane(paneIndex);
                     if (blinkOverlayToggle) _openOptionsForm.BlinkOverlayToggle();
+                    if (_openOptionsForm.WindowState == FormWindowState.Minimized)
+                        _openOptionsForm.WindowState = FormWindowState.Normal;
                     _openOptionsForm.BringToFront();
                     _openOptionsForm.Activate();
                     return;
                 }
 
-                _openOptionsForm = new OptionsForm(_settings, OnOptionToggle);
+                _openOptionsForm = new OptionsForm(_settings, _audio);
                 if (paneIndex >= 0) _openOptionsForm.NavigateToPane(paneIndex);
                 if (blinkOverlayToggle)
                     _openOptionsForm.Shown += (s, e) => { _openOptionsForm.BlinkOverlayToggle(); };
@@ -1372,33 +1456,11 @@ namespace AngryAudio
                         var result = _openOptionsForm.DialogResult;
                         if (result == DialogResult.OK)
                         {
+                            // All settings were applied live via AudioSettings.Changed events.
+                            // Just ensure final save and apply startup setting.
                             _settings.Save();
                             _settings.ApplyStartupSetting();
-
-                            _lastMicEnforce = DateTime.MinValue;
-                            _lastSpeakerEnforce = DateTime.MinValue;
-
-                            // Apply PTT/PTM settings
-                            if (_settings.PushToTalkEnabled || _settings.PushToToggleEnabled || _settings.PushToMuteEnabled)
-                            {
-                                DisablePtt();
-                                EnablePtt();
-                            }
-                            else
-                            {
-                                DisablePtt();
-                                Audio.SetMicMute(false);
-                                if (_micStatus != null && !_micStatus.IsDisposed)
-                                    _micStatus.ShowMicOpenIdle();
-                            }
-
-                            Logger.Info("Settings updated by user.");
-
-                            if (!_isPaused)
-                            {
-                                EnforceMic(true);
-                                EnforceSpeaker(true);
-                            }
+                            Logger.Info("Settings saved by user.");
                         }
                         else if (result == DialogResult.Retry)
                         {
@@ -1409,6 +1471,7 @@ namespace AngryAudio
                         }
                         _openOptionsForm.Dispose();
                         _openOptionsForm = null;
+
                     }
                     catch (Exception ex) { Logger.Error("Options close handler failed.", ex); }
                 };
@@ -1425,204 +1488,226 @@ namespace AngryAudio
             }
         }
 
-        private bool _toggleProcessing;
-        private void OnOptionToggle(string toggleId)
+        // --- AudioSettings Changed Handler ---
+        // This is the unified actuation point. When ANY AudioSettings property changes,
+        // this fires and TrayApp actuates the hardware/overlay/engine accordingly.
+        private bool _audioSettingsProcessing;
+        private void OnAudioSettingsChanged(SettingsChange what)
         {
-            // Prevent reentrancy — rapid toggle clicks can cause COM STA deadlocks
-            if (_toggleProcessing) return;
-            _toggleProcessing = true;
-            try {
-            // Reset toast cooldown — toggle feedback should ALWAYS show
-            _lastToastShown = DateTime.MinValue;
-
-            // Suspend/resume PTT hook during key capture
-            if (toggleId == "capture_start") {
-                if (_pushToTalk != null) _pushToTalk.SuspendHook = true;
-                Logger.Info("PTT hook SUSPENDED for key capture");
-                return;
-            }
-            if (toggleId == "capture_stop") {
-                if (_pushToTalk != null) _pushToTalk.SuspendHook = false;
-                Logger.Info("PTT hook RESUMED after key capture");
-                return;
-            }
-
-            // Handle parameterized commands
-            if (toggleId != null && (toggleId.StartsWith("ptt_key:") || toggleId.StartsWith("ptt_key2:") || toggleId.StartsWith("ptt_key3:") || toggleId.StartsWith("ptm_key:") || toggleId.StartsWith("toggle_key:")))
-            {
-                // Parse and save the key value to settings
-                int colonIdx = toggleId.IndexOf(':');
-                int keyVal = 0;
-                if (colonIdx >= 0) int.TryParse(toggleId.Substring(colonIdx + 1), out keyVal);
-                if (toggleId.StartsWith("ptt_key:")) _settings.PushToTalkKey = keyVal;
-                else if (toggleId.StartsWith("ptt_key2:")) _settings.PushToTalkKey2 = keyVal;
-                else if (toggleId.StartsWith("ptt_key3:")) _settings.PushToTalkKey3 = keyVal;
-                else if (toggleId.StartsWith("ptm_key:")) _settings.PushToMuteKey = keyVal;
-                else if (toggleId.StartsWith("toggle_key:")) _settings.PushToToggleKey = keyVal;
-                Logger.Info("Hotkey updated via toggle: " + toggleId + " → saved to settings");
-                
-                // Re-enable PTT with updated keys if currently active
-                if ((_settings.PushToTalkEnabled || _settings.PushToMuteEnabled || _settings.PushToToggleEnabled) && _pushToTalk != null && _pushToTalk.Enabled)
-                {
-                    DisablePtt();
-                    EnablePtt();
-                    Logger.Info("PTT hotkey changed — hook reinstalled.");
-                }
-                return;
-            }
-            if (toggleId != null && toggleId.StartsWith("afk_mic_sec:"))
-            {
-                int sec;
-                if (int.TryParse(toggleId.Substring(12), out sec))
-                    _settings.AfkMicMuteSec = sec;
-                return;
-            }
-            if (toggleId != null && toggleId.StartsWith("afk_spk_sec:"))
-            {
-                int sec;
-                if (int.TryParse(toggleId.Substring(12), out sec))
-                    _settings.AfkSpeakerMuteSec = sec;
-                return;
-            }
-            if (toggleId != null && toggleId.StartsWith("mic_vol:"))
-            {
-                int vol;
-                if (int.TryParse(toggleId.Substring(8), out vol))
-                    _settings.MicVolumePercent = Math.Max(0, Math.Min(100, vol));
-                return;
-            }
-            if (toggleId != null && toggleId.StartsWith("spk_vol:"))
-            {
-                int vol;
-                if (int.TryParse(toggleId.Substring(8), out vol))
-                    _settings.SpeakerVolumePercent = Math.Max(0, Math.Min(100, vol));
-                return;
-            }
-
+            if (_audioSettingsProcessing) return;
+            _audioSettingsProcessing = true;
             try
             {
-                switch (toggleId)
+                if ((what & SettingsChange.PttMode) != 0)
                 {
-                    case "mic_lock_on":
-                        // Snapshot current volume before locking
+                    // Sync overlay mode flags
+                    if (_micStatus != null && !_micStatus.IsDisposed)
+                    {
+                        _micStatus.PushToMuteMode = _audio.PtmEnabled;
+                        _micStatus.ToggleMode = _audio.PtToggleEnabled;
+                    }
+
+                    bool shouldBeActive = _audio.PttEnabled || _audio.PtmEnabled || _audio.PtToggleEnabled;
+
+                    // Check if engine needs restart (key or enabled changed) vs just overlay/sound refresh
+                    bool engineNeedsRestart = false;
+                    if (_pushToTalk != null && _pushToTalk.Enabled)
+                    {
+                        // Engine is running — check if mode or keys actually differ
+                        bool modeMatch = true;
+                        if (_audio.PtToggleEnabled && !_pushToTalk.IsToggleMode) modeMatch = false;
+                        else if (!_audio.PtToggleEnabled && _pushToTalk.IsToggleMode) modeMatch = false;
+                        bool ptmOnlyWanted = _audio.PtmEnabled && !_audio.PttEnabled && !_audio.PtToggleEnabled;
+                        if (ptmOnlyWanted != _pushToTalk.IsPushToMuteMode) modeMatch = false;
+                        // If modes match and engine is running, this is likely a cosmetic change (overlay/sound)
+                        engineNeedsRestart = !modeMatch;
+                    }
+                    else if (shouldBeActive)
+                    {
+                        // Engine not running but should be — definitely need to start
+                        engineNeedsRestart = true;
+                    }
+
+                    if (shouldBeActive && engineNeedsRestart)
+                    {
+                        DisablePtt();
+                        EnablePtt();
+                        // EnablePtt already handles: mic mute state, overlay show/hide, engine start.
+                        // Just show the toast here.
+
+                        // Build dynamic key list for toast
+                        string modeName = null;
+                        string keyList = null;
+                        string modeDesc = null;
+                        if (_audio.PttEnabled && _audio.PttKey > 0)
+                        {
+                            modeName = "Push-to-Talk";
+                            keyList = PushToTalk.GetKeyName(_audio.PttKey);
+                            if (_audio.PttKey2 > 0) keyList += ", " + PushToTalk.GetKeyName(_audio.PttKey2);
+                            if (_audio.PttKey3 > 0) keyList += ", " + PushToTalk.GetKeyName(_audio.PttKey3);
+                            modeDesc = "Hold " + keyList + " to unmute your mic";
+                        }
+                        else if (_audio.PtmEnabled && _audio.PtmKey > 0)
+                        {
+                            modeName = "Push-to-Mute";
+                            keyList = PushToTalk.GetKeyName(_audio.PtmKey);
+                            if (_audio.PtmKey2 > 0) keyList += ", " + PushToTalk.GetKeyName(_audio.PtmKey2);
+                            if (_audio.PtmKey3 > 0) keyList += ", " + PushToTalk.GetKeyName(_audio.PtmKey3);
+                            modeDesc = "Hold " + keyList + " to mute your mic";
+                        }
+                        else if (_audio.PtToggleEnabled && _audio.PtToggleKey > 0)
+                        {
+                            modeName = "Push-to-Toggle";
+                            keyList = PushToTalk.GetKeyName(_audio.PtToggleKey);
+                            if (_audio.PtToggleKey2 > 0) keyList += ", " + PushToTalk.GetKeyName(_audio.PtToggleKey2);
+                            if (_audio.PtToggleKey3 > 0) keyList += ", " + PushToTalk.GetKeyName(_audio.PtToggleKey3);
+                            modeDesc = "Tap " + keyList + " to toggle your mic on/off";
+                        }
+
+                        // Show toast (skip during wizard — the animation is the feedback)
+                        if (modeName != null && modeDesc != null && (_openWelcomeForm == null || _openWelcomeForm.IsDisposed))
+                            ShowCorrectionToast(modeName + " Enabled \u2014 " + modeDesc, true);
+                    }
+                    else if (shouldBeActive && !engineNeedsRestart)
+                    {
+                        // Key change with same mode — still need engine restart for new keys
+                        DisablePtt();
+                        EnablePtt();
+                    }
+                    else if (!shouldBeActive)
+                    {
+                        // Dismiss correction toast synchronously to avoid racing with mic warning
+                        if (_activeToast != null && !_activeToast.IsDisposed)
+                            try { _activeToast.Dismiss(); } catch { }
+                        DisablePtt();
+                        try { Audio.SetMicMute(false); } catch { }
+                        if (_micStatus != null && !_micStatus.IsDisposed)
+                        {
+                            _micStatus.UseExtendedDelay();
+                            _micStatus.HideOverlay();
+                        }
+                        CheckMicUnprotected();
+                    }
+
+                    if (shouldBeActive)
+                        DismissMicWarning();
+                    UpdateTrayState();
+                }
+
+                if ((what & SettingsChange.MicLock) != 0)
+                {
+                    if (_audio.MicLockEnabled)
+                    {
                         try { _micPreLockVol = (int)Audio.GetMicVolume(); } catch { _micPreLockVol = -1; }
                         if (_restoreMicTimer != null) { _restoreMicTimer.Dispose(); _restoreMicTimer = null; }
-                        _settings.MicEnforceEnabled = true;
                         EnforceMic(false);
                         DismissMicWarning();
-                        ShowCorrectionToast("Mic Volume Locked at " + _settings.MicVolumePercent + "%" + " \u2014 Volume enforcement is active", true);
+                        if (_openWelcomeForm == null || _openWelcomeForm.IsDisposed)
+                            ShowCorrectionToast("Mic Volume Locked at " + _audio.MicLockVolume + "%" + " \u2014 Volume enforcement is active", true, true, false);
                         Logger.Info("Mic lock ON (snapshot: " + _micPreLockVol + "%)");
-                        break;
-                    case "mic_lock_off":
-                        _settings.MicEnforceEnabled = false;
+                    }
+                    else
+                    {
                         DismissActiveToast();
                         SmoothRestore(true);
                         CheckMicUnprotected();
                         Logger.Info("Mic lock OFF (restoring to " + _micPreLockVol + "%)");
-                        break;
-                    case "spk_lock_on":
-                        // Snapshot current volume before locking
+                    }
+                    UpdateTrayState();
+                }
+
+                if ((what & SettingsChange.SpeakerLock) != 0)
+                {
+                    if (_audio.SpeakerLockEnabled)
+                    {
                         try { _spkPreLockVol = (int)Audio.GetSpeakerVolume(); } catch { _spkPreLockVol = -1; }
                         if (_restoreSpkTimer != null) { _restoreSpkTimer.Dispose(); _restoreSpkTimer = null; }
-                        _settings.SpeakerEnforceEnabled = true;
                         EnforceSpeaker(false);
-                        ShowCorrectionToast("Speaker Volume Locked at " + _settings.SpeakerVolumePercent + "%" + " \u2014 Volume enforcement is active", true);
+                        if (_openWelcomeForm == null || _openWelcomeForm.IsDisposed)
+                            ShowCorrectionToast("Speaker Volume Locked at " + _audio.SpeakerLockVolume + "%" + " \u2014 Volume enforcement is active", true, false, true);
                         Logger.Info("Speaker lock ON (snapshot: " + _spkPreLockVol + "%)");
-                        break;
-                    case "spk_lock_off":
-                        _settings.SpeakerEnforceEnabled = false;
+                    }
+                    else
+                    {
                         DismissActiveToast();
                         SmoothRestore(false);
                         Logger.Info("Speaker lock OFF (restoring to " + _spkPreLockVol + "%)");
-                        break;
-                    case "afk_mic_on":
-                        _settings.AfkMicMuteEnabled = true;
+                    }
+                    UpdateTrayState();
+                }
+
+                if ((what & SettingsChange.AfkMic) != 0)
+                {
+                    if (_audio.AfkMicEnabled)
+                    {
                         DismissMicWarning();
-                        if (_settings.PushToTalkEnabled)
-                        {
-                            _settings.PushToTalkEnabled = false;
-                            DisablePtt();
-                            Logger.Info("AFK mic mute enabled — PTT auto-disabled.");
-                        }
-                        else
-                        {
-                        }
                         _settings.MicOverlayEnabled = true;
+                        _settings.Save();
                         if (_micStatus != null && !_micStatus.IsDisposed)
                         {
                             _micStatus.OverlayEnabled = true;
-                            { _micStatus.UseExtendedDelay();
-                            _micStatus.ShowMicOpenIdle(); }
+                            _micStatus.UseExtendedDelay();
+                            _micStatus.ShowMicOpenIdle();
                         }
-                        break;
-                    case "afk_mic_off":
-                        _settings.AfkMicMuteEnabled = false;
-                        // ShowBalloon("AFK Mic Mute Disabled", "Your mic will stay on even when idle.");
-                        if (!_settings.PushToTalkEnabled && _micStatus != null && !_micStatus.IsDisposed)
-                            _micStatus.HideOverlay();
+                        if (_openWelcomeForm == null || _openWelcomeForm.IsDisposed)
+                            ShowCorrectionToast("Mute Microphone When Idle \u2014 Mic will auto-mute after " + _audio.AfkMicSec + "s of inactivity", true);
+                    }
+                    else
+                    {
+                        DismissActiveToast();
+                        // Unmute mic if it was AFK-muted
+                        if (_micAfkState == AfkState.AfkMuted || _micAfkState == AfkState.FadingOut)
+                        {
+                            try { Audio.SetMicMute(false); } catch { }
+                            _micAfkState = AfkState.Active;
+                            Logger.Info("AFK mic mute disabled — mic restored.");
+                        }
+                        if (!_audio.PttEnabled && !_audio.PtmEnabled && !_audio.PtToggleEnabled)
+                        {
+                            if (_micStatus != null && !_micStatus.IsDisposed)
+                                _micStatus.HideOverlay();
+                        }
                         CheckMicUnprotected();
-                        break;
-                    case "afk_spk_on":
-                        _settings.AfkSpeakerMuteEnabled = true;
-                        break;
-                    case "afk_spk_off":
-                        _settings.AfkSpeakerMuteEnabled = false;
-                        // ShowBalloon("AFK Speaker Mute Disabled", "Speakers will stay on even when idle.");
-                        break;
-                    case "ptt_on":
-                        _settings.PushToTalkEnabled = true;
-                        DismissMicWarning();
-                        DisablePtt();
-                        EnablePtt();
-                        Audio.SetMicMute(true);
-                        if (_micStatus != null && !_micStatus.IsDisposed)
-                            { _micStatus.PushToMuteMode = false; _micStatus.ToggleMode = false;
-                            _micStatus.UseExtendedDelay(); _micStatus.ShowMicClosed(); }
-                        break;
-                    case "ptt_off":
-                        _settings.PushToTalkEnabled = false;
-                        DisablePtt();
-                        EnablePtt(); // re-enable if other modes still active
-                        if (!AnyModeEnabled()) { Audio.SetMicMute(false); CheckMicUnprotected();
-                            if (_micStatus != null && !_micStatus.IsDisposed) { _micStatus.UseExtendedDelay(); _micStatus.ShowMicOpenIdle(); } }
-                        break;
-                    case "ptm_on":
-                        _settings.PushToMuteEnabled = true;
-                        DismissMicWarning();
-                        if (_micStatus != null) _micStatus.PushToMuteMode = true;
-                        DisablePtt();
-                        EnablePtt();
-                        if (!_settings.PushToTalkEnabled) { Audio.SetMicMute(false);
-                            if (_micStatus != null && !_micStatus.IsDisposed) { _micStatus.UseExtendedDelay(); _micStatus.ShowMicOpenIdle(); } }
-                        break;
-                    case "ptm_off":
-                        _settings.PushToMuteEnabled = false;
-                        if (_micStatus != null) _micStatus.PushToMuteMode = false;
-                        DisablePtt();
-                        EnablePtt();
-                        if (!AnyModeEnabled()) { Audio.SetMicMute(false); CheckMicUnprotected();
-                            if (_micStatus != null && !_micStatus.IsDisposed) { _micStatus.UseExtendedDelay(); _micStatus.ShowMicOpenIdle(); } }
-                        break;
-                    case "ptt_toggle_on":
-                        _settings.PushToToggleEnabled = true;
-                        DismissMicWarning();
-                        if (_micStatus != null) _micStatus.ToggleMode = true;
-                        DisablePtt();
-                        EnablePtt();
-                        Audio.SetMicMute(true);
-                        if (_micStatus != null && !_micStatus.IsDisposed)
-                            { _micStatus.UseExtendedDelay(); _micStatus.ShowMicClosed(); }
-                        break;
-                    case "ptt_toggle_off":
-                        _settings.PushToToggleEnabled = false;
-                        if (_micStatus != null) _micStatus.ToggleMode = false;
-                        DisablePtt();
-                        EnablePtt();
-                        if (!AnyModeEnabled()) { Audio.SetMicMute(false); CheckMicUnprotected();
-                            if (_micStatus != null && !_micStatus.IsDisposed) { _micStatus.UseExtendedDelay(); _micStatus.ShowMicOpenIdle(); } }
-                        break;
-                    case "overlay_on":
-                        _settings.MicOverlayEnabled = true;
+                    }
+                    UpdateTrayState();
+                }
+
+                if ((what & SettingsChange.AfkSpeaker) != 0)
+                {
+                    if (_audio.AfkSpeakerEnabled && (_openWelcomeForm == null || _openWelcomeForm.IsDisposed))
+                        ShowCorrectionToast("Mute Speakers When Idle \u2014 Audio will fade out after " + _audio.AfkSpeakerSec + "s of inactivity", true);
+                    else if (!_audio.AfkSpeakerEnabled)
+                        DismissActiveToast();
+                    UpdateTrayState();
+                }
+
+                if ((what & SettingsChange.PttCosmetic) != 0)
+                {
+                    // Overlay or sound toggle changed — refresh overlay visibility without restarting engine
+                    if (_micStatus != null && !_micStatus.IsDisposed && _pushToTalk != null && _pushToTalk.Enabled)
+                    {
+                        bool showOverlay = false;
+                        if (_audio.PttEnabled) showOverlay = _audio.PttShowOverlay;
+                        else if (_audio.PtmEnabled) showOverlay = _audio.PtmShowOverlay;
+                        else if (_audio.PtToggleEnabled) showOverlay = _audio.PtToggleShowOverlay;
+
+                        if (!showOverlay)
+                            _micStatus.HideOverlay();
+                        else
+                        {
+                            _micStatus.OverlayEnabled = true;
+                            bool micMuted = false;
+                            try { micMuted = Audio.GetMicMute(); } catch { }
+                            if (micMuted) _micStatus.ShowMicClosed();
+                            else _micStatus.ShowMicOpenIdle();
+                        }
+                    }
+                }
+
+                if ((what & SettingsChange.Overlay) != 0)
+                {
+                    if (_audio.MicOverlayEnabled)
+                    {
                         if (_micStatus != null && !_micStatus.IsDisposed)
                         {
                             _micStatus.OverlayEnabled = true;
@@ -1632,56 +1717,32 @@ namespace AngryAudio
                             if (micMuted) _micStatus.ShowMicClosed();
                             else _micStatus.ShowMicOpenIdle();
                         }
-                        break;
-                    case "overlay_off":
-                        _settings.MicOverlayEnabled = false;
-                        // ShowBalloon("Mic Overlay Hidden", "Mic status indicator removed from screen.");
+                    }
+                    else
+                    {
                         if (_micStatus != null && !_micStatus.IsDisposed)
                         {
                             _micStatus.OverlayEnabled = false;
                             _micStatus.HideOverlay();
                         }
-                        break;
-                    case "app_lock_on":
-                        _settings.AppVolumeEnforceEnabled = true;
-                        EnforceAppVolumes();
-                        break;
-                    case "app_lock_off":
-                        _settings.AppVolumeEnforceEnabled = false;
-                        // ShowBalloon("App Volume Lock Disabled", "Apps can change their own volumes freely.");
-                        break;
-                    case "notify_corr_on":
-                        _settings.NotifyOnCorrection = true;
-                        break;
-                    case "notify_corr_off":
-                        _settings.NotifyOnCorrection = false;
-                        // ShowBalloon("Correction Alerts Off", "Volume corrections will happen silently.");
-                        break;
-                    case "notify_dev_on":
-                        _settings.NotifyOnDeviceChange = true;
-                        break;
-                    case "notify_dev_off":
-                        _settings.NotifyOnDeviceChange = false;
-                        // ShowBalloon("Device Alerts Off", "Audio device changes will happen silently.");
-                        break;
-                    case "startup_on":
-                        _settings.StartWithWindows = true;
-                        _settings.ApplyStartupSetting();
-                        break;
-                    case "startup_off":
-                        _settings.StartWithWindows = false;
-                        _settings.ApplyStartupSetting();
-                        break;
+                    }
                 }
-                _settings.Save();
-                UpdateTrayState();
+
+                // Startup and Notifications don't need actuation beyond what the property setter already does
+
+                if ((what & SettingsChange.AppVolume) != 0)
+                {
+                    if (_settings.AppVolumeEnforceEnabled)
+                        EnforceAppVolumes();
+                }
             }
             catch (Exception ex)
             {
-                Logger.Error("Toggle actuation failed: " + toggleId, ex);
+                Logger.Error("OnAudioSettingsChanged failed for " + what, ex);
             }
-            } finally { _toggleProcessing = false; }
+            finally { _audioSettingsProcessing = false; }
         }
+
 
         private void UpdatePauseMenuItem()
         {
@@ -1722,6 +1783,8 @@ namespace AngryAudio
                 }
                 _lastMicEnforce = DateTime.MinValue;
                 _lastSpeakerEnforce = DateTime.MinValue;
+                if (_settings.MicEnforceEnabled && _micPreLockVol < 0) { try { _micPreLockVol = (int)Audio.GetMicVolume(); } catch { } }
+                if (_settings.SpeakerEnforceEnabled && _spkPreLockVol < 0) { try { _spkPreLockVol = (int)Audio.GetSpeakerVolume(); } catch { } }
                 EnforceMic(true);
                 EnforceSpeaker(true);
                 ShowCorrectionToast("\u25B6  Angry Audio Resumed \u2014 Protection Active");
@@ -1775,36 +1838,22 @@ namespace AngryAudio
         private void ShowWelcomeDialog()
         {
             // Prevent duplicate wizard instances
-            if (_openWelcomeForm != null && !_openWelcomeForm.IsDisposed) { try { _openWelcomeForm.Activate(); } catch { } return; }
+            if (_openWelcomeForm != null && !_openWelcomeForm.IsDisposed) {
+                if (_openWelcomeForm.WindowState == FormWindowState.Minimized)
+                    _openWelcomeForm.WindowState = FormWindowState.Normal;
+                try { _openWelcomeForm.BringToFront(); _openWelcomeForm.Activate(); } catch { }
+                return;
+            }
 
             CloseSplash(); // never overlap splash with welcome wizard
 
             // Close any open OptionsForm first
             try { if (_openOptionsForm != null && !_openOptionsForm.IsDisposed) { _openOptionsForm.Close(); _openOptionsForm.Dispose(); _openOptionsForm = null; } } catch { _openOptionsForm = null; }
 
-            _openWelcomeForm = new WelcomeForm(OnOptionToggle);
+            _openWelcomeForm = new WelcomeForm(_audio);
             _openWelcomeForm.FormClosed += (s, e) => {
-                // Read ALL properties from wizard into settings
-                var wf = _openWelcomeForm;
-                if (wf != null) {
-                    _settings.MicEnforceEnabled = wf.ProtectMic;
-                    _settings.SpeakerEnforceEnabled = wf.ProtectSpeakers;
-                    _settings.MicVolumePercent = wf.MicVolPercent;
-                    _settings.SpeakerVolumePercent = wf.SpkVolPercent;
-                    _settings.AfkMicMuteEnabled = wf.AfkMicEnabled;
-                    _settings.AfkMicMuteSec = wf.AfkMicSec;
-                    _settings.AfkSpeakerMuteEnabled = wf.AfkSpkEnabled;
-                    _settings.AfkSpeakerMuteSec = wf.AfkSpkSec;
-                    _settings.PushToTalkEnabled = wf.PttEnabled;
-                    _settings.PushToMuteEnabled = wf.PtMuteEnabled;
-                    _settings.PushToToggleEnabled = wf.PtToggleEnabled;
-                    if (wf.PttKey > 0) _settings.PushToTalkKey = wf.PttKey;
-                    if (wf.PtMuteKey > 0) _settings.PushToMuteKey = wf.PtMuteKey;
-                    if (wf.PtToggleKey > 0) _settings.PushToToggleKey = wf.PtToggleKey;
-                    _settings.StartWithWindows = wf.StartupEnabled;
-                    _settings.NotifyOnCorrection = wf.NotifyCorrEnabled;
-                    _settings.NotifyOnDeviceChange = wf.NotifyDevEnabled;
-                }
+                // All settings were applied live via AudioSettings.Changed events.
+                // Just mark first run complete and do final save.
                 _settings.FirstRunComplete = true;
                 _settings.Save();
                 _settings.ApplyStartupSetting();
@@ -1812,15 +1861,6 @@ namespace AngryAudio
                     + " SpkEnf=" + _settings.SpeakerEnforceEnabled
                     + " AfkMic=" + _settings.AfkMicMuteEnabled
                     + " PTT=" + _settings.PushToTalkEnabled);
-
-                // Enforce immediately after wizard
-                if (!_isPaused)
-                {
-                    if (_settings.MicEnforceEnabled) EnforceMic(true);
-                    if (_settings.SpeakerEnforceEnabled) EnforceSpeaker(true);
-                    if (_settings.PushToTalkEnabled || _settings.PushToMuteEnabled || _settings.PushToToggleEnabled)
-                        EnablePtt();
-                }
                 Logger.Info("First-run wizard complete.");
 
                 // Show splash ONLY if Options isn't already open
@@ -1842,10 +1882,15 @@ namespace AngryAudio
 
         private void ShowCorrectionToast(string message)
         {
-            ShowCorrectionToast(message, false);
+            ShowCorrectionToast(message, false, false, false);
         }
 
         private void ShowCorrectionToast(string message, bool force)
+        {
+            ShowCorrectionToast(message, force, false, false);
+        }
+
+        private void ShowCorrectionToast(string message, bool force, bool showMicBtn, bool showSpkBtn)
         {
             RecordNotif(message);
 
@@ -1861,7 +1906,7 @@ namespace AngryAudio
                     // Kill ALL existing toasts before showing new one
                     ToastStack.DismissAllExcept(null);
 
-                    _activeToast = new CorrectionToast(message, _settings.MicEnforceEnabled, _settings.SpeakerEnforceEnabled);
+                    _activeToast = new CorrectionToast(message, showMicBtn, showSpkBtn);
                     _activeToast.FormClosed += (s, e) =>
                     {
                         var toast = (CorrectionToast)s;
@@ -1911,65 +1956,97 @@ namespace AngryAudio
         // --- Mic Unprotected Warning ---
 
         private MicWarningToast _micWarningToast;
+        private System.Windows.Forms.Timer _micWarningPollTimer;
+        private bool _micWarningDismissed; // true after user dismisses — reset when any mic protection turns on
+        private bool _micWasProtected = true; // tracks previous state to detect transitions
 
+        /// <summary>Mic is unprotected when no mic muting/control features are active.
+        /// Volume lock doesn't count — it protects volume level, not mic open/close state.
+        /// Speaker toggles don't count either.</summary>
         private bool IsMicFullyUnprotected()
         {
-            return !_settings.MicEnforceEnabled &&
-                   !_settings.AfkMicMuteEnabled &&
+            return !_settings.AfkMicMuteEnabled &&
                    !_settings.PushToTalkEnabled &&
                    !_settings.PushToMuteEnabled &&
                    !_settings.PushToToggleEnabled;
         }
 
-        private void CheckMicUnprotected()
+        /// <summary>Start the mic warning poll timer. Called once at startup.
+        /// Every 500ms, checks if mic is unprotected and shows/hides warning accordingly.
+        /// Waits for splash screen and wizard to close before first show.
+        /// Only shows once per unprotected session — user dismiss is respected.</summary>
+        private void StartMicWarningPoller()
         {
-            bool unprotected = IsMicFullyUnprotected();
-            Logger.Info("CheckMicUnprotected: unprotected=" + unprotected + " micEnf=" + _settings.MicEnforceEnabled + " afkMic=" + _settings.AfkMicMuteEnabled + " ptt=" + _settings.PushToTalkEnabled + " ptm=" + _settings.PushToMuteEnabled + " ptToggle=" + _settings.PushToToggleEnabled);
-            if (!unprotected) return;
+            if (_micWarningPollTimer != null) return;
+            _micWarningPollTimer = new System.Windows.Forms.Timer { Interval = 500 };
+            _micWarningPollTimer.Tick += (s, e) => {
+                try {
+                    bool unprotected = IsMicFullyUnprotected();
+                    bool warningShowing = _micWarningToast != null && !_micWarningToast.IsDisposed;
 
-            // Kill ALL other popups so the red warning stands alone (except MicStatusOverlay)
-            ToastStack.DismissAllExcept(typeof(MicWarningToast));
+                    // When protection turns ON, reset the dismiss flag so warning can fire next time
+                    if (!unprotected && _micWasProtected == false) {
+                        _micWarningDismissed = false;
+                    }
+                    _micWasProtected = !unprotected;
 
-            Action showWarning = () =>
-            {
-                try
-                {
-                    if (_micWarningToast != null && !_micWarningToast.IsDisposed)
-                        try { _micWarningToast.Close(); } catch { }
+                    // Don't show while splash or wizard is up
+                    bool splashUp = _activeSplash != null && !_activeSplash.IsDisposed;
+                    bool wizardUp = _openWelcomeForm != null && !_openWelcomeForm.IsDisposed;
 
-                    _micWarningToast = new MicWarningToast();
-                    _micWarningToast.FormClosed += (s, e) =>
-                    {
-                        bool wantsSettings = ((MicWarningToast)s).OpenSettings;
-                        _micWarningToast = null;
-                        if (wantsSettings)
-                        {
-                            // Marshal to UI thread — form creation requires it
-                            if (_contextMenu != null && _contextMenu.IsHandleCreated)
-                                try { _contextMenu.BeginInvoke((Action)(() => ShowOptions(0))); } catch { ShowOptions(0); }
-                            else
-                                ShowOptions(0);
-                        }
-                    };
-                    _micWarningToast.ShowNoFocus();
-                }
-                catch (Exception ex) { Logger.Error("MicWarningToast show failed.", ex); }
+                    if (unprotected && !warningShowing && !splashUp && !wizardUp && !_micWarningDismissed) {
+                        ShowMicWarning();
+                    } else if (!unprotected && warningShowing) {
+                        HideMicWarning();
+                    } else if (unprotected && !warningShowing) {
+                        // Log why we're NOT showing
+                        if (splashUp) Logger.Info("MicWarningPoller: waiting for splash");
+                        else if (wizardUp) Logger.Info("MicWarningPoller: waiting for wizard");
+                        else if (_micWarningDismissed) Logger.Info("MicWarningPoller: already dismissed by user");
+                    }
+                } catch { }
             };
-
-            if (_contextMenu != null && _contextMenu.IsHandleCreated)
-                try { _contextMenu.BeginInvoke(showWarning); } catch { showWarning(); }
-            else
-                showWarning();
+            _micWarningPollTimer.Start();
         }
 
-        private void DismissMicWarning()
+        private void ShowMicWarning()
+        {
+            try {
+                if (_micWarningToast != null && !_micWarningToast.IsDisposed)
+                    try { _micWarningToast.Close(); } catch { }
+
+                // Kill other popups so red warning stands alone
+                ToastStack.DismissAllExcept(typeof(MicWarningToast));
+
+                _micWarningToast = new MicWarningToast();
+                _micWarningToast.FormClosed += (s2, e2) => {
+                    bool wantsSettings = ((MicWarningToast)s2).OpenSettings;
+                    _micWarningToast = null;
+                    _micWarningDismissed = true; // User dismissed — don't re-show until protection cycles
+                    if (wantsSettings) {
+                        if (_contextMenu != null && _contextMenu.IsHandleCreated)
+                            try { _contextMenu.BeginInvoke((Action)(() => ShowOptions(0))); } catch { ShowOptions(0); }
+                        else ShowOptions(0);
+                    }
+                };
+                _micWarningToast.ShowNoFocus();
+                Logger.Info("Mic warning shown — all mic protections are off.");
+            } catch (Exception ex) { Logger.Error("ShowMicWarning failed.", ex); }
+        }
+
+        private void HideMicWarning()
         {
             if (_micWarningToast == null || _micWarningToast.IsDisposed) return;
-            Action a = () => { try { if (_micWarningToast != null && !_micWarningToast.IsDisposed) _micWarningToast.Close(); } catch { } };
-            if (_contextMenu != null && _contextMenu.IsHandleCreated)
-                try { _contextMenu.BeginInvoke(a); } catch { a(); }
-            else a();
+            try { _micWarningToast.Close(); } catch { }
+            _micWarningToast = null;
+            Logger.Info("Mic warning dismissed — mic protection enabled.");
         }
+
+        /// <summary>Legacy call — now a no-op. The poll timer handles everything.</summary>
+        private void CheckMicUnprotected() { }
+
+        /// <summary>Legacy call — now a no-op. The poll timer handles everything.</summary>
+        private void DismissMicWarning() { }
 
         // --- Notifications ---
 
@@ -2092,12 +2169,12 @@ namespace AngryAudio
             if (_disposed) return;
             _disposed = true;
 
-            _pollTimer?.Dispose();
-            _pttSafetyTimer?.Dispose();
-            _killEvent?.Dispose();
-            _pushToTalk?.Dispose();
-            _restoreMicTimer?.Dispose();
-            _restoreSpkTimer?.Dispose();
+            if (_pollTimer != null) _pollTimer.Dispose();
+            if (_pttSafetyTimer != null) _pttSafetyTimer.Dispose();
+            if (_killEvent != null) _killEvent.Dispose();
+            if (_pushToTalk != null) _pushToTalk.Dispose();
+            if (_restoreMicTimer != null) _restoreMicTimer.Dispose();
+            if (_restoreSpkTimer != null) _restoreSpkTimer.Dispose();
 
             if (_openWelcomeForm != null && !_openWelcomeForm.IsDisposed)
                 try { _openWelcomeForm.Close(); _openWelcomeForm.Dispose(); } catch { }
@@ -2119,6 +2196,8 @@ namespace AngryAudio
                 try { _activeInfoToast.Close(); _activeInfoToast.Dispose(); } catch { }
             if (_micWarningToast != null && !_micWarningToast.IsDisposed)
                 try { _micWarningToast.Close(); _micWarningToast.Dispose(); } catch { }
+            if (_micWarningPollTimer != null)
+                try { _micWarningPollTimer.Stop(); _micWarningPollTimer.Dispose(); } catch { }
 
             if (_trayIcon != null)
             {
@@ -2126,13 +2205,13 @@ namespace AngryAudio
                 _trayIcon.Dispose();
             }
 
-            _contextMenu?.Dispose();
-            _baseIcon?.Dispose();
-            _pausedIcon?.Dispose();
-            _afkIcon?.Dispose();
-            _errorIcon?.Dispose();
-            _pttIcon?.Dispose();
-            _micHotIcon?.Dispose();
+            if (_contextMenu != null) _contextMenu.Dispose();
+            if (_baseIcon != null) _baseIcon.Dispose();
+            if (_pausedIcon != null) _pausedIcon.Dispose();
+            if (_afkIcon != null) _afkIcon.Dispose();
+            if (_errorIcon != null) _errorIcon.Dispose();
+            if (_pttIcon != null) _pttIcon.Dispose();
+            if (_micHotIcon != null) _micHotIcon.Dispose();
         }
     }
 

@@ -1,4 +1,4 @@
-// OptionsForm.cs — Main settings/options window.
+﻿// OptionsForm.cs — Main settings/options window.
 // Uses StarBackground for star rendering, Controls.cs for shared UI controls.
 // Private inner classes: PaintedLabel (text rendering), AppRuleRow (volume rules).
 //
@@ -25,20 +25,35 @@ namespace AngryAudio
 
         private Label[] _navLabels;
         private int _activePane = 0;
+        private bool _starShowMode = false;
+        private int _savedMascotX, _savedMascotY;
 
-        private ToggleSwitch _tglAfkMic, _tglAfkSpk, _tglPtt, _tglPtm, _tglPtToggle, _tglMicEnf, _tglSpkEnf, _tglAppEnf, _tglStartup, _tglNotifyCorr, _tglNotifyDev, _tglOverlay, _tglSoundFeedback;
-        private Label _lblPttWarning;
+        private ToggleSwitch _tglAfkMic, _tglAfkSpk, _tglPtt, _tglPtm, _tglPtToggle, _tglMicEnf, _tglSpkEnf, _tglAppEnf, _tglStartup, _tglNotifyCorr, _tglNotifyDev, _tglOverlay;
+        private string _pttWarningText = "";
+        private int _pttWarningY = 0;
+        private string _spkWarningText = "";
+        private int _spkWarningY = 0;
         private NumericUpDown _nudAfkMicSec, _nudAfkSpkSec;
-        private Label _lblPttKey, _lblPttKey2, _lblPttKey3, _lblPtmKey, _lblPtToggleKey;
+        private Label _lblPttKey, _lblPttKey2, _lblPttKey3, _lblPtmKey, _lblPtmKey2, _lblPtmKey3, _lblPtToggleKey, _lblPtToggleKey2, _lblPtToggleKey3;
         private Label _lblKey2Label, _lblKey2Hint, _lblKey3Label, _lblKey3Hint;
         private Button _btnRemoveKey2, _btnAddKey2, _btnRemoveKey3, _btnAddKey3;
-        private CheckBox _chkKey1Overlay, _chkKey2Overlay, _chkKey3Overlay;
+        private Button _btnPtmAddKey2, _btnPtmRemKey2, _btnPtmAddKey3, _btnPtmRemKey3, _btnToggleAddKey2, _btnToggleRemKey2, _btnToggleAddKey3, _btnToggleRemKey3;
+        private CardIcon _chkKey1Overlay, _chkKey2Overlay, _chkKey3Overlay;
+        private Dictionary<Panel, List<CardIcon>> _cardIconMap = new Dictionary<Panel, List<CardIcon>>();
+        private Dictionary<Panel, List<CardToggle>> _cardToggleMap = new Dictionary<Panel, List<CardToggle>>();
+        private Dictionary<Panel, List<CardSlider>> _cardSliderMap = new Dictionary<Panel, List<CardSlider>>();
         private bool _key1ShowOverlay = true, _key2ShowOverlay = true, _key3ShowOverlay = true;
         private Timer _pollTimer;
-        private int _pttKeyCode = 0, _pttKeyCode2 = 0, _pttKeyCode3 = 0, _ptmKeyCode = 0, _ptToggleKeyCode = 0; private bool _capturingKey, _capturingKey2, _capturingKey3, _capturingPtmKey, _capturingToggleKey, _loading;
-        public bool IsCapturingKey { get { return _capturingKey || _capturingKey2 || _capturingKey3 || _capturingPtmKey || _capturingToggleKey; } }
+        private int _pttKeyCode = 0, _pttKeyCode2 = 0, _pttKeyCode3 = 0, _ptmKeyCode = 0, _ptmKeyCode2 = 0, _ptmKeyCode3 = 0, _ptToggleKeyCode = 0, _ptToggleKeyCode2 = 0, _ptToggleKeyCode3 = 0; private bool _loading;
+        public bool IsCapturingKey { get { return _audio != null && _audio.IsCapturing; } }
         private SlickSlider _trkMicVol, _trkSpkVol, _sysVolSlider;
-        private Label _lblSysVolPct;
+        private SlickSlider _micCurVolSlider, _spkCurVolSlider;
+        private PaintedLabel _lblMicCurVolPct, _lblSpkCurVolPct;
+        private CardIcon _micMuteIcon, _spkMuteIcon;
+        private CardIcon _micLockIcon, _spkLockIcon;
+        private CardIcon _appsSysMuteIcon;
+        private DateTime _lastLockClick = DateTime.MinValue;
+        private PaintedLabel _lblSysVolPct;
         // Volume lock snapshot/restore
         private int _micPreLockVol = -1, _spkPreLockVol = -1;
         private Timer _sliderRestoreMicTimer, _sliderRestoreSpkTimer;
@@ -58,16 +73,16 @@ namespace AngryAudio
         static readonly Color INPUT_BG = DarkTheme.InputBG;
         static readonly Color INPUT_BDR = DarkTheme.InputBdr;
         static readonly Color GREEN = DarkTheme.Green;
-        static readonly string[] NAV = { "Push-to-Talk", "AFK Protection", "Volume Lock", "Apps", "General" };
+        static readonly string[] NAV = { "Mic", "AFK", "Volume", "Apps", "General" };
         const int SB_W = 155;
 
-        private Action<string> _onToggle; // Callback for instant actuation
+        private AudioSettings _audio; // Unified state controller
 
-        public OptionsForm(Settings settings, Action<string> onToggle = null) {
+        public OptionsForm(Settings settings, AudioSettings audio) {
             _settings = settings;
-            _onToggle = onToggle;
+            _audio = audio;
             Text = AppVersion.FullName + " \u2014 Options";
-            FormBorderStyle = FormBorderStyle.Sizable; MaximizeBox = true;
+            FormBorderStyle = FormBorderStyle.Sizable; MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = BG; ForeColor = TXT;
             AutoScaleMode = AutoScaleMode.None;
@@ -90,7 +105,19 @@ namespace AngryAudio
             _sidebar = new Panel { Dock = DockStyle.Left, Width = Dpi.S(SB_W), BackColor = SB_BG };
             var sep = new Panel { Dock = DockStyle.Left, Width = 1, BackColor = BDR };
             _contentPanel = new BufferedPanel { Dock = DockStyle.Fill, BackColor = BG, Padding = Dpi.Pad(20, 16, 20, 0) };
-            _contentPanel.Paint += (s, e) => { PaintUnifiedStars(e.Graphics, _contentPanel); };
+            _contentPanel.Paint += (s, e) => {
+                PaintUnifiedStars(e.Graphics, _contentPanel);
+                // Mascot watermark — in star show, use exact position captured from card before hiding
+                try {
+                    if (_starShowMode && _savedMascotY > 0) {
+                        int msz = Dpi.S(120); // same size as card mascot
+                        Mascot.DrawMascotWithOpacity(e.Graphics, _savedMascotX, _savedMascotY, msz, 0.25f);
+                    } else {
+                        int msz = Dpi.S(135);
+                        Mascot.DrawMascotWithOpacity(e.Graphics, _contentPanel.Width - msz - Dpi.S(8), _contentPanel.Height - msz - Dpi.S(8), msz, 0.22f);
+                    }
+                } catch { }
+            };
 
             BuildSidebar(); BuildPanes(); BuildFooter();
             Controls.Add(_contentPanel); Controls.Add(sep); Controls.Add(_sidebar);
@@ -109,84 +136,65 @@ namespace AngryAudio
                     _stars.Tick();
                     InvalidateCardsDeep(); // Full invalidation only on twinkle change
                 }
-                // Hotkey test detection — flash when user presses their assigned hotkey
-                if (!_capturingKey && !_capturingKey2 && !_capturingKey3 && _pttKeyCode > 0) {
-                    bool hotDown = (GetAsyncKeyState(_pttKeyCode) & 0x8000) != 0;
-                    if (!hotDown && _pttKeyCode2 > 0) hotDown = (GetAsyncKeyState(_pttKeyCode2) & 0x8000) != 0;
-                    if (!hotDown && _pttKeyCode3 > 0) hotDown = (GetAsyncKeyState(_pttKeyCode3) & 0x8000) != 0;
-                    if (hotDown && !_hotkeyWasDown) {
-                        FlashModeToggles();
-                        // If no toggle is on, remind user they need one
-                        if (!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked)
-                            EnforceToggleSelection();
+                // Hotkey test detection — flash only the specific mode when user presses its assigned hotkey
+                if (!IsCapturingKey) {
+                    bool pttDown = false, ptmDown = false, toggleDown = false;
+                    if (_pttKeyCode > 0) pttDown = IsKeyHeld(_pttKeyCode);
+                    if (!pttDown && _pttKeyCode2 > 0) pttDown = IsKeyHeld(_pttKeyCode2);
+                    if (!pttDown && _pttKeyCode3 > 0) pttDown = IsKeyHeld(_pttKeyCode3);
+                    if (_ptmKeyCode > 0) ptmDown = IsKeyHeld(_ptmKeyCode);
+                    if (!ptmDown && _ptmKeyCode2 > 0) ptmDown = IsKeyHeld(_ptmKeyCode2);
+                    if (!ptmDown && _ptmKeyCode3 > 0) ptmDown = IsKeyHeld(_ptmKeyCode3);
+                    if (_ptToggleKeyCode > 0) toggleDown = IsKeyHeld(_ptToggleKeyCode);
+                    if (!toggleDown && _ptToggleKeyCode2 > 0) toggleDown = IsKeyHeld(_ptToggleKeyCode2);
+                    if (!toggleDown && _ptToggleKeyCode3 > 0) toggleDown = IsKeyHeld(_ptToggleKeyCode3);
+                    bool anyDown = pttDown || ptmDown || toggleDown;
+                    // Continuous held-key highlight — stays lit while key is held
+                    bool[] downs = { pttDown, ptmDown, toggleDown };
+                    bool changed = false;
+                    for (int i = 0; i < 3; i++) {
+                        if (downs[i] != _optModeActive[i]) { _optModeActive[i] = downs[i]; changed = true; }
                     }
-                    _hotkeyWasDown = hotDown;
+                    if (changed && _pttCard != null) _pttCard.Invalidate();
+                    // Glisten on rising edge
+                    if (anyDown && !_hotkeyWasDown) {
+                        if (pttDown && _tglPtt.Checked) { StartGlisten(_tglPtt); }
+                        else if (ptmDown && _tglPtm.Checked) { StartGlisten(_tglPtm); }
+                        else if (toggleDown && _tglPtToggle.Checked) { StartGlisten(_tglPtToggle); }
+                        if (!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked) {
+                            if (pttDown) { StartGlisten(_tglPtt); }
+                            else if (ptmDown) { StartGlisten(_tglPtm); }
+                            else if (toggleDown) { StartGlisten(_tglPtToggle); }
+                        }
+                    }
+                    _hotkeyWasDown = anyDown;
                 }
+                // Fix 2: Star spin around "Press..." — advance frame continuously while capturing
+                if (_captureGlowLabel != null) { _captureGlowFrame++; if (_pttCard != null) _pttCard.Invalidate(); }
+                // Fix 3: Toggle glisten — driven by dedicated _glistenTimer (30ms, matches wizard speed)
             };
             _twinkleTimer.Start();
             // Shooting star animation — occasional streaks across card backgrounds
             _stars = new StarBackground(() => { InvalidateCards(); });
-            FormClosing += (s, e) => { if (WindowState == FormWindowState.Normal) { _settings.LastWindowX = Location.X; _settings.LastWindowY = Location.Y; _settings.Save(); } StopCapturePolling(); _captureTimer?.Dispose(); CleanupEnforcement(); _pollTimer?.Stop(); _pollTimer?.Dispose(); _twinkleTimer?.Stop(); _twinkleTimer?.Dispose(); _hotkeyFlashTimer?.Stop(); _hotkeyFlashTimer?.Dispose(); _stars?.Dispose(); _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _updateShimmerTimer?.Stop(); _updateShimmerTimer?.Dispose(); _saveOrbitTimer?.Stop(); _saveOrbitTimer?.Dispose(); };
+            FormClosing += (s, e) => { CancelAllCaptures(); if (WindowState == FormWindowState.Normal) { _settings.LastWindowX = Location.X; _settings.LastWindowY = Location.Y; } _settings.Save(); CleanupEnforcement(); if (_pollTimer != null) { _pollTimer.Stop(); _pollTimer.Dispose(); } if (_twinkleTimer != null) { _twinkleTimer.Stop(); _twinkleTimer.Dispose(); } if (_hotkeyFlashTimer != null) { _hotkeyFlashTimer.Stop(); _hotkeyFlashTimer.Dispose(); } if (_flashFadeTimer != null) { _flashFadeTimer.Stop(); _flashFadeTimer.Dispose(); } if (_stars != null) _stars.Dispose(); if (_sliderRestoreMicTimer != null) { _sliderRestoreMicTimer.Stop(); _sliderRestoreMicTimer.Dispose(); } if (_sliderRestoreSpkTimer != null) { _sliderRestoreSpkTimer.Stop(); _sliderRestoreSpkTimer.Dispose(); } if (_updateShimmerTimer != null) { _updateShimmerTimer.Stop(); _updateShimmerTimer.Dispose(); } if (_saveOrbitTimer != null) { _saveOrbitTimer.Stop(); _saveOrbitTimer.Dispose(); } if (_glistenTimer != null) { _glistenTimer.Stop(); _glistenTimer.Dispose(); } };
         }
 
         private Size _defaultSize;
         private const int WM_NCLBUTTONDBLCLK = 0x00A3;
-        private Timer _hotkeyFlashTimer;
-        private int _hotkeyFlashStep;
+        private Timer _hotkeyFlashTimer; // Used in FlashModeToggles guard check
         private bool _hotkeyWasDown;
+        private bool[] _optModeActive = new bool[3]; // persistent held-key highlight: [ptt, ptm, toggle]
+        // Fix 2: Star spin around "Press..." hotkey label
+        private Label _captureGlowLabel;
+        private int _captureGlowFrame;
+        // Fix 3: Toggle-on glisten animation (ported from WelcomeForm)
+        private ToggleSwitch _tglGlistenTarget;
+        private int _tglGlistenFrame;
+        private Timer _glistenTimer;
 
-        // === Key capture via GetAsyncKeyState polling ===
-        // WndProc/ProcessCmdKey/KeyDown all fail for CapsLock because WM_KEYDOWN
-        // goes to the FOCUSED CHILD CONTROL, not the Form. GetAsyncKeyState reads
-        // physical hardware state directly — same proven mechanism PushToTalk uses.
-        private Timer _captureTimer;
-        private bool[] _prevKeyState = new bool[256]; // track previous state to detect transitions
-
-        void StartCapturePolling() {
-            // Tell TrayApp to suspend PTT hook so we can capture the key
-            if (_onToggle != null) _onToggle("capture_start");
-            // Snapshot current key state so we only detect NEW presses
-            for (int i = 0; i < 256; i++)
-                _prevKeyState[i] = (GetAsyncKeyState(i) & 0x8000) != 0;
-            if (_captureTimer == null) {
-                _captureTimer = new Timer { Interval = 30 };
-                _captureTimer.Tick += CaptureTimerTick;
-            }
-            Logger.Info("CapturePolling STARTED — timer active, interval=30ms");
-            _captureTimer.Start();
-        }
-
-        void StopCapturePolling() {
-            if (_captureTimer != null) _captureTimer.Stop();
-            if (_onToggle != null) _onToggle("capture_stop");
-        }
-
-        private int _capturePollCount;
-        void CaptureTimerTick(object s, EventArgs e) {
-            _capturePollCount++;
-            if (!_capturingKey && !_capturingKey2 && !_capturingKey3 && !_capturingPtmKey && !_capturingToggleKey) { StopCapturePolling(); Logger.Info("CapturePolling stopped — no active capture"); return; }
-            // Scan for newly pressed keys (transition from up→down)
-            for (int vk = 1; vk < 256; vk++) {
-                // Skip mouse buttons (1=LMB, 2=RMB, 3=cancel, 4=MMB, 5=X1, 6=X2)
-                if (vk >= 1 && vk <= 3) continue;
-                short raw = GetAsyncKeyState(vk);
-                bool down = (raw & 0x8000) != 0;
-                bool wasDown = _prevKeyState[vk];
-                _prevKeyState[vk] = down;
-                if (down && !wasDown) {
-                    Logger.Info("CAPTURED vk=0x" + vk.ToString("X2") + " (" + ((Keys)vk).ToString() + ") after " + _capturePollCount + " polls");
-                    _capturePollCount = 0;
-                    var ke = new KeyEventArgs((Keys)vk);
-                    StopCapturePolling();
-                    if (_capturingKey) OnKeyCapture(this, ke);
-                    else if (_capturingKey2) OnKeyCapture2(this, ke);
-                    else if (_capturingKey3) OnKeyCapture3(this, ke);
-                    else if (_capturingPtmKey) OnPtmKeyCapture(this, ke);
-                    else if (_capturingToggleKey) OnToggleKeyCapture(this, ke);
-                    return;
-                }
-            }
-        }
+        // === Key capture is handled entirely by AudioSettings.StartCapture() ===
+        // No local timer, no local polling, no boolean flags.
+        // BeginCapture() and OnCaptureComplete() below are the single entry/exit points.
 
         protected override void WndProc(ref Message m)
         {
@@ -216,12 +224,17 @@ namespace AngryAudio
         }
 
         // Full invalidation — used by twinkle timer when stars change
+        // Only invalidates the active card panel — CardToggle/CardSlider/CardIcon/PaintedLabel
+        // are all drawn in the card's Paint handler. Real child controls (buttons, labels, NUDs)
+        // have opaque backgrounds and don't need star bg updates every tick.
         void InvalidateCardsDeep() {
             try {
                 _contentPanel.Invalidate(false);
                 for (int i = 0; i < 5; i++) {
                     if (_panes[i] != null && _panes[i].Visible) {
-                        foreach (Control c in _panes[i].Controls) c.Invalidate(false);
+                        foreach (Control c in _panes[i].Controls) {
+                            if (c is BufferedPanel) c.Invalidate(false); // card panels only
+                        }
                         break;
                     }
                 }
@@ -234,8 +247,21 @@ namespace AngryAudio
         void UpdateCurrent() {
             try {
                 float mic = Audio.GetMicVolume(), spk = Audio.GetSpeakerVolume();
-                if (mic >= 0 && _plMicCur != null) _plMicCur.Text = "Current: " + (int)mic + "%";
-                if (spk >= 0 && _plSpkCur != null) _plSpkCur.Text = "Current: " + (int)spk + "%";
+
+                // Keep mic current volume slider in sync (if user changed vol externally)
+                if (_micCurVolSlider != null && !_micCurVolSlider.Capture && mic >= 0) {
+                    int mv = (int)mic;
+                    if (_micCurVolSlider.Value != mv) { _loading = true; _micCurVolSlider.Value = mv; _lblMicCurVolPct.Text = mv + "%"; _loading = false; }
+                }
+                // Keep speaker current volume slider in sync
+                if (_spkCurVolSlider != null && !_spkCurVolSlider.Capture && spk >= 0) {
+                    int sv = (int)spk;
+                    if (_spkCurVolSlider.Value != sv) { _loading = true; _spkCurVolSlider.Value = sv; _lblSpkCurVolPct.Text = sv + "%"; _loading = false; }
+                }
+                // Keep mute icons in sync
+                try { if (_micMuteIcon != null) { bool muted = Audio.GetMicMute(); if (_micMuteIcon.Checked == muted) { _micMuteIcon.Checked = !muted; } } } catch {}
+                try { if (_spkMuteIcon != null) { bool muted = Audio.GetSpeakerMute(); if (_spkMuteIcon.Checked == muted) { _spkMuteIcon.Checked = !muted; } } } catch {}
+
                 if (_volCard != null) _volCard.Invalidate();
 
                 // Live-update app row effective volumes (throttled to every 2s)
@@ -268,6 +294,8 @@ namespace AngryAudio
                         if (_sysVolSlider != null && !_sysVolSlider.Capture) {
                             try { int sv = (int)masterVol; if (_sysVolSlider.Value != sv) { _loading = true; _sysVolSlider.Value = sv; _lblSysVolPct.Text = sv + "%"; _loading = false; } } catch {}
                         }
+                        // Keep Apps page mute icon in sync
+                        try { if (_appsSysMuteIcon != null) { bool muted = Audio.GetSpeakerMute(); if (_appsSysMuteIcon.Checked == muted) { _appsSysMuteIcon.Checked = !muted; } } } catch {}
                     }
                 }
             } catch { }
@@ -286,8 +314,8 @@ namespace AngryAudio
             if (slider == null) return;
 
             // Kill existing animation
-            if (isMic) { _sliderRestoreMicTimer?.Stop(); _sliderRestoreMicTimer?.Dispose(); _sliderRestoreMicTimer = null; }
-            else { _sliderRestoreSpkTimer?.Stop(); _sliderRestoreSpkTimer?.Dispose(); _sliderRestoreSpkTimer = null; }
+            if (isMic) { if (_sliderRestoreMicTimer != null) { _sliderRestoreMicTimer.Stop(); _sliderRestoreMicTimer.Dispose(); _sliderRestoreMicTimer = null; } }
+            else { if (_sliderRestoreSpkTimer != null) { _sliderRestoreSpkTimer.Stop(); _sliderRestoreSpkTimer.Dispose(); _sliderRestoreSpkTimer = null; } }
 
             int start = slider.Value;
             if (start == target) { if (isMic) _micPreLockVol = -1; else _spkPreLockVol = -1; return; }
@@ -305,9 +333,8 @@ namespace AngryAudio
                     if (isMic) _sliderRestoreMicTimer = null; else _sliderRestoreSpkTimer = null;
                     if (!IsDisposed) {
                         slider.Value = target;
-                        if (isMic) { _settings.MicVolumePercent = target; _micPreLockVol = -1; }
-                        else { _settings.SpeakerVolumePercent = target; _spkPreLockVol = -1; }
-                        _settings.Save();
+                        if (isMic) { _audio.MicLockVolume = target; _micPreLockVol = -1; try { Audio.SetMicVolume(target); } catch { } }
+                        else { _audio.SpeakerLockVolume = target; _spkPreLockVol = -1; try { Audio.SetSpeakerVolume(target); } catch { } }
                     }
                     return;
                 }
@@ -357,13 +384,18 @@ namespace AngryAudio
                     g.DrawString("Your privacy, your rules", f, b, Dpi.S(14), Dpi.S(28));
             };
             foot.MouseDown += (s, e) => {
-                int dividerY = Dpi.S(24); // split between the two text lines
+                int dividerY = Dpi.S(24);
+                if (e.Button == MouseButtons.Right) {
+                    // Right-click anywhere on footer — toggle star show mode
+                    ToggleStarShow();
+                    return;
+                }
                 if (e.Y < dividerY) {
-                    // Clicked "by Andrew Ganter" — spawn shooting star
-                    if (_stars.Shooting != null) _stars.Shooting.ForceLaunchMeteor();
+                    // Left-click "by Andrew Ganter" — spawn burst of shooting stars
+                    if (_stars.Shooting != null) for (int i = 0; i < 5; i++) _stars.Shooting.ForceLaunchMeteor();
                 } else {
-                    // Clicked "Your privacy, your rules" — spawn rare event
-                    if (_stars.Celestial != null) _stars.Celestial.ForceLaunch();
+                    // Left-click "Your privacy, your rules" — spawn burst of celestial events
+                    if (_stars.Celestial != null) for (int i = 0; i < 5; i++) _stars.Celestial.ForceLaunch();
                 }
             };
             _sidebar.Controls.Add(foot);
@@ -386,6 +418,8 @@ namespace AngryAudio
         }
 
         void SwitchPane(int idx) {
+            if (IsCapturingKey) { CancelAllCaptures(); } // Cancel capture and let them navigate
+            if (_starShowMode) ToggleStarShow(); // exit star show if active
             _activePane = idx;
             _settings.LastActivePane = idx; _settings.Save();
             for (int i = 0; i < 5; i++) {
@@ -396,6 +430,34 @@ namespace AngryAudio
                 _navPanels[i].BackColor = a ? HOVER : SB_BG;
                 _panes[i].Visible = a;
             }
+        }
+
+        void ToggleStarShow() {
+            _starShowMode = !_starShowMode;
+            if (_starShowMode) {
+                // Capture the card mascot's position in contentPanel coordinates before hiding
+                var activeCard = _panes[_activePane].Controls.Count > 0 ? _panes[_activePane].Controls[0] : null;
+                if (activeCard != null) {
+                    var cardScreen = activeCard.PointToScreen(Point.Empty);
+                    var cpScreen = _contentPanel.PointToScreen(Point.Empty);
+                    int cardInCpX = cardScreen.X - cpScreen.X;
+                    int cardInCpY = cardScreen.Y - cpScreen.Y;
+                    int msz = Dpi.S(120); // same size as card mascot
+                    _savedMascotX = cardInCpX + activeCard.Width - msz - Dpi.S(8);
+                    _savedMascotY = cardInCpY + activeCard.Height - msz - Dpi.S(8);
+                }
+                // Hide all panes and footer — just stars + sidebar
+                for (int i = 0; i < 5; i++) _panes[i].Visible = false;
+                _footer.Visible = false;
+                // Launch a burst of meteors for the show
+                if (_stars.Shooting != null) for (int i = 0; i < 8; i++) _stars.Shooting.ForceLaunchMeteor();
+                if (_stars.Celestial != null) _stars.Celestial.ForceLaunch();
+            } else {
+                // Restore active pane and footer
+                _panes[_activePane].Visible = true;
+                _footer.Visible = true;
+            }
+            _contentPanel.Invalidate();
         }
 
         public void NavigateToPane(int idx) { if (idx >= 0 && idx < 5) SwitchPane(idx); }
@@ -423,9 +485,11 @@ namespace AngryAudio
             public Color Color;
             public int MaxWidth; // 0 = auto
             public bool RightAlign; // true = X is right edge, text aligns right
+            public bool Visible = true; // false = skip painting
         }
         Dictionary<Panel, List<PaintedLabel>> _cardLabels = new Dictionary<Panel, List<PaintedLabel>>();
         Dictionary<Panel, List<int>> _cardLines = new Dictionary<Panel, List<int>>(); // separator Y positions
+        Dictionary<Panel, int> _cardBottomLimit = new Dictionary<Panel, int>(); // optional max card bottom (0 = use panel height)
 
         PaintedLabel AddText(Panel card, string text, int x, int y, float fontSize, Color color, FontStyle style = FontStyle.Regular, int maxW = 0) {
             if (!_cardLabels.ContainsKey(card)) _cardLabels[card] = new List<PaintedLabel>();
@@ -448,13 +512,16 @@ namespace AngryAudio
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
                 int cardTop = Dpi.S(sub != null ? 46 : 38);
+                int cardBottom = c.Height - 1;
+                if (_cardBottomLimit.ContainsKey(c) && _cardBottomLimit[c] > 0)
+                    cardBottom = Math.Min(cardBottom, _cardBottomLimit[c]);
                 int rad = Dpi.S(6);
 
                 // 1) Unified starfield — same stars as entire form, seamless
                 PaintUnifiedStars(g, c);
 
                 // 2) Frosted glass card — tint + dimmed unified stars
-                var cardRect = new Rectangle(0, cardTop, c.Width - 1, c.Height - cardTop - 1);
+                var cardRect = new Rectangle(0, cardTop, c.Width - 1, cardBottom - cardTop);
                 var clipPath = new GraphicsPath();
                 int d = rad * 2;
                 clipPath.AddArc(cardRect.X, cardRect.Y, d, d, 180, 90);
@@ -507,13 +574,16 @@ namespace AngryAudio
                 {
                     using (var f = new Font("Segoe UI", 8f)) {
                         using (var b = new SolidBrush(TXT4))
-                            g.DrawString(sub, f, b, Dpi.S(16), Dpi.S(28));
+                            g.DrawString(sub, f, b, Dpi.S(16), Dpi.S(29));
                     }
                 }
 
-                // 7) All painted labels — drawn directly on glass (no backing rects)
+                // 7) All painted labels — drawn directly on glass, clipped to card area
                 if (_cardLabels.ContainsKey(c)) {
+                    var oldClip2 = g.Clip;
+                    g.SetClip(cardRect);
                     foreach (var lbl in _cardLabels[c]) {
+                        if (!lbl.Visible) continue;
                         using (var b = new SolidBrush(lbl.Color)) {
                             if (lbl.MaxWidth > 0)
                                 g.DrawString(lbl.Text, lbl.Font, b, new RectangleF(lbl.X, lbl.Y, lbl.MaxWidth, 100));
@@ -525,6 +595,226 @@ namespace AngryAudio
                                 g.DrawString(lbl.Text, lbl.Font, b, lbl.X, lbl.Y);
                         }
                     }
+                    g.Clip = oldClip2;
+                }
+
+                // PTT/Speaker warning text — drawn directly in card paint handler
+                if (c == _volCard) {
+                    var oldClip3 = g.Clip;
+                    g.SetClip(cardRect);
+                    using (var warnFont = new Font("Segoe UI", 7.5f))
+                    using (var warnBrush = new SolidBrush(Color.FromArgb(220, 180, 80))) {
+                        if (_pttWarningY > 0)
+                            g.DrawString(_pttWarningText != null && _pttWarningText.Length > 0 ? _pttWarningText : "\u26A0  No active mic protections.", warnFont, warnBrush, Dpi.S(64), _pttWarningY);
+                        if (_spkWarningY > 0)
+                            g.DrawString(_spkWarningText != null && _spkWarningText.Length > 0 ? _spkWarningText : "\u26A0  No active speaker protections.", warnFont, warnBrush, Dpi.S(64), _spkWarningY);
+                    }
+                    g.Clip = oldClip3;
+                }
+
+                // Fix 2: Star spin around "Press..." hotkey label
+                if (_captureGlowLabel != null && _captureGlowLabel.Parent == c) {
+                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    float glCx = _captureGlowLabel.Left + _captureGlowLabel.Width / 2f;
+                    float glCy = _captureGlowLabel.Top + _captureGlowLabel.Height / 2f;
+                    float ringR = Dpi.S(20) + (float)Math.Sin(_captureGlowFrame * 0.3) * Dpi.S(3);
+                    float baseAngle2 = _captureGlowFrame * 50f * (float)(Math.PI / 180.0);
+                    for (int rd = 0; rd < 4; rd++) {
+                        float dotAngle = baseAngle2 + rd * (float)(Math.PI * 2.0 / 4);
+                        for (int tail = 0; tail < 4; tail++) {
+                            float tailAngle = dotAngle - tail * 0.22f;
+                            float tx = glCx + (float)Math.Cos(tailAngle) * ringR;
+                            float ty = glCy + (float)Math.Sin(tailAngle) * ringR;
+                            float tr = Dpi.S(2) * (1f - tail * 0.2f);
+                            int ta2 = 240 - tail * 55;
+                            if (ta2 <= 0) continue;
+                            Color dc = tail == 0 ? Color.FromArgb(ta2, 255, 255, 255) : Color.FromArgb(ta2, 100, 200, 255);
+                            using (var br = new SolidBrush(dc))
+                                g.FillEllipse(br, tx - tr, ty - tr, tr*2, tr*2);
+                        }
+                    }
+                }
+
+                // Fix 3: Toggle-on glisten animation
+                if (_tglGlistenTarget != null && _tglGlistenTarget.Parent == c && _tglGlistenFrame > 0 && _tglGlistenFrame <= 35) {
+                    g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    float ct = _tglGlistenFrame / 35f;
+                    float tglW = _tglGlistenTarget.Width, tglH = _tglGlistenTarget.Height;
+                    float tglCx2 = _tglGlistenTarget.Left + tglW / 2f;
+                    float tglCy2 = _tglGlistenTarget.Top + tglH / 2f;
+                    float glRingR = Dpi.S(13) + (float)Math.Sin(ct * Math.PI) * Dpi.S(3);
+                    float glBaseAngle2 = _tglGlistenFrame * 50f * (float)(Math.PI / 180.0);
+                    float ringFade = ct < 0.8f ? 1f : (1f - ct) / 0.2f;
+                    for (int rd = 0; rd < 4; rd++) {
+                        float dotAngle = glBaseAngle2 + rd * (float)(Math.PI * 2.0 / 4);
+                        for (int tail = 0; tail < 4; tail++) {
+                            float tailAngle = dotAngle - tail * 0.22f;
+                            float tx = tglCx2 + (float)Math.Cos(tailAngle) * glRingR;
+                            float ty = tglCy2 + (float)Math.Sin(tailAngle) * glRingR;
+                            float tr = Dpi.S(2) * (1f - tail * 0.2f);
+                            int ta2 = (int)(ringFade * (240 - tail * 55));
+                            if (ta2 <= 0) continue;
+                            Color dc = tail == 0 ? Color.FromArgb(ta2, 255, 255, 255) : Color.FromArgb(ta2, 100, 200, 255);
+                            using (var br = new SolidBrush(dc))
+                                g.FillEllipse(br, tx - tr, ty - tr, tr*2, tr*2);
+                        }
+                    }
+                    if (ct > 0.2f && ct < 0.8f) {
+                        float sweepT = (ct - 0.2f) / 0.6f;
+                        float sweepX = _tglGlistenTarget.Left - Dpi.S(3) + sweepT * (tglW + Dpi.S(6));
+                        float sweepW2 = Dpi.S(5);
+                        int sweepA = (int)((sweepT < 0.5f ? sweepT / 0.5f : (1f - sweepT) / 0.5f) * 200);
+                        if (sweepA > 0) {
+                            using (var lgb = new System.Drawing.Drawing2D.LinearGradientBrush(
+                                new PointF(sweepX - sweepW2, 0), new PointF(sweepX + sweepW2, 0),
+                                Color.FromArgb(0, 255, 255, 255), Color.FromArgb(sweepA, 255, 255, 255))) {
+                                var blend = new System.Drawing.Drawing2D.ColorBlend(3);
+                                blend.Colors = new[] { Color.FromArgb(0, 255, 255, 255), Color.FromArgb(sweepA, 255, 255, 255), Color.FromArgb(0, 255, 255, 255) };
+                                blend.Positions = new[] { 0f, 0.5f, 1f };
+                                lgb.InterpolationColors = blend;
+                                g.FillRectangle(lgb, sweepX - sweepW2, _tglGlistenTarget.Top - Dpi.S(1), sweepW2 * 2, tglH + Dpi.S(2));
+                            }
+                        }
+                    }
+                }
+
+                // Hotkey flash highlight — painted directly on card, no child panel
+                if (_flashTarget != null && _flashTarget.Parent == c && _flashAlpha > 0) {
+                    int hlX = Dpi.S(4), hlY = _flashTarget.Top - Dpi.S(4);
+                    int hlW = c.Width - Dpi.S(8), hlH = Dpi.S(42);
+                    using (var b = new SolidBrush(Color.FromArgb(_flashAlpha, ACC.R, ACC.G, ACC.B)))
+                        g.FillRectangle(b, hlX, hlY, hlW, hlH);
+                    int borderA = (int)(_flashAlpha * 3.5); if (borderA > 255) borderA = 255;
+                    using (var pen = new Pen(Color.FromArgb(borderA, ACC.R, ACC.G, ACC.B), 2f))
+                        g.DrawRectangle(pen, hlX + 1, hlY + 1, hlW - 3, hlH - 3);
+                }
+
+                // Persistent held-key highlight — stays lit while hotkey is held (matches WelcomeForm)
+                if (c == _pttCard) {
+                    ToggleSwitch[] modeTgls = { _tglPtt, _tglPtm, _tglPtToggle };
+                    for (int mi = 0; mi < 3; mi++) {
+                        if (!_optModeActive[mi] || modeTgls[mi] == null) continue;
+                        int sTop = modeTgls[mi].Top - Dpi.S(4);
+                        int sBot = modeTgls[mi].Top + Dpi.S(38);
+                        int sLeft = Dpi.S(10), sRight = c.Width - Dpi.S(10);
+                        var segRect = new Rectangle(sLeft, sTop, sRight - sLeft, sBot - sTop);
+                        // Soft outer bloom
+                        for (int layer = 0; layer < 4; layer++) {
+                            int expand = Dpi.S(layer * 2 + 1);
+                            int alpha = 40 - layer * 8;
+                            using (var b = new SolidBrush(Color.FromArgb(alpha, ACC.R, ACC.G, ACC.B)))
+                                g.FillRectangle(b, segRect.X - expand, segRect.Y - expand, segRect.Width + expand * 2, segRect.Height + expand * 2);
+                        }
+                        // Thick accent border
+                        using (var pen = new Pen(ACC, Dpi.PenW(2)))
+                            g.DrawRectangle(pen, segRect);
+                    }
+                }
+
+                // Card icons — eye/speaker painted directly, zero compositing
+                List<CardIcon> icons;
+                if (_cardIconMap.TryGetValue(c, out icons)) {
+                    foreach (var icon in icons) icon.Paint(g, ACC);
+                }
+                // Card toggles — painted directly, real ToggleSwitch hidden
+                List<CardToggle> ctgls;
+                if (_cardToggleMap.TryGetValue(c, out ctgls)) {
+                    foreach (var ct in ctgls) ct.Paint(g, ACC);
+                }
+                // Card sliders — painted directly, real SlickSlider hidden
+                List<CardSlider> cslds;
+                if (_cardSliderMap.TryGetValue(c, out cslds)) {
+                    foreach (var cs in cslds) cs.Paint(g, ACC);
+                }
+            };
+            // Mouse handlers for card icons + card toggles + card sliders
+            c.MouseDown += (s, e2) => {
+                if (e2.Button != MouseButtons.Left) return;
+                List<CardSlider> cslds2;
+                if (_cardSliderMap.TryGetValue(c, out cslds2)) {
+                    foreach (var cs in cslds2) {
+                        if (cs.HitTest(e2.Location) && cs.Source != null && cs.Source.Enabled) {
+                            cs.Dragging = true; cs.Source.Value = cs.XToValue(e2.X); c.Invalidate(); return;
+                        }
+                    }
+                }
+            };
+            c.MouseUp += (s, e2) => {
+                List<CardSlider> cslds2;
+                if (_cardSliderMap.TryGetValue(c, out cslds2)) {
+                    foreach (var cs in cslds2) {
+                        if (cs.Dragging) { cs.Dragging = false; c.Invalidate(); if (cs.Source != null) cs.Source.FireDragCompleted(); }
+                    }
+                }
+            };
+            c.MouseClick += (s, e2) => {
+                // Don't fire click if a slider was just dragged
+                List<CardSlider> cslds2;
+                if (_cardSliderMap.TryGetValue(c, out cslds2)) {
+                    foreach (var cs in cslds2) { if (cs.HitTest(e2.Location)) return; }
+                }
+                List<CardToggle> ctgls2;
+                if (_cardToggleMap.TryGetValue(c, out ctgls2)) {
+                    foreach (var ct in ctgls2) {
+                        if (ct.HitTest(e2.Location)) { ct.Click(); return; }
+                    }
+                }
+                List<CardIcon> icons2;
+                if (_cardIconMap.TryGetValue(c, out icons2)) {
+                    foreach (var icon in icons2) {
+                        if (icon.HitTest(e2.Location)) { icon.Toggle(); break; }
+                    }
+                }
+            };
+            c.MouseMove += (s, e2) => {
+                // Slider drag
+                List<CardSlider> cslds2;
+                if (_cardSliderMap.TryGetValue(c, out cslds2)) {
+                    foreach (var cs in cslds2) {
+                        if (cs.Dragging && cs.Source != null) { cs.Source.Value = cs.XToValue(e2.X); c.Invalidate(); }
+                    }
+                }
+                List<CardIcon> icons2;
+                bool anyHover = false;
+                if (_cardIconMap.TryGetValue(c, out icons2)) {
+                    foreach (var icon in icons2) {
+                        bool wasHover = icon.Hover;
+                        icon.Hover = icon.HitTest(e2.Location);
+                        if (icon.Hover) anyHover = true;
+                        if (wasHover != icon.Hover) c.Invalidate();
+                    }
+                }
+                List<CardToggle> ctgls2;
+                if (_cardToggleMap.TryGetValue(c, out ctgls2)) {
+                    foreach (var ct in ctgls2) {
+                        bool wasH = ct.Hover;
+                        ct.Hover = ct.HitTest(e2.Location);
+                        if (ct.Hover) anyHover = true;
+                        if (wasH != ct.Hover) c.Invalidate();
+                    }
+                }
+                if (_cardSliderMap.TryGetValue(c, out cslds2)) {
+                    foreach (var cs in cslds2) {
+                        bool wasH = cs.Hover;
+                        cs.Hover = cs.ThumbHitTest(e2.Location) || cs.Dragging;
+                        if (cs.Hover) anyHover = true;
+                        if (wasH != cs.Hover) c.Invalidate();
+                    }
+                }
+                c.Cursor = anyHover ? Cursors.Hand : Cursors.Default;
+            };
+            c.MouseLeave += (s, e2) => {
+                List<CardIcon> icons2;
+                if (_cardIconMap.TryGetValue(c, out icons2)) {
+                    foreach (var icon in icons2) { if (icon.Hover) { icon.Hover = false; c.Invalidate(); } }
+                }
+                List<CardToggle> ctgls2;
+                if (_cardToggleMap.TryGetValue(c, out ctgls2)) {
+                    foreach (var ct in ctgls2) { if (ct.Hover) { ct.Hover = false; c.Invalidate(); } }
+                }
+                List<CardSlider> cslds2;
+                if (_cardSliderMap.TryGetValue(c, out cslds2)) {
+                    foreach (var cs in cslds2) { if (cs.Hover) { cs.Hover = false; c.Invalidate(); } }
                 }
             };
             return c;
@@ -553,11 +843,30 @@ namespace AngryAudio
             var off = FormOffset(child);
             int w = ClientSize.Width, h = ClientSize.Height;
             _stars.PaintChildBg(g, w, h, off.X, off.Y, child.Width, child.Height);
+            // Paint frosted glass tint so controls match the card background, not raw stars
+            using (var tint = new SolidBrush(DarkTheme.GlassTint))
+                g.FillRectangle(tint, 0, 0, child.Width, child.Height);
+            // Dimmed stars through the glass — matches card's 3rd paint layer
+            PaintUnifiedStars(g, child, 0.35f, false);
+            // Flash highlight — if this child is within the flash region, tint it
+            if (_flashTarget != null && _flashAlpha > 0 && child.Parent == _flashTarget.Parent) {
+                int hlY = _flashTarget.Top - Dpi.S(4);
+                int hlH = Dpi.S(42);
+                int childBottom = child.Top + child.Height;
+                if (child.Top >= hlY && childBottom <= hlY + hlH) {
+                    using (var b = new SolidBrush(Color.FromArgb(_flashAlpha, ACC.R, ACC.G, ACC.B)))
+                        g.FillRectangle(b, 0, 0, child.Width, child.Height);
+                }
+            }
         }
 
         // Tgl now only creates ToggleSwitch — text is painted
         ToggleSwitch Tgl(string label, string sub, int y, Panel card) {
             var t = new ToggleSwitch { Location = Dpi.Pt(16, y) }; t.PaintParentBg = PaintCardBg; card.Controls.Add(t);
+            t.Visible = false; // Hidden — CardToggle paints instead
+            var ct = new CardToggle { PixelX = Dpi.S(16), PixelY = Dpi.S(y), Source = t, Card = card };
+            if (!_cardToggleMap.ContainsKey(card)) _cardToggleMap[card] = new List<CardToggle>();
+            _cardToggleMap[card].Add(ct);
             AddText(card, label, 64, y, 9.5f, TXT);
             if (sub != null) AddText(card, sub, 64, y + 19, 7.5f, TXT3);
             return t;
@@ -567,216 +876,560 @@ namespace AngryAudio
             return n; }
 
         // Dynamic painted labels that update at runtime
-        private PaintedLabel _plMicCur, _plSpkCur, _plMicVol, _plSpkVol;
+        private PaintedLabel _plMicVol, _plSpkVol;
         private Panel _volCard; // reference for invalidation on value change
+        private Panel _pttCard; // reference for animation invalidation
 
         void BuildAfkPane(Panel pane) {
             var card = MakeCard(1, "AFK Protection", "When you return, audio fades back in over 2s so you're never startled.");
-            int y = 64;
-            _tglAfkMic = Tgl("Mute Microphone When Idle", "Automatically mutes your mic when you step away.", y, card);
+            int y = 56;
+
+            // ── MICROPHONE SECTION ──
+            _tglAfkMic = Tgl("Microphone Auto-Mute", "Automatically mutes your mic when you step away.", y, card);
             _tglAfkMic.CheckedChanged += (s,e) => { if (!_loading) {
-                _settings.AfkMicMuteEnabled = _tglAfkMic.Checked;
-                if (_onToggle != null) _onToggle(_tglAfkMic.Checked ? "afk_mic_on" : "afk_mic_off");
+                _audio.AfkMicEnabled = _tglAfkMic.Checked;
+                _pttWarningText = BuildPttWarningText();
                 if (_tglAfkMic.Checked) { _loading = true; if (_tglPtt.Checked) _tglPtt.Checked = false; if (_tglPtm.Checked) _tglPtm.Checked = false; if (_tglPtToggle.Checked) _tglPtToggle.Checked = false; _loading = false; }
             } };
-            y += 52;
+            y += 48;
             AddText(card, "After", 64, y+3, 9f, TXT2);
             _nudAfkMicSec = Nud(5,3600,10,104,y,60); card.Controls.Add(_nudAfkMicSec);
-            _nudAfkMicSec.ValueChanged += (s,e) => { if (!_loading) { _settings.AfkMicMuteSec = (int)_nudAfkMicSec.Value; _settings.Save(); } };
+            _nudAfkMicSec.ValueChanged += (s,e) => { if (!_loading) { _audio.AfkMicSec = (int)_nudAfkMicSec.Value; _pttWarningText = BuildPttWarningText(); } };
             AddText(card, "seconds of inactivity", 170, y+3, 9f, TXT2);
-            y+=34;
+            y+=32;
             AddText(card, "\u26A0  Disable this during open mic or voice calls", 64, y+4, 7.5f, DarkTheme.Amber);
-            AddText(card, "Mutes all microphones system-wide \u2014 headset, camera mic, USB devices.", 64, y+22, 7f, Color.FromArgb(90, ACC.R, ACC.G, ACC.B));
-            y+=48; AddLine(card, y); y+=24;
-            _tglAfkSpk = Tgl("Mute Speakers When Idle", "Fades out system audio when you're away.", y, card);
-            _tglAfkSpk.CheckedChanged += (s,e) => { if (!_loading) { _settings.AfkSpeakerMuteEnabled = _tglAfkSpk.Checked; if (_onToggle != null) _onToggle(_tglAfkSpk.Checked ? "afk_spk_on" : "afk_spk_off"); } };
-            y += 52;
+            y += 18;
+            AddText(card, "Mutes all microphones system-wide \u2014 headset, camera mic, USB devices.", 64, y+4, 7.5f, Color.FromArgb(100, 180, 255));
+            y+=34; AddLine(card, y); y+=10;
+
+            // ── SPEAKERS SECTION ──
+            _tglAfkSpk = Tgl("Speaker Auto-Mute", "Fades out system audio when you're away.", y, card);
+            _tglAfkSpk.CheckedChanged += (s,e) => { if (!_loading) { _audio.AfkSpeakerEnabled = _tglAfkSpk.Checked; _spkWarningText = BuildSpkWarningText(); } };
+            y += 48;
             AddText(card, "After", 64, y+3, 9f, TXT2);
             _nudAfkSpkSec = Nud(5,3600,10,104,y,60); card.Controls.Add(_nudAfkSpkSec);
-            _nudAfkSpkSec.ValueChanged += (s,e) => { if (!_loading) { _settings.AfkSpeakerMuteSec = (int)_nudAfkSpkSec.Value; _settings.Save(); } };
+            _nudAfkSpkSec.ValueChanged += (s,e) => { if (!_loading) { _audio.AfkSpeakerSec = (int)_nudAfkSpkSec.Value; _spkWarningText = BuildSpkWarningText(); } };
             AddText(card, "seconds of inactivity", 170, y+3, 9f, TXT2);
+            y+=32;
+            AddText(card, "\u26A0  Disable this during movies or music", 64, y+4, 7.5f, DarkTheme.Amber);
+            y += 18;
+            AddText(card, "Mutes all speakers system-wide \u2014 headphones, monitors, Bluetooth devices.", 64, y+4, 7.5f, Color.FromArgb(100, 180, 255));
+
             pane.Controls.Add(card);
         }
 
         void BuildPttPane(Panel pane) {
-            var card = MakeCard(0, "Push-to-Talk", "Control when your mic is live. Enable one or more modes below.");
-            int y = 64;
+            var card = MakeCard(0, "Mic Protection", "Control when your mic is live. Enable one or more modes below.");
+            _pttCard = card;
+            int ki = 64;
 
-            // --- PTT SECTION ---
-            _tglPtt = Tgl("Enable Push-to-Talk", "Mic stays muted until you hold the hotkey.", y, card);
+            // Mic Security button — opens Windows microphone permissions, right-aligned in header
+            var btnMicSec = new Button{Text="Mic Security",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(90,26),ForeColor=ACC,BackColor=Color.FromArgb(ACC.R/8,ACC.G/8,ACC.B/8),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false};
+            btnMicSec.FlatAppearance.BorderColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);
+            btnMicSec.MouseEnter+=(s,e)=>{btnMicSec.BackColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);btnMicSec.ForeColor=Color.FromArgb(Math.Min(255,ACC.R+50),Math.Min(255,ACC.G+50),Math.Min(255,ACC.B+50));};
+            btnMicSec.MouseLeave+=(s,e)=>{btnMicSec.BackColor=Color.FromArgb(ACC.R/8,ACC.G/8,ACC.B/8);btnMicSec.ForeColor=ACC;};
+            btnMicSec.Click+=(s,e)=>{ try { System.Diagnostics.Process.Start("ms-settings:privacy-microphone"); } catch { } };
+            card.Controls.Add(btnMicSec);
+            card.Resize += (s2,e2) => { btnMicSec.Location = new Point(card.Width - Dpi.S(90) - Dpi.S(2), Dpi.S(18)); };
+
+            // MODE 1: PUSH-TO-TALK
+            int y = 56;
+            _tglPtt = new ToggleSwitch { Location = Dpi.Pt(16, y) }; _tglPtt.PaintParentBg = PaintCardBg; card.Controls.Add(_tglPtt);
+            _tglPtt.Visible = false;
+            { var ct = new CardToggle { PixelX = Dpi.S(16), PixelY = Dpi.S(y), Source = _tglPtt, Card = card };
+              if (!_cardToggleMap.ContainsKey(card)) _cardToggleMap[card] = new List<CardToggle>(); _cardToggleMap[card].Add(ct); }
+            AddText(card, "Push-to-Talk", 64, y, 10f, TXT, FontStyle.Bold);
+            AddText(card, "Silent until you hold the key to open.", 64, y+20, 7.5f, TXT3);
             _tglPtt.CheckedChanged += (s,e) => { if (!_loading) {
-                if (_tglPtt.Checked && _pttKeyCode <= 0) { _loading = true; _tglPtt.Checked = false; _loading = false; return; }
-                _settings.PushToTalkEnabled = _tglPtt.Checked; _settings.PushToTalkKey = _pttKeyCode; _settings.PushToTalkKey2 = _pttKeyCode2; _settings.PushToTalkKey3 = _pttKeyCode3;
-                if (_onToggle != null) _onToggle(_tglPtt.Checked ? "ptt_on" : "ptt_off");
+                if (_tglPtt.Checked && (IsCapturingKey || CaptureCooldownActive())) { _loading=true; _tglPtt.Checked=false; _loading=false; return; }
+                if (_tglPtt.Checked && _pttKeyCode <= 0) { _loading=true; _tglPtt.Checked=false; _loading=false; BeginCapture(CaptureTarget.PttKey1, _lblPttKey); return; }
+                if (!_tglPtt.Checked) { CancelAllCaptures();_pttKeyCode=0;_pttKeyCode2=0;_pttKeyCode3=0;_lblPttKey.Text="Add Key";_lblPttKey.BackColor=INPUT_BG;_lblPttKey.ForeColor=ACC;CompactKeys();LayoutPttKeys();_audio.DisablePttMode(); }
+                else {
+                    // PTT ON: if Toggle is off, force PTM off (mutually exclusive without Toggle)
+                    if (!_tglPtToggle.Checked && _tglPtm.Checked) {
+                        _loading=true; _tglPtm.Checked=false; _loading=false;
+                        _ptmKeyCode=0;_ptmKeyCode2=0;_ptmKeyCode3=0;_lblPtmKey.Text="Add Key";_lblPtmKey.BackColor=INPUT_BG;_lblPtmKey.ForeColor=ACC;LayoutPtmKeys();_audio.DisablePtmMode();
+                    }
+                    _audio.PttEnabled = true; _audio.PttKey = _pttKeyCode; _audio.PttKey2 = _pttKeyCode2; _audio.PttKey3 = _pttKeyCode3;
+                }
+                RefreshPttHotkeyLabel();
             } };
-            y += 36;
-            AddText(card, "Hotkey:", 64, y+3, 8f, TXT3);
-            _lblPttKey = new Label{Text=_pttKeyCode > 0 ? PushToTalk.GetKeyName(_pttKeyCode) : "Add Key",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(100,28),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(120,y)};
+            int hk1Y = y + 46;
+            AddText(card, "Hotkey:", ki, hk1Y+4, 8f, TXT3);
+            _lblPttKey = new Label{Text=_pttKeyCode > 0 ? PushToTalk.GetKeyName(_pttKeyCode) : "Add Key",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(80,26),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(ki+50,hk1Y)};
             _lblPttKey.Paint += (s,e) => { using(var p=new Pen(Color.FromArgb(60,ACC.R,ACC.G,ACC.B))) e.Graphics.DrawRectangle(p,0,0,_lblPttKey.Width-1,_lblPttKey.Height-1); };
-            _lblPttKey.MouseEnter += (s,e) => { if(!_capturingKey) _lblPttKey.BackColor = Color.FromArgb(28, 28, 28); };
-            _lblPttKey.MouseLeave += (s,e) => { if(!_capturingKey) _lblPttKey.BackColor = INPUT_BG; };
-            _lblPttKey.Click += (s,e) => StartKeyCapture(); card.Controls.Add(_lblPttKey);
-            _chkKey1Overlay = MakeOverlayCheck(y, card, _key1ShowOverlay, (v) => { _key1ShowOverlay = v; _settings.PttKey1ShowOverlay = v; if(!_loading && _onToggle!=null)_onToggle("eye1"); });
-            if (_chkKey1Overlay != null) _chkKey1Overlay.Location = Dpi.Pt(226, y+1);
-            AddText(card, "Click to change", 258, y+6, 7f, TXT3);
-            y += 32;
-            // Key 2 row
-            _lblKey2Label = new Label{Text="Key 2:",Font=new Font("Segoe UI",8f),ForeColor=TXT3,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(64,y+3)}; card.Controls.Add(_lblKey2Label);
-            _lblPttKey2 = new Label{Text=PushToTalk.GetKeyName(_pttKeyCode2),Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(100,28),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(120,y)};
+            _lblPttKey.MouseEnter += (s,e) => { if(!IsCapturingKey) _lblPttKey.BackColor = Color.FromArgb(28, 28, 28); };
+            _lblPttKey.MouseLeave += (s,e) => { if(!IsCapturingKey) _lblPttKey.BackColor = INPUT_BG; };
+            _lblPttKey.Click += (s,e) => BeginCapture(CaptureTarget.PttKey1, _lblPttKey); card.Controls.Add(_lblPttKey);
+            _chkKey1Overlay = MakeOverlayCheck(y, card, _key1ShowOverlay, (v) => { _key1ShowOverlay = v; _audio.PttShowOverlay = v; });
+            var _chkPttSound = MakeSoundCheck(y, card, _settings.PttSoundFeedback, (v) => { _audio.PttSoundFeedback = v; });
+            var _drpPttSound = MakeSoundDropdown(y, card, _settings.SoundFeedbackType, (v) => { _audio.SoundFeedbackType = v; });
+            // --- HORIZONTAL KEY ROW: Key1 [x] Key2 [x] Key3 [x] [Add Key] ---
+            // All keys on a single row. "Add Key" appears after the last assigned key.
+            int kbW = 80; // key box width (base)
+            int rmW = 18; // remove button width
+
+            _btnAddKey2 = new Button{Text="Add Key",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(56,26),ForeColor=ACC,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false};
+            _btnAddKey2.FlatAppearance.BorderColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);
+            _btnAddKey2.MouseEnter += (s,e) => { _btnAddKey2.BackColor=Color.FromArgb(ACC.R/5,ACC.G/5,ACC.B/5); };
+            _btnAddKey2.MouseLeave += (s,e) => { _btnAddKey2.BackColor=Color.FromArgb(20,20,20); };
+            _btnAddKey2.Click += (s,e) => BeginCapture(CaptureTarget.PttKey2, _lblPttKey2); card.Controls.Add(_btnAddKey2);
+            // Key 2 box (inline, right of key 1)
+            _lblKey2Label = new Label{Text="",Font=new Font("Segoe UI",8f),ForeColor=TXT3,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(0,0),Visible=false}; card.Controls.Add(_lblKey2Label); // hidden, kept for compat
+            _lblPttKey2 = new Label{Text=PushToTalk.GetKeyName(_pttKeyCode2),Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(kbW,26),TextAlign=ContentAlignment.MiddleCenter};
             _lblPttKey2.Paint += (s,e) => { using(var p=new Pen(Color.FromArgb(60,ACC.R,ACC.G,ACC.B))) e.Graphics.DrawRectangle(p,0,0,_lblPttKey2.Width-1,_lblPttKey2.Height-1); };
-            _lblPttKey2.MouseEnter += (s,e) => { if(!_capturingKey2) _lblPttKey2.BackColor = Color.FromArgb(28, 28, 28); };
-            _lblPttKey2.MouseLeave += (s,e) => { if(!_capturingKey2) _lblPttKey2.BackColor = INPUT_BG; };
-            _lblPttKey2.Click += (s,e) => StartKeyCapture2(); card.Controls.Add(_lblPttKey2);
-            _chkKey2Overlay = MakeOverlayCheck(y, card, _key2ShowOverlay, (v) => { _key2ShowOverlay = v; _settings.PttKey2ShowOverlay = v; if(!_loading && _onToggle!=null)_onToggle("eye2"); });
-            if (_chkKey2Overlay != null) _chkKey2Overlay.Location = Dpi.Pt(226, y+1);
-            _lblKey2Hint = new Label{Text="",Font=new Font("Segoe UI",7f),ForeColor=TXT4,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(258,y+6)}; card.Controls.Add(_lblKey2Hint);
-            _btnRemoveKey2 = new Button{Text="",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(24,24),BackColor=Color.Transparent,TabStop=false,Location=Dpi.Pt(258,y+2)};
+            _lblPttKey2.MouseEnter += (s,e) => { if(!IsCapturingKey) _lblPttKey2.BackColor = Color.FromArgb(28, 28, 28); };
+            _lblPttKey2.MouseLeave += (s,e) => { if(!IsCapturingKey) _lblPttKey2.BackColor = INPUT_BG; };
+            _lblPttKey2.Click += (s,e) => BeginCapture(CaptureTarget.PttKey2, _lblPttKey2); card.Controls.Add(_lblPttKey2);
+            _chkKey2Overlay = null;
+            _lblKey2Hint = new Label{Text="",Font=new Font("Segoe UI",7f),ForeColor=TXT4,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(0,0),Visible=false}; card.Controls.Add(_lblKey2Hint);
+            _btnRemoveKey2 = new Button{Text="",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(rmW,rmW),BackColor=Color.Transparent,TabStop=false};
             _btnRemoveKey2.FlatAppearance.BorderSize=0; _btnRemoveKey2.FlatAppearance.MouseOverBackColor=Color.Transparent; _btnRemoveKey2.FlatAppearance.MouseDownBackColor=Color.Transparent;
             bool _hoverRm2 = false;
             _btnRemoveKey2.MouseEnter += (s,e) => { _hoverRm2=true; _btnRemoveKey2.Invalidate(); };
             _btnRemoveKey2.MouseLeave += (s,e) => { _hoverRm2=false; _btnRemoveKey2.Invalidate(); };
             _btnRemoveKey2.Paint += (s,e) => { PaintRemoveIcon(e.Graphics, _btnRemoveKey2.ClientRectangle, _hoverRm2); };
-            _btnRemoveKey2.Click += (s,e) => { if (_pttKeyCode3 > 0) { _pttKeyCode2 = _pttKeyCode3; _settings.PushToTalkKey2 = _pttKeyCode3; _lblPttKey2.Text = KeyName(_pttKeyCode2); _key2ShowOverlay = _key3ShowOverlay; _settings.PttKey2ShowOverlay = _key3ShowOverlay; if(_chkKey2Overlay!=null) _chkKey2Overlay.Checked = _key2ShowOverlay; _pttKeyCode3 = 0; _settings.PushToTalkKey3 = 0; _key3ShowOverlay = true; _settings.PttKey3ShowOverlay = true; } else { _pttKeyCode2 = 0; _settings.PushToTalkKey2 = 0; } UpdateKey2Visibility(); };
+            _btnRemoveKey2.Click += (s,e) => { if (_pttKeyCode3 > 0) { _pttKeyCode2 = _pttKeyCode3; _lblPttKey2.Text = KeyName(_pttKeyCode2); _pttKeyCode3 = 0; } else { _pttKeyCode2 = 0; } LayoutPttKeys(); _audio.PttKey = _pttKeyCode; _audio.PttKey2 = _pttKeyCode2; _audio.PttKey3 = _pttKeyCode3; };
             card.Controls.Add(_btnRemoveKey2);
-            _btnAddKey2 = new Button{Text="+ Add Key",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(100,28),ForeColor=ACC,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false,Location=Dpi.Pt(120,y)};
-            _btnAddKey2.FlatAppearance.BorderColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);
-            _btnAddKey2.MouseEnter += (s,e) => { _btnAddKey2.BackColor=Color.FromArgb(ACC.R/5,ACC.G/5,ACC.B/5); };
-            _btnAddKey2.MouseLeave += (s,e) => { _btnAddKey2.BackColor=Color.FromArgb(20,20,20); };
-            _btnAddKey2.Click += (s,e) => StartKeyCapture2(); card.Controls.Add(_btnAddKey2);
-            UpdateKey2Visibility();
-            _lblKey3Label = new Label{Text="Key 3:",Font=new Font("Segoe UI",8f),ForeColor=TXT3,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(290,y+3)}; card.Controls.Add(_lblKey3Label);
-            _lblPttKey3 = new Label{Text=PushToTalk.GetKeyName(_pttKeyCode3),Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(100,28),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(340,y)};
+            // Key 3 box (inline, right of key 2)
+            _lblKey3Label = new Label{Text="",Font=new Font("Segoe UI",8f),ForeColor=TXT3,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(0,0),Visible=false}; card.Controls.Add(_lblKey3Label);
+            _lblPttKey3 = new Label{Text=PushToTalk.GetKeyName(_pttKeyCode3),Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(kbW,26),TextAlign=ContentAlignment.MiddleCenter};
             _lblPttKey3.Paint += (s,e) => { using(var p=new Pen(Color.FromArgb(60,ACC.R,ACC.G,ACC.B))) e.Graphics.DrawRectangle(p,0,0,_lblPttKey3.Width-1,_lblPttKey3.Height-1); };
-            _lblPttKey3.MouseEnter += (s,e) => { if(!_capturingKey3) _lblPttKey3.BackColor = Color.FromArgb(28, 28, 28); };
-            _lblPttKey3.MouseLeave += (s,e) => { if(!_capturingKey3) _lblPttKey3.BackColor = INPUT_BG; };
-            _lblPttKey3.Click += (s,e) => StartKeyCapture3(); card.Controls.Add(_lblPttKey3);
-            _chkKey3Overlay = MakeOverlayCheck(y, card, _key3ShowOverlay, (v) => { _key3ShowOverlay = v; _settings.PttKey3ShowOverlay = v; if(!_loading && _onToggle!=null)_onToggle("eye3"); });
-            if (_chkKey3Overlay != null) _chkKey3Overlay.Location = Dpi.Pt(446, y+1);
-            _btnRemoveKey3 = new Button{Text="",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(24,24),BackColor=Color.Transparent,TabStop=false,Location=Dpi.Pt(446,y+2)};
+            _lblPttKey3.MouseEnter += (s,e) => { if(!IsCapturingKey) _lblPttKey3.BackColor = Color.FromArgb(28, 28, 28); };
+            _lblPttKey3.MouseLeave += (s,e) => { if(!IsCapturingKey) _lblPttKey3.BackColor = INPUT_BG; };
+            _lblPttKey3.Click += (s,e) => BeginCapture(CaptureTarget.PttKey3, _lblPttKey3); card.Controls.Add(_lblPttKey3);
+            _chkKey3Overlay = null;
+            _btnRemoveKey3 = new Button{Text="",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(rmW,rmW),BackColor=Color.Transparent,TabStop=false};
             _btnRemoveKey3.FlatAppearance.BorderSize=0; _btnRemoveKey3.FlatAppearance.MouseOverBackColor=Color.Transparent; _btnRemoveKey3.FlatAppearance.MouseDownBackColor=Color.Transparent;
             bool _hoverRm3 = false;
             _btnRemoveKey3.MouseEnter += (s,e) => { _hoverRm3=true; _btnRemoveKey3.Invalidate(); };
             _btnRemoveKey3.MouseLeave += (s,e) => { _hoverRm3=false; _btnRemoveKey3.Invalidate(); };
             _btnRemoveKey3.Paint += (s,e) => { PaintRemoveIcon(e.Graphics, _btnRemoveKey3.ClientRectangle, _hoverRm3); };
-            _btnRemoveKey3.Click += (s,e) => { _pttKeyCode3 = 0; _settings.PushToTalkKey3 = 0; UpdateKey3Visibility(); };
+            _btnRemoveKey3.Click += (s,e) => { _pttKeyCode3 = 0; LayoutPttKeys(); _audio.PttKey3 = 0; };
             card.Controls.Add(_btnRemoveKey3);
-            _btnAddKey3 = new Button{Text="+ Key",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(70,28),ForeColor=ACC,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false,Location=Dpi.Pt(290,y)};
+            _btnAddKey3 = new Button{Text="Add Key",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(56,26),ForeColor=ACC,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false};
             _btnAddKey3.FlatAppearance.BorderColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);
             _btnAddKey3.MouseEnter += (s,e) => { _btnAddKey3.BackColor=Color.FromArgb(ACC.R/5,ACC.G/5,ACC.B/5); };
             _btnAddKey3.MouseLeave += (s,e) => { _btnAddKey3.BackColor=Color.FromArgb(20,20,20); };
-            _btnAddKey3.Click += (s,e) => StartKeyCapture3(); card.Controls.Add(_btnAddKey3);
-            _lblKey3Hint = new Label{Text="",Font=new Font("Segoe UI",7f),ForeColor=TXT4,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(258,y+6)}; card.Controls.Add(_lblKey3Hint);
-            UpdateKey3Visibility();
+            _btnAddKey3.Click += (s,e) => BeginCapture(CaptureTarget.PttKey3, _lblPttKey3); card.Controls.Add(_btnAddKey3);
+            _lblKey3Hint = new Label{Text="",Font=new Font("Segoe UI",7f),ForeColor=TXT4,AutoSize=true,BackColor=Color.Transparent,Location=Dpi.Pt(0,0),Visible=false}; card.Controls.Add(_lblKey3Hint);
+            LayoutPttKeys();
 
-            y += 30;
-            AddLine(card, y); y += 12;
+            y = hk1Y + 34;
+            AddLine(card, y); y += 10;
 
-            // --- PTM SECTION ---
-            _tglPtm = Tgl("Enable Push-to-Mute", "Mic stays open \u2014 hold the hotkey to mute.", y, card);
+            // MODE 2: PUSH-TO-MUTE — with overlay icon
+            _tglPtm = new ToggleSwitch { Location = Dpi.Pt(16, y) }; _tglPtm.PaintParentBg = PaintCardBg; card.Controls.Add(_tglPtm);
+            _tglPtm.Visible = false;
+            { var ct = new CardToggle { PixelX = Dpi.S(16), PixelY = Dpi.S(y), Source = _tglPtm, Card = card };
+              _cardToggleMap[card].Add(ct); }
+            AddText(card, "Push-to-Mute", 64, y, 10f, TXT, FontStyle.Bold);
+            AddText(card, "Open until you hold the key to silence.", 64, y+20, 7.5f, TXT3);
             _tglPtm.CheckedChanged += (s,e) => { if (!_loading) {
-                if (_tglPtm.Checked && _ptmKeyCode <= 0) { _loading = true; _tglPtm.Checked = false; _loading = false; return; }
-                _settings.PushToMuteEnabled = _tglPtm.Checked; _settings.PushToMuteKey = _ptmKeyCode;
-                if (_onToggle != null) _onToggle(_tglPtm.Checked ? "ptm_on" : "ptm_off");
+                if (_tglPtm.Checked && (IsCapturingKey || CaptureCooldownActive())) { _loading=true; _tglPtm.Checked=false; _loading=false; return; }
+                if (_tglPtm.Checked && _ptmKeyCode <= 0) { _loading=true; _tglPtm.Checked=false; _loading=false; BeginCapture(CaptureTarget.PtmKey1, _lblPtmKey); return; }
+                if (!_tglPtm.Checked) { CancelAllCaptures();_ptmKeyCode=0;_ptmKeyCode2=0;_ptmKeyCode3=0;_lblPtmKey.Text="Add Key";_lblPtmKey.BackColor=INPUT_BG;_lblPtmKey.ForeColor=ACC;LayoutPtmKeys();_audio.DisablePtmMode(); }
+                else {
+                    // PTM ON: if Toggle is off, force PTT off (mutually exclusive without Toggle)
+                    if (!_tglPtToggle.Checked && _tglPtt.Checked) {
+                        _loading=true; _tglPtt.Checked=false; _loading=false;
+                        _pttKeyCode=0;_pttKeyCode2=0;_pttKeyCode3=0;_lblPttKey.Text="Add Key";_lblPttKey.BackColor=INPUT_BG;_lblPttKey.ForeColor=ACC;CompactKeys();LayoutPttKeys();_audio.DisablePttMode();
+                    }
+                    _audio.PtmEnabled = true; _audio.PtmKey = _ptmKeyCode; _audio.PtmKey2 = _ptmKeyCode2;
+                }
+                RefreshPttHotkeyLabel();
             } };
-            y += 36;
-            AddText(card, "Hotkey:", 64, y+3, 8f, TXT3);
-            _lblPtmKey = new Label{Text=_ptmKeyCode > 0 ? PushToTalk.GetKeyName(_ptmKeyCode) : "Add Key",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(100,28),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(120,y)};
+            int hk2Y = y + 46;
+            AddText(card, "Hotkey:", ki, hk2Y+4, 8f, TXT3);
+            _lblPtmKey = new Label{Text=_ptmKeyCode > 0 ? PushToTalk.GetKeyName(_ptmKeyCode) : "Add Key",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(80,26),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(ki+50,hk2Y)};
             _lblPtmKey.Paint += (s,e) => { using(var p=new Pen(Color.FromArgb(60,ACC.R,ACC.G,ACC.B))) e.Graphics.DrawRectangle(p,0,0,_lblPtmKey.Width-1,_lblPtmKey.Height-1); };
-            _lblPtmKey.MouseEnter += (s,e) => { if(!_capturingPtmKey) _lblPtmKey.BackColor = Color.FromArgb(28, 28, 28); };
-            _lblPtmKey.MouseLeave += (s,e) => { if(!_capturingPtmKey) _lblPtmKey.BackColor = INPUT_BG; };
-            _lblPtmKey.Click += (s,e) => StartPtmKeyCapture(); card.Controls.Add(_lblPtmKey);
-            AddText(card, "Click to change", 226, y+6, 7f, TXT3);
+            _lblPtmKey.MouseEnter += (s,e) => { if(!IsCapturingKey) _lblPtmKey.BackColor = Color.FromArgb(28, 28, 28); };
+            _lblPtmKey.MouseLeave += (s,e) => { if(!IsCapturingKey) _lblPtmKey.BackColor = INPUT_BG; };
+            _lblPtmKey.Click += (s,e) => BeginCapture(CaptureTarget.PtmKey1, _lblPtmKey); card.Controls.Add(_lblPtmKey);
+            // PTM Add Key button for key2
+            _btnPtmAddKey2 = new Button{Text="Add Key",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(56,26),ForeColor=ACC,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false,Location=Dpi.Pt(ki+152,hk2Y)};
+            _btnPtmAddKey2.FlatAppearance.BorderColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);
+            _btnPtmAddKey2.Click += (s,e) => BeginCapture(CaptureTarget.PtmKey2, _lblPtmKey2);
+            card.Controls.Add(_btnPtmAddKey2);
+            // PTM key2 row
+            int ptmK2Y = hk2Y + 30;
+            _lblPtmKey2 = new Label{Text=_ptmKeyCode2>0?KeyName(_ptmKeyCode2):"",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(80,26),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(ki+50,ptmK2Y),Visible=_ptmKeyCode2>0};
+            _lblPtmKey2.Paint += (s,e) => { using(var p=new Pen(Color.FromArgb(60,ACC.R,ACC.G,ACC.B))) e.Graphics.DrawRectangle(p,0,0,_lblPtmKey2.Width-1,_lblPtmKey2.Height-1); };
+            _lblPtmKey2.Click += (s,e) => BeginCapture(CaptureTarget.PtmKey2, _lblPtmKey2);
+            card.Controls.Add(_lblPtmKey2);
+            _btnPtmRemKey2 = new Button{Text="",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(24,24),BackColor=Color.Transparent,TabStop=false,Location=Dpi.Pt(ki+150,ptmK2Y+1),Visible=_ptmKeyCode2>0};
+            _btnPtmRemKey2.FlatAppearance.BorderSize=0; _btnPtmRemKey2.Paint+=(s,e)=>{using(var p=new Pen(Color.FromArgb(120,120,120),2f)){var g2=e.Graphics;g2.SmoothingMode=System.Drawing.Drawing2D.SmoothingMode.AntiAlias;float cx=_btnPtmRemKey2.Width/2f,cy=_btnPtmRemKey2.Height/2f;g2.DrawLine(p,cx-4,cy-4,cx+4,cy+4);g2.DrawLine(p,cx+4,cy-4,cx-4,cy+4);}};
+            _btnPtmRemKey2.Click += (s,e) => { _ptmKeyCode2=0;_audio.PtmKey2=0;CompactKeys(); };
+            card.Controls.Add(_btnPtmRemKey2);
+            // PTM key3 row
+            int ptmK3Y = ptmK2Y + 30;
+            _lblPtmKey3 = new Label{Text=_ptmKeyCode3>0?KeyName(_ptmKeyCode3):"",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(80,26),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(ki+50,ptmK3Y),Visible=_ptmKeyCode3>0};
+            _lblPtmKey3.Paint += (s,e) => { using(var p=new Pen(Color.FromArgb(60,ACC.R,ACC.G,ACC.B))) e.Graphics.DrawRectangle(p,0,0,_lblPtmKey3.Width-1,_lblPtmKey3.Height-1); };
+            _lblPtmKey3.Click += (s,e) => BeginCapture(CaptureTarget.PtmKey3, _lblPtmKey3);
+            card.Controls.Add(_lblPtmKey3);
+            _btnPtmRemKey3 = new Button{Text="",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(24,24),BackColor=Color.Transparent,TabStop=false,Location=Dpi.Pt(ki+150,ptmK3Y+1),Visible=_ptmKeyCode3>0};
+            _btnPtmRemKey3.FlatAppearance.BorderSize=0; _btnPtmRemKey3.Paint+=(s,e)=>{using(var p=new Pen(Color.FromArgb(120,120,120),2f)){var g2=e.Graphics;g2.SmoothingMode=System.Drawing.Drawing2D.SmoothingMode.AntiAlias;float cx=_btnPtmRemKey3.Width/2f,cy=_btnPtmRemKey3.Height/2f;g2.DrawLine(p,cx-4,cy-4,cx+4,cy+4);g2.DrawLine(p,cx+4,cy-4,cx-4,cy+4);}};
+            _btnPtmRemKey3.Click += (s,e) => { _ptmKeyCode3=0;_audio.PtmKey3=0;CompactKeys(); };
+            card.Controls.Add(_btnPtmRemKey3);
+            // PTM Add Key button for key3
+            _btnPtmAddKey3 = new Button{Text="Add Key",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(56,26),ForeColor=ACC,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false};
+            _btnPtmAddKey3.FlatAppearance.BorderColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);
+            _btnPtmAddKey3.Click += (s,e) => BeginCapture(CaptureTarget.PtmKey3, _lblPtmKey3);
+            card.Controls.Add(_btnPtmAddKey3);
+            // Initial visibility
+            _btnPtmAddKey2.Visible = _ptmKeyCode2 <= 0 && _ptmKeyCode > 0;
+            // PTM overlay toggle — on hotkey row
+            var _chkPtmOverlay = MakeOverlayCheck(y, card, _settings.PtmShowOverlay, (v) => { _audio.PtmShowOverlay = v; });
+            var _chkPtmSound = MakeSoundCheck(y, card, _settings.PtmSoundFeedback, (v) => { _audio.PtmSoundFeedback = v; });
+            var _drpPtmSound = MakeSoundDropdown(y, card, _settings.SoundFeedbackType, (v) => { _audio.SoundFeedbackType = v; });
+            LayoutPtmKeys();
 
-            y += 30;
-            AddLine(card, y); y += 12;
+            y = hk2Y + 34;
+            AddLine(card, y); y += 10;
 
-            // --- TOGGLE SECTION ---
-            _tglPtToggle = Tgl("Enable Push-to-Toggle", "Tap once to unmute, tap again to mute.", y, card);
+            // MODE 3: PUSH-TO-TOGGLE — with overlay icon
+            _tglPtToggle = new ToggleSwitch { Location = Dpi.Pt(16, y) }; _tglPtToggle.PaintParentBg = PaintCardBg; card.Controls.Add(_tglPtToggle);
+            _tglPtToggle.Visible = false;
+            { var ct = new CardToggle { PixelX = Dpi.S(16), PixelY = Dpi.S(y), Source = _tglPtToggle, Card = card };
+              _cardToggleMap[card].Add(ct); }
+            AddText(card, "Push-to-Toggle", 64, y, 10f, TXT, FontStyle.Bold);
+            AddText(card, "Tap to mute, tap again to unmute.", 64, y+20, 7.5f, TXT3);
             _tglPtToggle.CheckedChanged += (s,e) => { if (!_loading) {
-                if (_tglPtToggle.Checked && _ptToggleKeyCode <= 0) { _loading = true; _tglPtToggle.Checked = false; _loading = false; return; }
-                _settings.PushToToggleEnabled = _tglPtToggle.Checked; _settings.PushToToggleKey = _ptToggleKeyCode;
-                if (_onToggle != null) _onToggle(_tglPtToggle.Checked ? "ptt_toggle_on" : "ptt_toggle_off");
+                if (_tglPtToggle.Checked && (IsCapturingKey || CaptureCooldownActive())) { _loading=true; _tglPtToggle.Checked=false; _loading=false; return; }
+                if (_tglPtToggle.Checked && _ptToggleKeyCode <= 0) { _loading=true; _tglPtToggle.Checked=false; _loading=false; BeginCapture(CaptureTarget.ToggleKey1, _lblPtToggleKey); return; }
+                if (!_tglPtToggle.Checked) {
+                    CancelAllCaptures();_ptToggleKeyCode=0;_ptToggleKeyCode2=0;_ptToggleKeyCode3=0;_lblPtToggleKey.Text="Add Key";_lblPtToggleKey.BackColor=INPUT_BG;_lblPtToggleKey.ForeColor=ACC;LayoutToggleKeys();_audio.DisablePtToggleMode();
+                    // Toggle OFF: PTT and PTM can no longer coexist — keep PTT, kill PTM
+                    if (_tglPtt.Checked && _tglPtm.Checked) {
+                        _loading=true; _tglPtm.Checked=false; _loading=false;
+                        _ptmKeyCode=0;_ptmKeyCode2=0;_ptmKeyCode3=0;_lblPtmKey.Text="Add Key";_lblPtmKey.BackColor=INPUT_BG;_lblPtmKey.ForeColor=ACC;LayoutPtmKeys();_audio.DisablePtmMode();
+                    }
+                }
+                else { _audio.PtToggleEnabled = true; _audio.PtToggleKey = _ptToggleKeyCode; _audio.PtToggleKey2 = _ptToggleKeyCode2; }
+                RefreshPttHotkeyLabel();
             } };
-            y += 36;
-            AddText(card, "Hotkey:", 64, y+3, 8f, TXT3);
-            _lblPtToggleKey = new Label{Text=_ptToggleKeyCode > 0 ? PushToTalk.GetKeyName(_ptToggleKeyCode) : "Add Key",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(100,28),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(120,y)};
+            int hk3Y = y + 46;
+            AddText(card, "Hotkey:", ki, hk3Y+4, 8f, TXT3);
+            _lblPtToggleKey = new Label{Text=_ptToggleKeyCode > 0 ? PushToTalk.GetKeyName(_ptToggleKeyCode) : "Add Key",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(80,26),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(ki+50,hk3Y)};
             _lblPtToggleKey.Paint += (s,e) => { using(var p=new Pen(Color.FromArgb(60,ACC.R,ACC.G,ACC.B))) e.Graphics.DrawRectangle(p,0,0,_lblPtToggleKey.Width-1,_lblPtToggleKey.Height-1); };
-            _lblPtToggleKey.MouseEnter += (s,e) => { if(!_capturingToggleKey) _lblPtToggleKey.BackColor = Color.FromArgb(28, 28, 28); };
-            _lblPtToggleKey.MouseLeave += (s,e) => { if(!_capturingToggleKey) _lblPtToggleKey.BackColor = INPUT_BG; };
-            _lblPtToggleKey.Click += (s,e) => StartToggleKeyCapture(); card.Controls.Add(_lblPtToggleKey);
-            AddText(card, "Click to change", 226, y+6, 7f, TXT3);
+            _lblPtToggleKey.MouseEnter += (s,e) => { if(!IsCapturingKey) _lblPtToggleKey.BackColor = Color.FromArgb(28, 28, 28); };
+            _lblPtToggleKey.MouseLeave += (s,e) => { if(!IsCapturingKey) _lblPtToggleKey.BackColor = INPUT_BG; };
+            _lblPtToggleKey.Click += (s,e) => BeginCapture(CaptureTarget.ToggleKey1, _lblPtToggleKey); card.Controls.Add(_lblPtToggleKey);
+            // Toggle Add Key button for key2
+            _btnToggleAddKey2 = new Button{Text="Add Key",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(56,26),ForeColor=ACC,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false,Location=Dpi.Pt(ki+152,hk3Y)};
+            _btnToggleAddKey2.FlatAppearance.BorderColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);
+            _btnToggleAddKey2.Click += (s,e) => BeginCapture(CaptureTarget.ToggleKey2, _lblPtToggleKey2);
+            card.Controls.Add(_btnToggleAddKey2);
+            // Toggle key2 row
+            int toggleK2Y = hk3Y + 30;
+            _lblPtToggleKey2 = new Label{Text=_ptToggleKeyCode2>0?KeyName(_ptToggleKeyCode2):"",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(80,26),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(ki+50,toggleK2Y),Visible=_ptToggleKeyCode2>0};
+            _lblPtToggleKey2.Paint += (s,e) => { using(var p=new Pen(Color.FromArgb(60,ACC.R,ACC.G,ACC.B))) e.Graphics.DrawRectangle(p,0,0,_lblPtToggleKey2.Width-1,_lblPtToggleKey2.Height-1); };
+            _lblPtToggleKey2.Click += (s,e) => BeginCapture(CaptureTarget.ToggleKey2, _lblPtToggleKey2);
+            card.Controls.Add(_lblPtToggleKey2);
+            _btnToggleRemKey2 = new Button{Text="",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(24,24),BackColor=Color.Transparent,TabStop=false,Location=Dpi.Pt(ki+150,toggleK2Y+1),Visible=_ptToggleKeyCode2>0};
+            _btnToggleRemKey2.FlatAppearance.BorderSize=0; _btnToggleRemKey2.Paint+=(s,e)=>{using(var p=new Pen(Color.FromArgb(120,120,120),2f)){var g2=e.Graphics;g2.SmoothingMode=System.Drawing.Drawing2D.SmoothingMode.AntiAlias;float cx=_btnToggleRemKey2.Width/2f,cy=_btnToggleRemKey2.Height/2f;g2.DrawLine(p,cx-4,cy-4,cx+4,cy+4);g2.DrawLine(p,cx+4,cy-4,cx-4,cy+4);}};
+            _btnToggleRemKey2.Click += (s,e) => { _ptToggleKeyCode2=0;_audio.PtToggleKey2=0;CompactKeys(); };
+            card.Controls.Add(_btnToggleRemKey2);
+            // Toggle key3 row
+            int toggleK3Y = toggleK2Y + 30;
+            _lblPtToggleKey3 = new Label{Text=_ptToggleKeyCode3>0?KeyName(_ptToggleKeyCode3):"",Font=new Font("Segoe UI",9f,FontStyle.Bold),ForeColor=ACC,BackColor=INPUT_BG,Size=Dpi.Size(80,26),TextAlign=ContentAlignment.MiddleCenter,Location=Dpi.Pt(ki+50,toggleK3Y),Visible=_ptToggleKeyCode3>0};
+            _lblPtToggleKey3.Paint += (s,e) => { using(var p=new Pen(Color.FromArgb(60,ACC.R,ACC.G,ACC.B))) e.Graphics.DrawRectangle(p,0,0,_lblPtToggleKey3.Width-1,_lblPtToggleKey3.Height-1); };
+            _lblPtToggleKey3.Click += (s,e) => BeginCapture(CaptureTarget.ToggleKey3, _lblPtToggleKey3);
+            card.Controls.Add(_lblPtToggleKey3);
+            _btnToggleRemKey3 = new Button{Text="",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(24,24),BackColor=Color.Transparent,TabStop=false,Location=Dpi.Pt(ki+150,toggleK3Y+1),Visible=_ptToggleKeyCode3>0};
+            _btnToggleRemKey3.FlatAppearance.BorderSize=0; _btnToggleRemKey3.Paint+=(s,e)=>{using(var p=new Pen(Color.FromArgb(120,120,120),2f)){var g2=e.Graphics;g2.SmoothingMode=System.Drawing.Drawing2D.SmoothingMode.AntiAlias;float cx=_btnToggleRemKey3.Width/2f,cy=_btnToggleRemKey3.Height/2f;g2.DrawLine(p,cx-4,cy-4,cx+4,cy+4);g2.DrawLine(p,cx+4,cy-4,cx-4,cy+4);}};
+            _btnToggleRemKey3.Click += (s,e) => { _ptToggleKeyCode3=0;_audio.PtToggleKey3=0;CompactKeys(); };
+            card.Controls.Add(_btnToggleRemKey3);
+            // Toggle Add Key button for key3
+            _btnToggleAddKey3 = new Button{Text="Add Key",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(56,26),ForeColor=ACC,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f,FontStyle.Bold),TabStop=false};
+            _btnToggleAddKey3.FlatAppearance.BorderColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);
+            _btnToggleAddKey3.Click += (s,e) => BeginCapture(CaptureTarget.ToggleKey3, _lblPtToggleKey3);
+            card.Controls.Add(_btnToggleAddKey3);
+            _btnToggleAddKey2.Visible = _ptToggleKeyCode2 <= 0 && _ptToggleKeyCode > 0;
+            // Toggle overlay toggle — on hotkey row
+            var _chkToggleOverlay = MakeOverlayCheck(y, card, _settings.PtToggleShowOverlay, (v) => { _audio.PtToggleShowOverlay = v; });
+            var _chkToggleSound = MakeSoundCheck(y, card, _settings.PtToggleSoundFeedback, (v) => { _audio.PtToggleSoundFeedback = v; });
+            var _drpToggleSound = MakeSoundDropdown(y, card, _settings.SoundFeedbackType, (v) => { _audio.SoundFeedbackType = v; });
+            LayoutToggleKeys();
 
-            y += 40;
-            AddText(card, "Mutes all microphones system-wide \u2014 headset, camera mic, USB devices.", 20, y, 7f, Color.FromArgb(90, ACC.R, ACC.G, ACC.B));
+            // Handle resizing to keep dropdowns top-right of their segments
+            card.Resize += (s2, e2) => {
+                int rEdge = card.Width - Dpi.S(16);
+                int yPtt = 56, yPtm = 56 + 46 + 34 + 10, yTog = 56 + 46 + 34 + 10 + 46 + 34 + 10;
+                
+                // Spaced: Dropdown (116), Speaker (154), Eye (188) -- scooted 15px to clear mascot
+                if (_chkKey1Overlay != null) { _chkKey1Overlay.PixelX = rEdge - Dpi.S(188); _chkKey1Overlay.PixelY = Dpi.S(yPtt); }
+                _chkPttSound.PixelX = rEdge - Dpi.S(154); _chkPttSound.PixelY = Dpi.S(yPtt);
+                _drpPttSound.Location = new Point(rEdge - Dpi.S(116), Dpi.S(yPtt));
+
+                if (_chkPtmOverlay != null) { _chkPtmOverlay.PixelX = rEdge - Dpi.S(188); _chkPtmOverlay.PixelY = Dpi.S(yPtm); }
+                _chkPtmSound.PixelX = rEdge - Dpi.S(154); _chkPtmSound.PixelY = Dpi.S(yPtm);
+                _drpPtmSound.Location = new Point(rEdge - Dpi.S(116), Dpi.S(yPtm));
+
+                if (_chkToggleOverlay != null) { _chkToggleOverlay.PixelX = rEdge - Dpi.S(188); _chkToggleOverlay.PixelY = Dpi.S(yTog); }
+                _chkToggleSound.PixelX = rEdge - Dpi.S(154); _chkToggleSound.PixelY = Dpi.S(yTog);
+                _drpToggleSound.Location = new Point(rEdge - Dpi.S(116), Dpi.S(yTog));
+                
+                btnMicSec.Location = new Point(card.Width - Dpi.S(90) - Dpi.S(2), Dpi.S(18));
+            };
+
+            y += 90;
+            AddText(card, "These options mute all microphones system-wide \u2014 headset, camera mic, USB devices.", 16, y - 1, 8.5f, Color.FromArgb(100, 180, 255));
+            
+            card.Dock = DockStyle.Fill;
             pane.Controls.Add(card);
         }
-
         void BuildVolLockPane(Panel pane) {
-            var card = MakeCard(2, "Volume Lock", "Keep your mic and speaker levels exactly where you set them."); int y = 64;
+            var card = MakeCard(2, "Volume Protection", "Keep your mic and speaker levels exactly where you set them."); int y = 56;
             _volCard = card;
+            if (!_cardSliderMap.ContainsKey(card)) _cardSliderMap[card] = new List<CardSlider>();
+            if (!_cardIconMap.ContainsKey(card)) _cardIconMap[card] = new List<CardIcon>();
+
+            // ── MIC SECTION ──────────────────────────────────────────────
             _tglMicEnf = Tgl("Lock Microphone Volume", "Prevents apps from silently changing your mic level.", y, card);
             _tglMicEnf.CheckedChanged += (s,e) => { if (!_loading) {
                 if (_tglMicEnf.Checked) {
-                    // Snapshot for slider restore
                     try { _micPreLockVol = (int)Audio.GetMicVolume(); } catch { _micPreLockVol = -1; }
                     if (_sliderRestoreMicTimer != null) { _sliderRestoreMicTimer.Stop(); _sliderRestoreMicTimer.Dispose(); _sliderRestoreMicTimer = null; }
-                    _settings.MicEnforceEnabled = true;
-                    if (_onToggle != null) _onToggle("mic_lock_on");
+                    _audio.MicLockVolume = _trkMicVol.Value;
+                    _audio.MicLockEnabled = true;
                     try { Audio.SetMicVolume(_trkMicVol.Value); UpdateCurrent(); } catch { }
                 } else {
-                    _settings.MicEnforceEnabled = false;
-                    if (_onToggle != null) _onToggle("mic_lock_off");
+                    _audio.MicLockEnabled = false;
                     AnimateSliderRestore(true);
                 }
-                if (_lblPttWarning != null) _lblPttWarning.Visible = _tglMicEnf.Checked && (_settings.PushToTalkEnabled || _settings.PushToMuteEnabled || _settings.PushToToggleEnabled);
+                if (_pttWarningText != null) {
+                    _pttWarningText = BuildPttWarningText();
+                }
+                if (_micLockIcon != null) { _micLockIcon.Checked = _tglMicEnf.Checked; }
             } };
-            y+=48;
-            _lblPttWarning = new Label{Text="Note: Push-to-Talk is active and controls mic muting.",Font=new Font("Segoe UI",7.5f),ForeColor=Color.FromArgb(220,180,80),BackColor=Color.Transparent,AutoSize=true,Location=Dpi.Pt(64,y)};
-            _lblPttWarning.Visible = _settings.MicEnforceEnabled && (_settings.PushToTalkEnabled || _settings.PushToMuteEnabled || _settings.PushToToggleEnabled);
-            card.Controls.Add(_lblPttWarning);
-            y += _lblPttWarning.Visible ? 16 : 0;
-            AddText(card, Audio.GetMicName()??"Mic: Unknown", 64, y, 7.5f, TXT4);
-            _plMicCur = AddText(card, "Current: --%", 380, y, 7.5f, GREEN); _plMicCur.RightAlign = true;
-            y+=22;
-            AddText(card, "Lock at:", 64, y+2, 9f, TXT2);
-            _trkMicVol = new SlickSlider{Minimum=0,Maximum=100,Value=100,Location=Dpi.Pt(120,y-8),Size=Dpi.Size(180,30)}; _trkMicVol.PaintParentBg = PaintCardBg; card.Controls.Add(_trkMicVol);
-            _plMicVol = AddText(card, "100%", 380, y+2, 9.5f, ACC, FontStyle.Bold); _plMicVol.RightAlign = true;
+            y+=44;
+
+            // PTT warning — stored as string, drawn directly in card paint handler
+            _pttWarningText = BuildPttWarningText();
+            _pttWarningY = Dpi.S(y);
+            y += 16; // Always reserve space — prevents layout shift when warning toggles
+
+            // Device name
+            AddText(card, Audio.GetMicName()??"Mic: Unknown", 64, y, 8f, TXT4);
+            y+=18;
+
+            // Current mic volume slider + speaker mute icon
+            int initMicVol = 50; try { initMicVol = (int)Audio.GetMicVolume(); } catch {}
+            bool initMicMuted = false; try { initMicMuted = Audio.GetMicMute(); } catch {}
+            AddText(card, "Volume:", 64, y+4, 8f, TXT3);
+            _micCurVolSlider = new SlickSlider{Minimum=0,Maximum=100,Value=initMicVol,Location=Dpi.Pt(120,y-4),Size=Dpi.Size(180,30)}; _micCurVolSlider.PaintParentBg = PaintCardBg; card.Controls.Add(_micCurVolSlider);
+            _micCurVolSlider.Visible = false;
+            { var cs = new CardSlider { PixelX = Dpi.S(120), PixelY = Dpi.S(y-4), PixelW = Dpi.S(180), PixelH = Dpi.S(30), Source = _micCurVolSlider, Card = card };
+              _cardSliderMap[card].Add(cs); }
+            _lblMicCurVolPct = AddText(card, initMicVol+"%", 380, y+4, 8.5f, GREEN, FontStyle.Bold); _lblMicCurVolPct.RightAlign = true;
+            _micCurVolSlider.ValueChanged += (s,e) => { _lblMicCurVolPct.Text=_micCurVolSlider.Value+"%"; card.Invalidate(); };
+            _micCurVolSlider.DragCompleted += (s,e) => { if (!_loading) { try { Audio.SetMicVolume(_micCurVolSlider.Value); } catch {} UpdateCurrent(); } };
+            // Mic mute icon (speaker icon — it's a mute button)
+            _micMuteIcon = new CardIcon { W = 28, H = 24, Checked = !initMicMuted, IsEye = false, Card = card,
+                OnChange = (on) => { try { Audio.SetMicMute(!on); } catch {} UpdateCurrent(); } };
+            _micMuteIcon.SetPos(392, y);
+            _cardIconMap[card].Add(_micMuteIcon);
+            y+=28;
+
+            // Lock at: slider (at bottom of mic section)
+            AddText(card, "Lock at:", 64, y+4, 8f, TXT2);
+            _trkMicVol = new SlickSlider{Minimum=0,Maximum=100,Value=100,Location=Dpi.Pt(120,y-4),Size=Dpi.Size(180,30)}; _trkMicVol.PaintParentBg = PaintCardBg; card.Controls.Add(_trkMicVol);
+            _trkMicVol.Visible = false;
+            { var cs = new CardSlider { PixelX = Dpi.S(120), PixelY = Dpi.S(y-4), PixelW = Dpi.S(180), PixelH = Dpi.S(30), Source = _trkMicVol, Card = card };
+              _cardSliderMap[card].Add(cs); }
+            _plMicVol = AddText(card, "100%", 380, y+4, 8.5f, ACC, FontStyle.Bold); _plMicVol.RightAlign = true;
             _trkMicVol.ValueChanged += (s,e) => { _plMicVol.Text=_trkMicVol.Value+"%"; card.Invalidate(); };
-            _trkMicVol.DragCompleted += (s,e) => { if (!_loading) { _settings.MicVolumePercent=_trkMicVol.Value; _settings.Save(); if (_tglMicEnf.Checked) try { Audio.SetMicVolume(_trkMicVol.Value); } catch { } } };
-            // Max button for mic
+            _trkMicVol.DragCompleted += (s,e) => { if (!_loading) { _audio.MicLockVolume=_trkMicVol.Value; if (_tglMicEnf.Checked) try { Audio.SetMicVolume(_trkMicVol.Value); } catch { } } };
+            // Lock icon next to Lock at % — reflects toggle state, clickable to toggle lock
+            _micLockIcon = new CardIcon { W = 20, H = 24, Checked = _settings.MicEnforceEnabled, IsLock = true, Card = card,
+                OnChange = (locked) => {
+                    if (_loading) return;
+                    if ((DateTime.UtcNow - _lastLockClick).TotalMilliseconds < 300) { _micLockIcon.Checked = !locked; return; }
+                    _lastLockClick = DateTime.UtcNow;
+                    _loading = true; _tglMicEnf.Checked = locked; _loading = false;
+                    if (locked) {
+                        StartGlisten(_tglMicEnf);
+                        if (_volCard != null) _volCard.Invalidate();
+                        try { _micPreLockVol = (int)Audio.GetMicVolume(); } catch { _micPreLockVol = -1; }
+                        if (_sliderRestoreMicTimer != null) { _sliderRestoreMicTimer.Stop(); _sliderRestoreMicTimer.Dispose(); _sliderRestoreMicTimer = null; }
+                        _audio.MicLockVolume = _trkMicVol.Value;
+                        _audio.MicLockEnabled = true;
+                        try { Audio.SetMicVolume(_trkMicVol.Value); UpdateCurrent(); } catch { }
+                    } else {
+                        _audio.MicLockEnabled = false;
+                        AnimateSliderRestore(true);
+                    }
+                    _pttWarningText = BuildPttWarningText();
+                } };
+            _micLockIcon.SetPos(396, y);
+            _cardIconMap[card].Add(_micLockIcon);
+
+            // Max All button — positioned absolute top-right of mic section
             var btnMicMax = new Button{Text="\u266B  Max All",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(82,24),ForeColor=ACC,BackColor=Color.FromArgb(ACC.R/8,ACC.G/8,ACC.B/8),Font=new Font("Segoe UI",7.5f,FontStyle.Bold),TabStop=false};
             btnMicMax.FlatAppearance.BorderColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);
             btnMicMax.MouseEnter+=(s,e)=>{btnMicMax.BackColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);btnMicMax.ForeColor=Color.FromArgb(Math.Min(255,ACC.R+50),Math.Min(255,ACC.G+50),Math.Min(255,ACC.B+50));};
             btnMicMax.MouseLeave+=(s,e)=>{btnMicMax.BackColor=Color.FromArgb(ACC.R/8,ACC.G/8,ACC.B/8);btnMicMax.ForeColor=ACC;};
-            btnMicMax.Click+=(s,e)=>{ AnimateSlider(_trkMicVol, 100, ()=>{ _settings.MicVolumePercent=100; _settings.Save(); if (_tglMicEnf.Checked) try { Audio.SetMicVolume(100); } catch { } UpdateCurrent(); }); AnimateSlider(_trkSpkVol, 100, ()=>{ _settings.SpeakerVolumePercent=100; _settings.Save(); if (_tglSpkEnf.Checked) try { Audio.SetSpeakerVolume(100); } catch { } UpdateCurrent(); }); };
+            btnMicMax.Click+=(s,e)=>{ AnimateSlider(_trkMicVol, 100, ()=>{ _audio.MicLockVolume=100; try { Audio.SetMicVolume(100); } catch { } UpdateCurrent(); }); AnimateSlider(_micCurVolSlider, 100, ()=>{ try { Audio.SetMicVolume(100); } catch { } UpdateCurrent(); }); AnimateSlider(_trkSpkVol, 100, ()=>{ _audio.SpeakerLockVolume=100; try { Audio.SetSpeakerVolume(100); } catch { } UpdateCurrent(); }); AnimateSlider(_spkCurVolSlider, 100, ()=>{ try { Audio.SetSpeakerVolume(100); } catch { } UpdateCurrent(); }); };
             card.Controls.Add(btnMicMax);
-            card.Resize += (s2,e2) => { btnMicMax.Left = card.Width - Dpi.S(82) - Dpi.S(16); btnMicMax.Top = Dpi.S(68); };
-            y+=44; AddLine(card, y); y+=24;
+
+            // Position Max All on resize
+            card.Resize += (s2,e2) => {
+                int rEdge = card.Width - Dpi.S(16);
+                btnMicMax.Left = rEdge - Dpi.S(82);
+                btnMicMax.Top = Dpi.S(56);
+            };
+
+            y+=34; AddLine(card, y); y+=10;
+
+            // ── SPEAKER SECTION ──────────────────────────────────────────
             _tglSpkEnf = Tgl("Lock Speaker Volume", "Prevents apps from changing your system volume.", y, card);
             _tglSpkEnf.CheckedChanged += (s,e) => { if (!_loading) {
                 if (_tglSpkEnf.Checked) {
                     try { _spkPreLockVol = (int)Audio.GetSpeakerVolume(); } catch { _spkPreLockVol = -1; }
                     if (_sliderRestoreSpkTimer != null) { _sliderRestoreSpkTimer.Stop(); _sliderRestoreSpkTimer.Dispose(); _sliderRestoreSpkTimer = null; }
-                    _settings.SpeakerEnforceEnabled = true;
-                    if (_onToggle != null) _onToggle("spk_lock_on");
+                    _audio.SpeakerLockVolume = _trkSpkVol.Value;
+                    _audio.SpeakerLockEnabled = true;
                     try { Audio.SetSpeakerVolume(_trkSpkVol.Value); UpdateCurrent(); } catch { }
                 } else {
-                    _settings.SpeakerEnforceEnabled = false;
-                    if (_onToggle != null) _onToggle("spk_lock_off");
+                    _audio.SpeakerLockEnabled = false;
                     AnimateSliderRestore(false);
                 }
+                if (_spkLockIcon != null) { _spkLockIcon.Checked = _tglSpkEnf.Checked; }
+                _spkWarningText = BuildSpkWarningText();
             } };
-            y+=48;
-            AddText(card, Audio.GetSpeakerName()??"Speaker: Unknown", 64, y, 7.5f, TXT4);
-            _plSpkCur = AddText(card, "Current: --%", 380, y, 7.5f, GREEN); _plSpkCur.RightAlign = true;
-            y+=22;
-            AddText(card, "Lock at:", 64, y+2, 9f, TXT2);
-            _trkSpkVol = new SlickSlider{Minimum=0,Maximum=100,Value=100,Location=Dpi.Pt(120,y-8),Size=Dpi.Size(180,30)}; _trkSpkVol.PaintParentBg = PaintCardBg; card.Controls.Add(_trkSpkVol);
-            _plSpkVol = AddText(card, "100%", 380, y+2, 9.5f, ACC, FontStyle.Bold); _plSpkVol.RightAlign = true;
+            y+=44;
+
+            // Speaker warning — AFK fade, app enforcement status
+            _spkWarningText = BuildSpkWarningText();
+            _spkWarningY = Dpi.S(y);
+            y += 16; // Always reserve space for symmetry with mic section
+
+            // Device name
+            AddText(card, Audio.GetSpeakerName()??"Speaker: Unknown", 64, y, 8f, TXT4);
+            y+=18;
+
+            // Current speaker volume slider + speaker mute icon
+            int initSpkVol2 = 100; try { initSpkVol2 = (int)Audio.GetSpeakerVolume(); } catch {}
+            bool initSpkMuted = false; try { initSpkMuted = Audio.GetSpeakerMute(); } catch {}
+            AddText(card, "Volume:", 64, y+4, 8f, TXT3);
+            _spkCurVolSlider = new SlickSlider{Minimum=0,Maximum=100,Value=initSpkVol2,Location=Dpi.Pt(120,y-4),Size=Dpi.Size(180,30)}; _spkCurVolSlider.PaintParentBg = PaintCardBg; card.Controls.Add(_spkCurVolSlider);
+            _spkCurVolSlider.Visible = false;
+            { var cs = new CardSlider { PixelX = Dpi.S(120), PixelY = Dpi.S(y-4), PixelW = Dpi.S(180), PixelH = Dpi.S(30), Source = _spkCurVolSlider, Card = card };
+              _cardSliderMap[card].Add(cs); }
+            _lblSpkCurVolPct = AddText(card, initSpkVol2+"%", 380, y+4, 8.5f, GREEN, FontStyle.Bold); _lblSpkCurVolPct.RightAlign = true;
+            _spkCurVolSlider.ValueChanged += (s,e) => { _lblSpkCurVolPct.Text=_spkCurVolSlider.Value+"%"; card.Invalidate(); };
+            _spkCurVolSlider.DragCompleted += (s,e) => { if (!_loading) { try { Audio.SetSpeakerVolume(_spkCurVolSlider.Value); } catch {} UpdateCurrent(); } };
+            // Speaker mute icon (speaker icon)
+            _spkMuteIcon = new CardIcon { W = 28, H = 24, Checked = !initSpkMuted, IsEye = false, Card = card,
+                OnChange = (on) => { try { Audio.SetSpeakerMute(!on); } catch {} UpdateCurrent(); } };
+            _spkMuteIcon.SetPos(392, y);
+            _cardIconMap[card].Add(_spkMuteIcon);
+            y+=28;
+
+            // Lock at: slider (at bottom of speaker section)
+            AddText(card, "Lock at:", 64, y+4, 8f, TXT2);
+            _trkSpkVol = new SlickSlider{Minimum=0,Maximum=100,Value=100,Location=Dpi.Pt(120,y-4),Size=Dpi.Size(180,30)}; _trkSpkVol.PaintParentBg = PaintCardBg; card.Controls.Add(_trkSpkVol);
+            _trkSpkVol.Visible = false;
+            { var cs = new CardSlider { PixelX = Dpi.S(120), PixelY = Dpi.S(y-4), PixelW = Dpi.S(180), PixelH = Dpi.S(30), Source = _trkSpkVol, Card = card };
+              _cardSliderMap[card].Add(cs); }
+            _plSpkVol = AddText(card, "100%", 380, y+4, 8.5f, ACC, FontStyle.Bold); _plSpkVol.RightAlign = true;
             _trkSpkVol.ValueChanged += (s,e) => { _plSpkVol.Text=_trkSpkVol.Value+"%"; card.Invalidate(); };
-            _trkSpkVol.DragCompleted += (s,e) => { if (!_loading) { _settings.SpeakerVolumePercent=_trkSpkVol.Value; _settings.Save(); if (_tglSpkEnf.Checked) try { Audio.SetSpeakerVolume(_trkSpkVol.Value); } catch { } } };
+            _trkSpkVol.DragCompleted += (s,e) => { if (!_loading) { _audio.SpeakerLockVolume=_trkSpkVol.Value; if (_tglSpkEnf.Checked) try { Audio.SetSpeakerVolume(_trkSpkVol.Value); } catch { } } };
+            // Lock icon next to Lock at % — reflects toggle state, clickable to toggle lock
+            _spkLockIcon = new CardIcon { W = 20, H = 24, Checked = _settings.SpeakerEnforceEnabled, IsLock = true, Card = card,
+                OnChange = (locked) => {
+                    if (_loading) return;
+                    if ((DateTime.UtcNow - _lastLockClick).TotalMilliseconds < 300) { _spkLockIcon.Checked = !locked; return; }
+                    _lastLockClick = DateTime.UtcNow;
+                    _loading = true; _tglSpkEnf.Checked = locked; _loading = false;
+                    if (locked) {
+                        StartGlisten(_tglSpkEnf);
+                        if (_volCard != null) _volCard.Invalidate();
+                        try { _spkPreLockVol = (int)Audio.GetSpeakerVolume(); } catch { _spkPreLockVol = -1; }
+                        if (_sliderRestoreSpkTimer != null) { _sliderRestoreSpkTimer.Stop(); _sliderRestoreSpkTimer.Dispose(); _sliderRestoreSpkTimer = null; }
+                        _audio.SpeakerLockVolume = _trkSpkVol.Value;
+                        _audio.SpeakerLockEnabled = true;
+                        try { Audio.SetSpeakerVolume(_trkSpkVol.Value); UpdateCurrent(); } catch { }
+                    } else {
+                        _audio.SpeakerLockEnabled = false;
+                        AnimateSliderRestore(false);
+                    }
+                    if (_spkLockIcon != null) _spkLockIcon.Checked = locked;
+                    _spkWarningText = BuildSpkWarningText();
+                } };
+            _spkLockIcon.SetPos(396, y);
+            _cardIconMap[card].Add(_spkLockIcon);
 
             pane.Controls.Add(card);
+        }
+
+        void RefreshPttHotkeyLabel() {
+            _pttWarningText = BuildPttWarningText();
+            if (_volCard != null) _volCard.Invalidate();
+        }
+        /// <summary>Starts the toggle glisten animation at 30ms/frame — matches wizard speed exactly.</summary>
+        void StartGlisten(ToggleSwitch target) {
+            _tglGlistenTarget = target;
+            _tglGlistenFrame = 0;
+            if (_glistenTimer != null) { _glistenTimer.Stop(); _glistenTimer.Dispose(); }
+            _glistenTimer = new Timer { Interval = 30 };
+            _glistenTimer.Tick += (s, e) => {
+                if (_tglGlistenTarget == null || _tglGlistenFrame >= 35) {
+                    _tglGlistenTarget = null; _glistenTimer.Stop(); _glistenTimer.Dispose(); _glistenTimer = null; return;
+                }
+                _tglGlistenFrame++;
+                if (_tglGlistenFrame >= 35) { _tglGlistenTarget = null; _glistenTimer.Stop(); _glistenTimer.Dispose(); _glistenTimer = null; }
+                if (_pttCard != null) _pttCard.Invalidate();
+                if (_volCard != null) _volCard.Invalidate();
+            };
+            _glistenTimer.Start();
+            // Immediate first paint
+            if (_pttCard != null) _pttCard.Invalidate();
+            if (_volCard != null) _volCard.Invalidate();
+        }
+        /// <summary>Builds mic status showing ALL active protections: PTT, AFK mute, etc.</summary>
+        string BuildPttWarningText() {
+            if (_audio == null && _settings == null) return "";
+            var parts = new System.Collections.Generic.List<string>();
+            // PTT/PTM/Toggle
+            if (_audio != null) {
+                string mode = ""; string key = "";
+                if (_audio.PttEnabled) {
+                    mode = "Push-to-Talk";
+                    if (_audio.PttKey > 0) key = PushToTalk.GetKeyName(_audio.PttKey);
+                } else if (_audio.PtmEnabled) {
+                    mode = "Push-to-Mute";
+                    if (_audio.PtmKey > 0) key = PushToTalk.GetKeyName(_audio.PtmKey);
+                } else if (_audio.PtToggleEnabled) {
+                    mode = "Push-to-Toggle";
+                    if (_audio.PtToggleKey > 0) key = PushToTalk.GetKeyName(_audio.PtToggleKey);
+                }
+                if (mode.Length > 0) {
+                    if (key.Length > 0) parts.Add(mode + " (" + key + ")");
+                    else parts.Add(mode);
+                }
+            }
+            // AFK mic mute
+            if (_settings != null && _settings.AfkMicMuteEnabled)
+                parts.Add("AFK mute after " + _settings.AfkMicMuteSec + "s");
+            if (parts.Count == 0) return "";
+            return "\u26A0  " + string.Join("  \u2022  ", parts.ToArray()) + " active.";
+        }
+        /// <summary>Builds speaker status text: AFK fade, app enforcement, or nothing.</summary>
+        string BuildSpkWarningText() {
+            if (_settings == null) return "";
+            var parts = new System.Collections.Generic.List<string>();
+            if (_settings.AfkSpeakerMuteEnabled)
+                parts.Add("AFK volume fade after " + _settings.AfkSpeakerMuteSec + "s");
+            if (_settings.AppVolumeEnforceEnabled)
+                parts.Add("Per-app volume enforcement active");
+            if (parts.Count == 0) return "";
+            return "\u26A0  " + string.Join("  \u2022  ", parts.ToArray()) + ".";
+        }
+        void RefreshSpkWarning() {
+            _spkWarningText = BuildSpkWarningText();
+            if (_volCard != null) _volCard.Invalidate();
         }
 
         private Panel _appListPanel;
@@ -845,40 +1498,24 @@ namespace AngryAudio
         }
 
         void BuildAppsPane(Panel pane) {
-            var card = MakeCard(3, "Apps", "Lock individual app volumes to specific levels."); int y = 64;
+            var card = MakeCard(3, "Apps", "Lock individual app volumes to specific levels."); int y = 56;
             _tglAppEnf = Tgl("Per-App Volume Enforcement", "Green = current  \u2022  Slider = target", y, card);
-            _tglAppEnf.CheckedChanged += (s,e) => { if (!_loading) { _settings.AppVolumeEnforceEnabled = _tglAppEnf.Checked; _settings.AppVolumeRules = CollectAppRules(); if (_onToggle != null) _onToggle(_tglAppEnf.Checked ? "app_lock_on" : "app_lock_off"); } };
+            _tglAppEnf.CheckedChanged += (s,e) => { if (!_loading) { _audio.AppVolumeEnabled = _tglAppEnf.Checked; _settings.AppVolumeRules = CollectAppRules(); _settings.Save(); _spkWarningText = BuildSpkWarningText(); } };
 
-            // System volume slider — controls master speaker volume
-            var lblSysVol = new Label{Text="System Vol",ForeColor=TXT3,BackColor=Color.Transparent,Font=new Font("Segoe UI",7.5f),Size=Dpi.Size(58,16),TextAlign=ContentAlignment.MiddleRight,Location=Dpi.Pt(0,y+4)};
-            card.Controls.Add(lblSysVol);
-            int initSpkVol = 100; try { initSpkVol = (int)Audio.GetSpeakerVolume(); } catch {}
-            _sysVolSlider = new SlickSlider{Minimum=0,Maximum=100,Value=initSpkVol,Size=Dpi.Size(150,24),Location=Dpi.Pt(0,y+2)};
-            _sysVolSlider.PaintParentBg = PaintCardBg;
-            _sysVolSlider.ValueChanged += (s,e) => {
-                if (_loading) return;
-                int val = _sysVolSlider.Value;
-                try { Audio.SetSpeakerVolume(val); } catch {}
-                _lblSysVolPct.Text = val + "%";
-                // Update all app row labels to reflect new system vol
-                foreach (var row in _appRows) {
-                    if (row.VolLabel != null && row.Slider != null)
-                        row.VolLabel.Text = row.Slider.Value + "% / " + val + "%";
-                }
-            };
-            card.Controls.Add(_sysVolSlider);
-            _lblSysVolPct = new Label{Text=initSpkVol+"%",ForeColor=ACC,BackColor=Color.Transparent,Font=new Font("Segoe UI",8f,FontStyle.Bold),Size=Dpi.Size(38,16),TextAlign=ContentAlignment.MiddleLeft,Location=Dpi.Pt(0,y+6)};
-            card.Controls.Add(_lblSysVolPct);
-            // Position system vol slider to the right
-            card.Resize += (s2,e2) => {
-                int rEdge = card.Width - Dpi.S(16);
-                _lblSysVolPct.Left = rEdge - Dpi.S(38);
-                _sysVolSlider.Left = _lblSysVolPct.Left - Dpi.S(152);
-                _sysVolSlider.Width = Dpi.S(150);
-                lblSysVol.Left = _sysVolSlider.Left - Dpi.S(60);
-            };
-            y+=48;
+            if (!_cardSliderMap.ContainsKey(card)) _cardSliderMap[card] = new List<CardSlider>();
+            if (!_cardIconMap.ContainsKey(card)) _cardIconMap[card] = new List<CardIcon>();
 
+            // Max All button — top right of card (matches Volume Protection page)
+            var btnMaxAll = new Button{Text="\u266B  Max All",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(82,24),ForeColor=ACC,BackColor=Color.FromArgb(ACC.R/8,ACC.G/8,ACC.B/8),Font=new Font("Segoe UI",7.5f,FontStyle.Bold),TabStop=false};
+            btnMaxAll.FlatAppearance.BorderColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);
+            btnMaxAll.MouseEnter+=(s,e)=>{btnMaxAll.BackColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);btnMaxAll.ForeColor=Color.FromArgb(Math.Min(255,ACC.R+50),Math.Min(255,ACC.G+50),Math.Min(255,ACC.B+50));};
+            btnMaxAll.MouseLeave+=(s,e)=>{btnMaxAll.BackColor=Color.FromArgb(ACC.R/8,ACC.G/8,ACC.B/8);btnMaxAll.ForeColor=ACC;};
+            btnMaxAll.Click+=(s,e)=>{ AnimateMaxAllApps(); AnimateSlider(_sysVolSlider, 100, ()=>{ try { Audio.SetSpeakerVolume(100); } catch {} }); };
+            card.Controls.Add(btnMaxAll);
+
+            y+=44;
+
+            // Scan + Clear buttons
             var btn = new Button{Text="\u25B6  Scan Running Apps",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(148,26),ForeColor=ACC,BackColor=Color.FromArgb(ACC.R/8,ACC.G/8,ACC.B/8),Location=Dpi.Pt(16,y),Font=new Font("Segoe UI",8.5f,FontStyle.Bold),TabStop=false};
             btn.FlatAppearance.BorderColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);
             btn.Click+=(s,e)=>ScanApps();
@@ -893,15 +1530,40 @@ namespace AngryAudio
             btnClear.MouseLeave+=(s,e)=>btnClear.BackColor=Color.FromArgb(24,24,24);
             card.Controls.Add(btnClear);
 
-            // Max All button — accent blue, matches Save style
-            var btnMaxAll = new Button{Text="\u266B  Max All",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(90,26),ForeColor=ACC,BackColor=Color.FromArgb(ACC.R/8,ACC.G/8,ACC.B/8),Location=Dpi.Pt(0,y),Font=new Font("Segoe UI",8.5f,FontStyle.Bold),TabStop=false};
-            btnMaxAll.FlatAppearance.BorderColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);
-            btnMaxAll.MouseEnter+=(s,e)=>{btnMaxAll.BackColor=Color.FromArgb(ACC.R/3,ACC.G/3,ACC.B/3);btnMaxAll.ForeColor=Color.FromArgb(Math.Min(255,ACC.R+50),Math.Min(255,ACC.G+50),Math.Min(255,ACC.B+50));};
-            btnMaxAll.MouseLeave+=(s,e)=>{btnMaxAll.BackColor=Color.FromArgb(ACC.R/8,ACC.G/8,ACC.B/8);btnMaxAll.ForeColor=ACC;};
-            btnMaxAll.Click+=(s,e)=>AnimateMaxAllApps();
-            card.Controls.Add(btnMaxAll);
-            // Position Max All button to the right — uses Resize event
-            card.Resize += (s2,e2) => { btnMaxAll.Left = card.Width - Dpi.S(90) - Dpi.S(16); };
+            // System volume slider — right side of scan buttons row
+            int initSpkVol = 100; try { initSpkVol = (int)Audio.GetSpeakerVolume(); } catch {}
+            AddText(card, "System Vol", 240, y+6, 7.5f, TXT3);
+            _sysVolSlider = new SlickSlider{Minimum=0,Maximum=100,Value=initSpkVol,Size=Dpi.Size(130,24),Location=Dpi.Pt(300,y)};
+            _sysVolSlider.PaintParentBg = PaintCardBg;
+            _sysVolSlider.ValueChanged += (s,e) => {
+                if (_loading) return;
+                int val = _sysVolSlider.Value;
+                _lblSysVolPct.Text = val + "%";
+                card.Invalidate();
+                foreach (var row in _appRows) {
+                    if (row.VolLabel != null && row.Slider != null)
+                        row.VolLabel.Text = row.Slider.Value + "% / " + val + "%";
+                }
+            };
+            _sysVolSlider.DragCompleted += (s,e) => {
+                if (_loading) return;
+                try { Audio.SetSpeakerVolume(_sysVolSlider.Value); } catch {}
+            };
+            card.Controls.Add(_sysVolSlider);
+            _sysVolSlider.Visible = false; // Hidden — CardSlider paints instead
+            var _sysVolCS = new CardSlider { PixelX = Dpi.S(300), PixelY = Dpi.S(y), PixelW = Dpi.S(130), PixelH = Dpi.S(24), Source = _sysVolSlider, Card = card };
+            _cardSliderMap[card].Add(_sysVolCS);
+            _lblSysVolPct = AddText(card, initSpkVol+"%", 445, y+4, 8.5f, ACC, FontStyle.Bold);
+            // Speaker mute icon — right of percentage
+            bool initSysMuted = false; try { initSysMuted = Audio.GetSpeakerMute(); } catch {}
+            _appsSysMuteIcon = new CardIcon { W = 28, H = 24, Checked = !initSysMuted, IsEye = false, Card = card,
+                OnChange = (on) => { try { Audio.SetSpeakerMute(!on); } catch {} } };
+            _appsSysMuteIcon.SetPos(476, y);
+            _cardIconMap[card].Add(_appsSysMuteIcon);
+
+            // Position Max All button top-right on resize
+            card.Resize += (s2,e2) => { btnMaxAll.Left = card.Width - Dpi.S(82) - Dpi.S(16); btnMaxAll.Top = Dpi.S(56); };
+
             y+=32;
 
             int listY = y; // logical Y=144
@@ -951,7 +1613,8 @@ namespace AngryAudio
         void RebuildAppList(System.Collections.Generic.List<AudioSession> cachedSessions = null) {
             _appListPanel.SuspendLayout();
             _appListPanel.Controls.Clear();
-            if (_appListPanel is ScrollPanel sp) sp.ResetScroll();
+            var sp = _appListPanel as ScrollPanel;
+            if (sp != null) sp.ResetScroll();
             int y = 0, rowH = Dpi.S(44);
             int iconSz = Dpi.S(20);
             int rowW = Math.Max(Dpi.S(300), _appListPanel.Width);
@@ -982,8 +1645,6 @@ namespace AngryAudio
                 ar.Row = row;
 
                 row.Paint += (s,e) => {
-                    using (var p = new Pen(Color.FromArgb(30,30,30)))
-                        e.Graphics.DrawLine(p, Dpi.S(6), 0, row.Width - Dpi.S(6), 0);
                 };
 
                 // Lock toggle
@@ -1129,9 +1790,9 @@ namespace AngryAudio
         void BuildGeneralPane(Panel pane) {
             var card = MakeCard(4, "General", "Startup behavior, notifications, and legal information.");
             // Card glass top is at y=46, separator below this section at y=96.
-            int y = 64;
+            int y = 56;
             _tglStartup = Tgl("Start with Windows", null, y, card);
-            _tglStartup.CheckedChanged += (s,e) => { if (!_loading) { _settings.StartWithWindows = _tglStartup.Checked; _settings.ApplyStartupSetting(); if (_onToggle != null) _onToggle(_tglStartup.Checked ? "startup_on" : "startup_off"); } };
+            _tglStartup.CheckedChanged += (s,e) => { if (!_loading) { _audio.StartWithWindows = _tglStartup.Checked; } };
             // Run Setup Wizard button — same row as Start with Windows, right-aligned
             int bwY = y;
             var bw = new Button{Text="Run Setup Wizard",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(120,24),ForeColor=TXT2,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f),TabStop=false};
@@ -1160,13 +1821,13 @@ namespace AngryAudio
             AddText(card, "NOTIFICATIONS", 16, y, 7.5f, TXT3, FontStyle.Bold);
             y += 22;
             _tglOverlay = Tgl("Show Mic Status Overlay", "Floating pill shows mic open/closed \u2014 drag to reposition, right-click to dismiss", y, card);
-            _tglOverlay.CheckedChanged += (s,e) => { if (!_loading) { _settings.MicOverlayEnabled = _tglOverlay.Checked; if (_onToggle != null) _onToggle(_tglOverlay.Checked ? "overlay_on" : "overlay_off"); } };
+            _tglOverlay.CheckedChanged += (s,e) => { if (!_loading) { _audio.MicOverlayEnabled = _tglOverlay.Checked; } };
             y += 42;
             _tglNotifyCorr = Tgl("Volume Correction Alerts", "Show a toast when Angry Audio resets your audio.", y, card);
-            _tglNotifyCorr.CheckedChanged += (s,e) => { if (!_loading) { _settings.NotifyOnCorrection = _tglNotifyCorr.Checked; if (_onToggle != null) _onToggle(_tglNotifyCorr.Checked ? "notify_corr_on" : "notify_corr_off"); } };
+            _tglNotifyCorr.CheckedChanged += (s,e) => { if (!_loading) { _audio.NotifyOnCorrection = _tglNotifyCorr.Checked; } };
             y += 42;
             _tglNotifyDev = Tgl("Device Change Alerts", "Notify when a new mic or speaker is detected.", y, card);
-            _tglNotifyDev.CheckedChanged += (s,e) => { if (!_loading) { _settings.NotifyOnDeviceChange = _tglNotifyDev.Checked; if (_onToggle != null) _onToggle(_tglNotifyDev.Checked ? "notify_dev_on" : "notify_dev_off"); } };
+            _tglNotifyDev.CheckedChanged += (s,e) => { if (!_loading) { _audio.NotifyOnDeviceChange = _tglNotifyDev.Checked; } };
             y += 42; AddLine(card, y); y += 16;
             // LEGAL section — vertically centered in remaining card space
             AddText(card, "LEGAL", 16, y, 7.5f, TXT3, FontStyle.Bold);
@@ -1196,10 +1857,6 @@ namespace AngryAudio
                 using (var path = DarkTheme.RoundedRect(_optSaveRect, cr))
                 using (var b = new SolidBrush(sbg)) g.FillPath(b, path);
                 TextRenderer.DrawText(g, "Save", DarkTheme.BtnFontBold, _optSaveRect, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-                var saved = g.Save();
-                g.TranslateTransform(_optSaveRect.X, _optSaveRect.Y);
-                DarkTheme.PaintOrbitingStar(g, _optSaveRect.Width, _optSaveRect.Height, _saveOrbitPhase, cr);
-                g.Restore(saved);
                 // Cancel button
                 _optCancelRect = new Rectangle(_optSaveRect.Left - Dpi.S(90), Dpi.S(10), Dpi.S(80), Dpi.S(30));
                 Color cbg = _optCancelHover ? Color.FromArgb(45, 45, 45) : Color.FromArgb(28, 28, 28);
@@ -1238,141 +1895,384 @@ namespace AngryAudio
 
         void FlashModeToggles() {
             if (_hotkeyFlashTimer != null && _hotkeyFlashTimer.Enabled) return;
-            if (_lblPttKey == null) return;
-            // Brief green flash on the hotkey label to confirm "I heard that"
-            var origBg = _lblPttKey.BackColor;
-            var origFg = _lblPttKey.ForeColor;
-            _hotkeyFlashStep = 0;
-            if (_hotkeyFlashTimer == null) {
-                _hotkeyFlashTimer = new Timer { Interval = 80 };
-                _hotkeyFlashTimer.Tick += (s, e) => {
-                    _hotkeyFlashStep++;
-                    if (_hotkeyFlashStep == 1) {
-                        _lblPttKey.BackColor = Color.FromArgb(20, 180, 80);
-                        _lblPttKey.ForeColor = Color.White;
-                    } else if (_hotkeyFlashStep == 2) {
-                        // Also flash key2/key3 if they match
-                        if (_pttKeyCode2 > 0 && _lblPttKey2.Visible) { _lblPttKey2.BackColor = Color.FromArgb(20, 180, 80); _lblPttKey2.ForeColor = Color.White; }
-                        if (_pttKeyCode3 > 0 && _lblPttKey3.Visible) { _lblPttKey3.BackColor = Color.FromArgb(20, 180, 80); _lblPttKey3.ForeColor = Color.White; }
-                    } else {
-                        _lblPttKey.BackColor = origBg; _lblPttKey.ForeColor = origFg;
-                        if (_lblPttKey2 != null) { _lblPttKey2.BackColor = INPUT_BG; _lblPttKey2.ForeColor = ACC; }
-                        if (_lblPttKey3 != null) { _lblPttKey3.BackColor = INPUT_BG; _lblPttKey3.ForeColor = ACC; }
-                        _hotkeyFlashTimer.Stop();
-                    }
-                };
-            }
-            _hotkeyFlashTimer.Start();
+            // Glow the specific mode segment that the pressed hotkey belongs to
+            if (_tglPtt != null && _tglPtt.Checked) FlashToggleOn(_tglPtt);
+            else if (_tglPtm != null && _tglPtm.Checked) FlashToggleOn(_tglPtm);
+            else if (_tglPtToggle != null && _tglPtToggle.Checked) FlashToggleOn(_tglPtToggle);
         }
 
-        void StartKeyCapture(){if(_capturingKey2||_capturingKey3)return;_capturingKey=true;_lblPttKey.Text="Press...";_lblPttKey.BackColor=ACC;_lblPttKey.ForeColor=Color.White;Logger.Info("StartKeyCapture() called");StartCapturePolling();}
-        void StartKeyCapture2(){
-            if(!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked){EnforceToggleSelection();return;}
-            if(_capturingKey || _capturingKey3){return;}
-            _capturingKey2=true;_lblPttKey2.Text="Press...";_lblPttKey2.BackColor=ACC;_lblPttKey2.ForeColor=Color.White;_btnAddKey2.Visible=false;_lblPttKey2.Visible=true;_lblKey2Label.Visible=true;_lblKey2Hint.Visible=true;StartCapturePolling();}
-        void OnKeyCapture2(object s,KeyEventArgs e){if(!_capturingKey2)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){if(_pttKeyCode2==0){UpdateKey2Visibility();}else{_lblPttKey2.Text=KeyName(_pttKeyCode2);}_lblPttKey2.BackColor=INPUT_BG;_lblPttKey2.ForeColor=ACC;_capturingKey2=false;return;}
-            int vk=(int)e.KeyCode;
-            if (vk == 0x10) vk = IsKeyDown(0xA1) ? 0xA1 : 0xA0;
-            if (vk == 0x11) vk = IsKeyDown(0xA3) ? 0xA3 : 0xA2;
-            if (vk == 0x12) vk = IsKeyDown(0xA5) ? 0xA5 : 0xA4;
-            if(vk>=0xA0&&vk<=0xA5){try{if((GetAsyncKeyState(0xA1)&0x8000)!=0)vk=0xA1;else if((GetAsyncKeyState(0xA0)&0x8000)!=0)vk=0xA0;else if((GetAsyncKeyState(0xA3)&0x8000)!=0)vk=0xA3;else if((GetAsyncKeyState(0xA2)&0x8000)!=0)vk=0xA2;else if((GetAsyncKeyState(0xA5)&0x8000)!=0)vk=0xA5;else if((GetAsyncKeyState(0xA4)&0x8000)!=0)vk=0xA4;}catch{}}
-            _pttKeyCode2=vk;
-            // Duplicate check
-            if(vk==_pttKeyCode || (_pttKeyCode3>0 && vk==_pttKeyCode3) || (_ptmKeyCode>0 && vk==_ptmKeyCode) || (_ptToggleKeyCode>0 && vk==_ptToggleKeyCode)){_capturingKey2=false;_pttKeyCode2=0;_settings.PushToTalkKey2=0;ShakeReject(_lblPttKey2, ()=>{UpdateKey2Visibility();});return;}
-            _lblPttKey2.Text=KeyName(_pttKeyCode2);_lblPttKey2.BackColor=INPUT_BG;_lblPttKey2.ForeColor=ACC;_capturingKey2=false;_settings.PushToTalkKey2=_pttKeyCode2;_key2ShowOverlay=true;_settings.PttKey2ShowOverlay=true;if(_chkKey2Overlay!=null)_chkKey2Overlay.Checked=true;UpdateKey2Visibility();if(_onToggle!=null)_onToggle("ptt_key2:"+_pttKeyCode2);}
-        void StartKeyCapture3(){
-            if(!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked){EnforceToggleSelection();return;}
-            if(_capturingKey || _capturingKey2){return;}
-            _capturingKey3=true;_lblPttKey3.Text="Press...";_lblPttKey3.BackColor=ACC;_lblPttKey3.ForeColor=Color.White;_btnAddKey3.Visible=false;_lblPttKey3.Visible=true;_lblKey3Label.Visible=true;_lblKey3Hint.Visible=true;StartCapturePolling();}
-        void OnKeyCapture3(object s,KeyEventArgs e){if(!_capturingKey3)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){if(_pttKeyCode3==0){UpdateKey3Visibility();}else{_lblPttKey3.Text=KeyName(_pttKeyCode3);}_lblPttKey3.BackColor=INPUT_BG;_lblPttKey3.ForeColor=ACC;_capturingKey3=false;return;}
-            int vk=(int)e.KeyCode;
-            if (vk == 0x10) vk = IsKeyDown(0xA1) ? 0xA1 : 0xA0;
-            if (vk == 0x11) vk = IsKeyDown(0xA3) ? 0xA3 : 0xA2;
-            if (vk == 0x12) vk = IsKeyDown(0xA5) ? 0xA5 : 0xA4;
-            if(vk>=0xA0&&vk<=0xA5){try{if((GetAsyncKeyState(0xA1)&0x8000)!=0)vk=0xA1;else if((GetAsyncKeyState(0xA0)&0x8000)!=0)vk=0xA0;else if((GetAsyncKeyState(0xA3)&0x8000)!=0)vk=0xA3;else if((GetAsyncKeyState(0xA2)&0x8000)!=0)vk=0xA2;else if((GetAsyncKeyState(0xA5)&0x8000)!=0)vk=0xA5;else if((GetAsyncKeyState(0xA4)&0x8000)!=0)vk=0xA4;}catch{}}
-            _pttKeyCode3=vk;
-            // Duplicate check
-            if(vk==_pttKeyCode || (_pttKeyCode2>0 && vk==_pttKeyCode2) || (_ptmKeyCode>0 && vk==_ptmKeyCode) || (_ptToggleKeyCode>0 && vk==_ptToggleKeyCode)){_capturingKey3=false;_pttKeyCode3=0;_settings.PushToTalkKey3=0;ShakeReject(_lblPttKey3, ()=>{UpdateKey3Visibility();});return;}
-            _lblPttKey3.Text=KeyName(_pttKeyCode3);_lblPttKey3.BackColor=INPUT_BG;_lblPttKey3.ForeColor=ACC;_capturingKey3=false;_settings.PushToTalkKey3=_pttKeyCode3;_key3ShowOverlay=true;_settings.PttKey3ShowOverlay=true;if(_chkKey3Overlay!=null)_chkKey3Overlay.Checked=true;UpdateKey3Visibility();if(_onToggle!=null)_onToggle("ptt_key3:"+_pttKeyCode3);}
-        void UpdateKey3Visibility(){bool hasKey3=_pttKeyCode3>0;_lblPttKey3.Visible=hasKey3;_lblKey3Label.Visible=hasKey3;_lblKey3Hint.Visible=hasKey3;_btnRemoveKey3.Visible=hasKey3;_btnAddKey3.Visible=!hasKey3 && _pttKeyCode2 > 0;if(_chkKey3Overlay!=null)_chkKey3Overlay.Visible=hasKey3;}
-        void StartPtmKeyCapture(){if(_capturingKey||_capturingKey2||_capturingKey3||_capturingToggleKey)return;_capturingPtmKey=true;_lblPtmKey.Text="Press...";_lblPtmKey.BackColor=ACC;_lblPtmKey.ForeColor=Color.White;StartCapturePolling();}
-        void OnPtmKeyCapture(object s,KeyEventArgs e){if(!_capturingPtmKey)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){_ptmKeyCode=0;_settings.PushToMuteKey=0;_lblPtmKey.Text="Add Key";_lblPtmKey.BackColor=INPUT_BG;_lblPtmKey.ForeColor=ACC;_capturingPtmKey=false;if(_tglPtm.Checked){_loading=true;_tglPtm.Checked=false;_loading=false;_settings.PushToMuteEnabled=false;if(_onToggle!=null)_onToggle("ptm_off");}return;}
-            int vk=(int)e.KeyCode;if(vk==0x10)vk=IsKeyDown(0xA1)?0xA1:0xA0;if(vk==0x11)vk=IsKeyDown(0xA3)?0xA3:0xA2;if(vk==0x12)vk=IsKeyDown(0xA5)?0xA5:0xA4;
-            if(vk==_pttKeyCode||vk==_pttKeyCode2||vk==_pttKeyCode3||vk==_ptToggleKeyCode){_capturingPtmKey=false;_lblPtmKey.Text=_ptmKeyCode>0?KeyName(_ptmKeyCode):"Add Key";_lblPtmKey.BackColor=INPUT_BG;_lblPtmKey.ForeColor=ACC;ShakeReject(_lblPtmKey,null);return;}
-            _ptmKeyCode=vk;_lblPtmKey.Text=KeyName(_ptmKeyCode);_lblPtmKey.BackColor=INPUT_BG;_lblPtmKey.ForeColor=ACC;_capturingPtmKey=false;_settings.PushToMuteKey=_ptmKeyCode;
-            if(!_tglPtm.Checked){_loading=true;_tglPtm.Checked=true;_loading=false;_settings.PushToMuteEnabled=true;if(_onToggle!=null)_onToggle("ptm_on");}
-            if(_onToggle!=null)_onToggle("ptm_key:"+_ptmKeyCode);}
-        void StartToggleKeyCapture(){if(_capturingKey||_capturingKey2||_capturingKey3||_capturingPtmKey)return;_capturingToggleKey=true;_lblPtToggleKey.Text="Press...";_lblPtToggleKey.BackColor=ACC;_lblPtToggleKey.ForeColor=Color.White;StartCapturePolling();}
-        void OnToggleKeyCapture(object s,KeyEventArgs e){if(!_capturingToggleKey)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){_ptToggleKeyCode=0;_settings.PushToToggleKey=0;_lblPtToggleKey.Text="Add Key";_lblPtToggleKey.BackColor=INPUT_BG;_lblPtToggleKey.ForeColor=ACC;_capturingToggleKey=false;if(_tglPtToggle.Checked){_loading=true;_tglPtToggle.Checked=false;_loading=false;_settings.PushToToggleEnabled=false;if(_onToggle!=null)_onToggle("ptt_toggle_off");}return;}
-            int vk=(int)e.KeyCode;if(vk==0x10)vk=IsKeyDown(0xA1)?0xA1:0xA0;if(vk==0x11)vk=IsKeyDown(0xA3)?0xA3:0xA2;if(vk==0x12)vk=IsKeyDown(0xA5)?0xA5:0xA4;
-            if(vk==_pttKeyCode||vk==_pttKeyCode2||vk==_pttKeyCode3||vk==_ptmKeyCode){_capturingToggleKey=false;_lblPtToggleKey.Text=_ptToggleKeyCode>0?KeyName(_ptToggleKeyCode):"Add Key";_lblPtToggleKey.BackColor=INPUT_BG;_lblPtToggleKey.ForeColor=ACC;ShakeReject(_lblPtToggleKey,null);return;}
-            _ptToggleKeyCode=vk;_lblPtToggleKey.Text=KeyName(_ptToggleKeyCode);_lblPtToggleKey.BackColor=INPUT_BG;_lblPtToggleKey.ForeColor=ACC;_capturingToggleKey=false;_settings.PushToToggleKey=_ptToggleKeyCode;
-            if(!_tglPtToggle.Checked){_loading=true;_tglPtToggle.Checked=true;_loading=false;_settings.PushToToggleEnabled=true;if(_onToggle!=null)_onToggle("ptt_toggle_on");}
-            if(_onToggle!=null)_onToggle("toggle_key:"+_ptToggleKeyCode);}
-        CheckBox MakeOverlayCheck(int y, Panel card, bool initialOn, Action<bool> onChange) {
-            // Custom eye toggle — owner-drawn, no text
-            var eye = new CheckBox{Checked=initialOn,Appearance=Appearance.Button,FlatStyle=FlatStyle.Flat,Size=Dpi.Size(38,26),Location=Dpi.Pt(405,y),BackColor=Color.Transparent,TabStop=false};
-            eye.FlatAppearance.BorderSize=0;
-            eye.FlatAppearance.CheckedBackColor=Color.Transparent;
-            eye.FlatAppearance.MouseDownBackColor=Color.Transparent;
-            eye.FlatAppearance.MouseOverBackColor=Color.Transparent;
-            bool hover = false;
-            eye.MouseEnter += (s,e) => { hover=true; eye.Invalidate(); };
-            eye.MouseLeave += (s,e) => { hover=false; eye.Invalidate(); };
-            eye.Paint += (s,e) => {
-                var g = e.Graphics;
-                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                int w = eye.Width, h = eye.Height;
-                float cx = w/2f, cy = h/2f;
-                bool on = eye.Checked;
-                Color col = on ? (hover ? Color.FromArgb(140,220,255) : ACC) : (hover ? Color.FromArgb(90,90,90) : Color.FromArgb(55,55,55));
-                float sc = Dpi.S(1);
-                // Simple ear: C-shape arc + inner arc + optional sound wave
-                using (var p = new Pen(col, 1.5f*sc)) {
-                    // Outer ear — open arc facing right
-                    g.DrawArc(p, cx-8*sc, cy-8*sc, 14*sc, 16*sc, -120, 240);
-                    // Inner ear detail
-                    g.DrawArc(p, cx-4*sc, cy-4*sc, 7*sc, 8*sc, -100, 200);
-                }
-                if (on) {
-                    // Sound waves to the right
-                    using (var p = new Pen(Color.FromArgb(150, col.R, col.G, col.B), 1.2f*sc)) {
-                        g.DrawArc(p, cx+3*sc, cy-4*sc, 6*sc, 8*sc, -50, 100);
-                        g.DrawArc(p, cx+6*sc, cy-6*sc, 6*sc, 12*sc, -50, 100);
-                    }
-                } else {
-                    // Diagonal slash (muted)
-                    using (var p = new Pen(col, 1.8f*sc)) {
-                        p.StartCap = System.Drawing.Drawing2D.LineCap.Round;
-                        p.EndCap = System.Drawing.Drawing2D.LineCap.Round;
-                        g.DrawLine(p, cx-6*sc, cy+6*sc, cx+8*sc, cy-6*sc);
-                    }
-                }
-            };
-            var tt = new ToolTip();
-            tt.SetToolTip(eye, initialOn ? "Sound feedback on — click to mute" : "Sound feedback off — click to enable");
-            eye.CheckedChanged += (s,e) => {
-                tt.SetToolTip(eye, eye.Checked ? "Sound feedback on — click to mute" : "Sound feedback off — click to enable");
-                onChange(eye.Checked);
-            };
-            card.Controls.Add(eye);
-            return eye;
+        private DateTime _lastCaptureComplete = DateTime.MinValue;
+        private bool CaptureCooldownActive() { return (DateTime.Now - _lastCaptureComplete).TotalMilliseconds < 300; }
+
+        // =====================================================================
+        //  UNIFIED CAPTURE — single entry point, single completion handler
+        // =====================================================================
+
+        /// <summary>Start a key capture for the specified target. ONE method for all 9 slots.</summary>
+        void BeginCapture(CaptureTarget target, Label label) {
+            if (_audio.IsCapturing || CaptureCooldownActive()) return;
+            // For key2/key3 slots, require at least one mode toggle to be on
+            if (target == CaptureTarget.PttKey2 || target == CaptureTarget.PttKey3 ||
+                target == CaptureTarget.PtmKey2 || target == CaptureTarget.PtmKey3 ||
+                target == CaptureTarget.ToggleKey2 || target == CaptureTarget.ToggleKey3) {
+                if (!_tglPtt.Checked && !_tglPtm.Checked && !_tglPtToggle.Checked) { FlashToggleOn(_tglPtt); return; }
+            }
+            label.Text = "Press..."; label.BackColor = ACC; label.ForeColor = Color.White;
+            _captureGlowLabel = label; _captureGlowFrame = 0;
+            // Update layout so the label is visible at its new size
+            if (target >= CaptureTarget.PttKey1 && target <= CaptureTarget.PttKey3) LayoutPttKeys();
+            else if (target >= CaptureTarget.PtmKey1 && target <= CaptureTarget.PtmKey3) LayoutPtmKeys();
+            else LayoutToggleKeys();
+            Logger.Info("BeginCapture: " + target);
+            _audio.StartCapture(target, vk => OnCaptureComplete(target, label, vk));
         }
-        void UpdateKey2Visibility(){bool hasKey2=_pttKeyCode2>0;bool hasKey1=_pttKeyCode>0;_lblPttKey2.Visible=hasKey2;_lblKey2Label.Visible=hasKey2;_lblKey2Hint.Visible=hasKey2;_btnRemoveKey2.Visible=hasKey2;_btnAddKey2.Visible=!hasKey2 && hasKey1;if(_chkKey2Overlay!=null)_chkKey2Overlay.Visible=hasKey2;if(_btnAddKey3!=null)UpdateKey3Visibility();}
-        void OnKeyCapture(object s,KeyEventArgs e){if(!_capturingKey)return;e.Handled=true;e.SuppressKeyPress=true;if(e.KeyCode==Keys.Escape){_pttKeyCode=0;_settings.PushToTalkKey=0;_lblPttKey.Text="Add Key";_lblPttKey.BackColor=INPUT_BG;_lblPttKey.ForeColor=ACC;_capturingKey=false;if(_tglPtt.Checked){_loading=true;_tglPtt.Checked=false;_loading=false;_settings.PushToTalkEnabled=false;if(_onToggle!=null)_onToggle("ptt_off");}return;}
-            // WinForms gives generic modifier VK codes (0x10=Shift, 0x11=Ctrl, 0x12=Alt)
-            // but the low-level keyboard hook sees specific left/right codes (0xA0/0xA1, 0xA2/0xA3, 0xA4/0xA5).
-            // Translate generic → left-specific so the hook can match.
-            int vk = (int)e.KeyCode;
-            if (vk == 0x10) vk = IsKeyDown(0xA1) ? 0xA1 : 0xA0; // ShiftKey → LShift or RShift
-            if (vk == 0x11) vk = IsKeyDown(0xA3) ? 0xA3 : 0xA2; // ControlKey → LCtrl or RCtrl
-            if (vk == 0x12) vk = IsKeyDown(0xA5) ? 0xA5 : 0xA4; // Menu → LAlt or RAlt
-            _pttKeyCode=vk;
-            // Duplicate check
-            if((_pttKeyCode2>0 && vk==_pttKeyCode2)||(_pttKeyCode3>0 && vk==_pttKeyCode3)||(_ptmKeyCode>0 && vk==_ptmKeyCode)||(_ptToggleKeyCode>0 && vk==_ptToggleKeyCode)){_capturingKey=false;_pttKeyCode=_settings.PushToTalkKey;_lblPttKey.Text=KeyName(_pttKeyCode);ShakeReject(_lblPttKey);return;}
-            _lblPttKey.Text=KeyName(_pttKeyCode);_lblPttKey.BackColor=INPUT_BG;_lblPttKey.ForeColor=ACC;_capturingKey=false;_settings.PushToTalkKey=_pttKeyCode;UpdateKey2Visibility();if(_onToggle!=null)_onToggle("ptt_key:"+_pttKeyCode);}
+
+        /// <summary>Single completion handler for ALL key captures.</summary>
+        void OnCaptureComplete(CaptureTarget target, Label label, int vk) {
+            _captureGlowLabel = null;
+            _lastCaptureComplete = DateTime.Now;
+
+            if (vk == 0) { // Escape or cancel
+                HandleCaptureCancel(target, label);
+                return;
+            }
+
+            // Check cross-mode duplicate
+            int excl = AudioSettings.ExcludeModeFor(target);
+            if (_audio.IsKeyInUse(vk, excl) || _audio.IsDuplicateInMode(vk, target)) {
+                ResetLabel(target, label);
+                ShakeReject(label, null);
+                return;
+            }
+
+            // === SUCCESS — apply the key ===
+            ResetLabel(target, label);
+            SetLocalKeyCode(target, vk);
+            label.Text = KeyName(vk);
+            CompactKeys();
+
+            // Write to AudioSettings
+            _audio.SetKeyForTarget(target, vk);
+
+            // Auto-enable mode toggle + glisten if this was a key1 capture
+            switch (target) {
+                case CaptureTarget.PttKey1:
+                    if (!_tglPtt.Checked) { _loading=true; _tglPtt.Checked=true; _loading=false; StartGlisten(_tglPtt); }
+                    // Mutual exclusivity: PTT on kills PTM (unless Toggle is on)
+                    if (!_tglPtToggle.Checked && _tglPtm.Checked) {
+                        _loading=true; _tglPtm.Checked=false; _loading=false;
+                        _ptmKeyCode=0;_ptmKeyCode2=0;_ptmKeyCode3=0;if(_lblPtmKey!=null){_lblPtmKey.Text="Add Key";_lblPtmKey.BackColor=INPUT_BG;_lblPtmKey.ForeColor=ACC;}LayoutPtmKeys();_audio.DisablePtmMode();
+                    }
+                    _audio.SetPttKeyAndEnable(vk); _audio.PttKey2=_pttKeyCode2; _audio.PttKey3=_pttKeyCode3;
+                    break;
+                case CaptureTarget.PttKey2:
+                    _key2ShowOverlay=true; _audio.PttKey2ShowOverlay=true; if(_chkKey2Overlay!=null)_chkKey2Overlay.Checked=true;
+                    _audio.PttKey2=vk; _audio.Save();
+                    break;
+                case CaptureTarget.PttKey3:
+                    _key3ShowOverlay=true; _audio.PttKey3ShowOverlay=true; if(_chkKey3Overlay!=null)_chkKey3Overlay.Checked=true;
+                    _audio.PttKey3=vk; _audio.Save();
+                    break;
+                case CaptureTarget.PtmKey1:
+                    if (!_tglPtm.Checked) { _loading=true; _tglPtm.Checked=true; _loading=false; StartGlisten(_tglPtm); }
+                    // Mutual exclusivity: PTM on kills PTT (unless Toggle is on)
+                    if (!_tglPtToggle.Checked && _tglPtt.Checked) {
+                        _loading=true; _tglPtt.Checked=false; _loading=false;
+                        _pttKeyCode=0;_pttKeyCode2=0;_pttKeyCode3=0;_lblPttKey.Text="Add Key";_lblPttKey.BackColor=INPUT_BG;_lblPttKey.ForeColor=ACC;CompactKeys();LayoutPttKeys();_audio.DisablePttMode();
+                    }
+                    _audio.SetPtmKeyAndEnable(vk);
+                    break;
+                case CaptureTarget.PtmKey2:
+                    _audio.PtmKey2=vk; _audio.Save(); LayoutPtmKeys();
+                    break;
+                case CaptureTarget.PtmKey3:
+                    _audio.PtmKey3=vk; _audio.Save(); LayoutPtmKeys();
+                    break;
+                case CaptureTarget.ToggleKey1:
+                    if (!_tglPtToggle.Checked) { _loading=true; _tglPtToggle.Checked=true; _loading=false; StartGlisten(_tglPtToggle); }
+                    _audio.SetPtToggleKeyAndEnable(vk);
+                    break;
+                case CaptureTarget.ToggleKey2:
+                    _audio.PtToggleKey2=vk; _audio.Save(); LayoutToggleKeys();
+                    break;
+                case CaptureTarget.ToggleKey3:
+                    _audio.PtToggleKey3=vk; _audio.Save(); LayoutToggleKeys();
+                    break;
+            }
+            RefreshPttHotkeyLabel();
+        }
+
+        /// <summary>Handle Escape/cancel for a specific target.</summary>
+        void HandleCaptureCancel(CaptureTarget target, Label label) {
+            ResetLabel(target, label);
+            SetLocalKeyCode(target, 0);
+            CompactKeys();
+            _audio.SetKeyForTarget(target, 0);
+            _audio.Save();
+
+            // If all keys for the mode are gone, disable mode
+            switch (target) {
+                case CaptureTarget.PttKey1: case CaptureTarget.PttKey2: case CaptureTarget.PttKey3:
+                    if (_pttKeyCode==0 && _pttKeyCode2==0 && _pttKeyCode3==0 && _tglPtt.Checked) { _loading=true; _tglPtt.Checked=false; _loading=false; _audio.DisablePttMode(); }
+                    break;
+                case CaptureTarget.PtmKey1: case CaptureTarget.PtmKey2: case CaptureTarget.PtmKey3:
+                    if (_ptmKeyCode==0 && _ptmKeyCode2==0 && _ptmKeyCode3==0 && _tglPtm.Checked) { _loading=true; _tglPtm.Checked=false; _loading=false; _audio.DisablePtmMode(); }
+                    break;
+                case CaptureTarget.ToggleKey1: case CaptureTarget.ToggleKey2: case CaptureTarget.ToggleKey3:
+                    if (_ptToggleKeyCode==0 && _ptToggleKeyCode2==0 && _ptToggleKeyCode3==0 && _tglPtToggle.Checked) { _loading=true; _tglPtToggle.Checked=false; _loading=false; _audio.DisablePtToggleMode(); }
+                    break;
+            }
+            RefreshPttHotkeyLabel();
+        }
+
+        /// <summary>Reset a label back to its non-capturing appearance.</summary>
+        void ResetLabel(CaptureTarget target, Label label) {
+            label.BackColor = INPUT_BG; label.ForeColor = ACC;
+        }
+
+        /// <summary>Set the local key code field for a target.</summary>
+        void SetLocalKeyCode(CaptureTarget target, int vk) {
+            switch (target) {
+                case CaptureTarget.PttKey1: _pttKeyCode = vk; break;
+                case CaptureTarget.PttKey2: _pttKeyCode2 = vk; break;
+                case CaptureTarget.PttKey3: _pttKeyCode3 = vk; break;
+                case CaptureTarget.PtmKey1: _ptmKeyCode = vk; break;
+                case CaptureTarget.PtmKey2: _ptmKeyCode2 = vk; break;
+                case CaptureTarget.PtmKey3: _ptmKeyCode3 = vk; break;
+                case CaptureTarget.ToggleKey1: _ptToggleKeyCode = vk; break;
+                case CaptureTarget.ToggleKey2: _ptToggleKeyCode2 = vk; break;
+                case CaptureTarget.ToggleKey3: _ptToggleKeyCode3 = vk; break;
+            }
+        }
+
+        /// <summary>Cancel any active key capture, bounce toggles back to off if no key was set, reset all labels.</summary>
+        void CancelAllCaptures() {
+            if (_audio.IsCapturing) _audio.CancelCapture();
+            _captureGlowLabel = null;
+            _lastCaptureComplete = DateTime.Now;
+            // Reset ALL toggles (if no key) and ALL labels
+            _loading = true;
+            if (_pttKeyCode <= 0) _tglPtt.Checked = false;
+            if (_ptmKeyCode <= 0) _tglPtm.Checked = false;
+            if (_ptToggleKeyCode <= 0) _tglPtToggle.Checked = false;
+            _loading = false;
+            _lblPttKey.Text = _pttKeyCode > 0 ? PushToTalk.GetKeyName(_pttKeyCode) : "Add Key";
+            _lblPttKey.BackColor = INPUT_BG; _lblPttKey.ForeColor = ACC;
+            if (_lblPtmKey != null) { _lblPtmKey.Text = _ptmKeyCode > 0 ? PushToTalk.GetKeyName(_ptmKeyCode) : "Add Key"; _lblPtmKey.BackColor = INPUT_BG; _lblPtmKey.ForeColor = ACC; }
+            if (_lblPtToggleKey != null) { _lblPtToggleKey.Text = _ptToggleKeyCode > 0 ? PushToTalk.GetKeyName(_ptToggleKeyCode) : "Add Key"; _lblPtToggleKey.BackColor = INPUT_BG; _lblPtToggleKey.ForeColor = ACC; }
+            CompactKeys(); LayoutPttKeys(); LayoutPtmKeys(); LayoutToggleKeys();
+        }
+
+        void UpdateKey3Visibility() { LayoutPttKeys(); }
+        void UpdatePtmKey2Vis() { LayoutPtmKeys(); }
+        void UpdateToggleKey2Vis() { LayoutToggleKeys(); }
+        CardIcon MakeOverlayCheck(int y, Panel card, bool initialOn, Action<bool> onChange) {
+            var icon = new CardIcon { W = 24, H = 24, Checked = initialOn, IsEye = true, OnChange = onChange, Card = card };
+            icon.SetPos(405, y);
+            if (!_cardIconMap.ContainsKey(card)) _cardIconMap[card] = new List<CardIcon>();
+            _cardIconMap[card].Add(icon);
+            return icon;
+        }
+        CardIcon MakeSoundCheck(int y, Panel card, bool initialOn, Action<bool> onChange) {
+            var icon = new CardIcon { W = 28, H = 24, Checked = initialOn, IsEye = false, OnChange = onChange, Card = card };
+            icon.SetPos(430, y);
+            if (!_cardIconMap.ContainsKey(card)) _cardIconMap[card] = new List<CardIcon>();
+            _cardIconMap[card].Add(icon);
+            return icon;
+        }
+        /// <summary>Creates a compact dark sound dropdown at a specific position, right-aligned on the hotkey row.</summary>
+        Panel MakeSoundDropdown(int y, Panel card, int settingValue, Action<int> onChange) {
+            string[] sndNames = { "Soft Click", "Double Tap", "Chirp", "Radio", "Chime", "Pop", "Custom..." };
+            int sel = Math.Max(0, Math.Min(sndNames.Length - 1, settingValue));
+            var btn = new BufferedPanel { Size = Dpi.Size(86, 24), Location = Dpi.Pt(330, y), BackColor = INPUT_BG, Cursor = Cursors.Hand };
+            bool hov = false;
+            btn.Paint += (s2, e2) => {
+                var g2 = e2.Graphics; g2.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g2.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                Color bg = hov ? Color.FromArgb(30, 30, 30) : INPUT_BG; Color bdr = hov ? ACC : Color.FromArgb(60, ACC.R, ACC.G, ACC.B);
+                int cr = Dpi.S(3);
+                using (var path = DarkTheme.RoundedRect(new Rectangle(0, 0, btn.Width - 1, btn.Height - 1), cr)) { using (var b = new SolidBrush(bg)) g2.FillPath(b, path); using (var p = new Pen(bdr, 1f)) g2.DrawPath(p, path); }
+                string txt = sel == 6 && !string.IsNullOrEmpty(_settings.CustomSoundPath) ? System.IO.Path.GetFileNameWithoutExtension(_settings.CustomSoundPath) : sndNames[Math.Min(sel, sndNames.Length-1)];
+                if (txt.Length > 10) txt = txt.Substring(0, 9) + "..";
+                using (var f = new Font("Segoe UI", 7.5f)) using (var b = new SolidBrush(TXT)) g2.DrawString(txt, f, b, Dpi.S(6), Dpi.S(4));
+                float cx2 = btn.Width - Dpi.S(12), cy2 = btn.Height / 2f;
+                using (var p = new Pen(ACC, Dpi.S(2))) { p.StartCap = System.Drawing.Drawing2D.LineCap.Round; p.EndCap = System.Drawing.Drawing2D.LineCap.Round; g2.DrawLine(p, cx2 - Dpi.S(3), cy2 - Dpi.S(2), cx2, cy2 + Dpi.S(2)); g2.DrawLine(p, cx2, cy2 + Dpi.S(2), cx2 + Dpi.S(3), cy2 - Dpi.S(2)); }
+            };
+            btn.MouseEnter += (s2, e2) => { hov = true; btn.Invalidate(); };
+            btn.MouseLeave += (s2, e2) => { hov = false; btn.Invalidate(); };
+            card.Controls.Add(btn);
+
+            btn.MouseClick += (s2, e2) => {
+                // Close any other open dropdown
+                if (_activeDropdownPopup != null && !_activeDropdownPopup.IsDisposed) {
+                    _activeDropdownPopup.Close(); _activeDropdownPopup = null;
+                }
+                // Create topmost borderless popup form
+                var popForm = new Form {
+                    FormBorderStyle = FormBorderStyle.None, StartPosition = FormStartPosition.Manual,
+                    ShowInTaskbar = false, TopMost = true, BackColor = Color.FromArgb(18, 18, 18),
+                    Size = new Size(Dpi.S(86), Dpi.S(sndNames.Length * 24 + 4))
+                };
+                var screenPt = btn.PointToScreen(new Point(0, btn.Height + Dpi.S(2)));
+                popForm.Location = screenPt;
+                int hovIdx = -1;
+                var popPanel = new BufferedPanel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(18, 18, 18) };
+                popPanel.Paint += (s3, e3) => {
+                    var g2 = e3.Graphics; g2.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                    g2.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                    int cr2 = Dpi.S(3);
+                    using (var path = DarkTheme.RoundedRect(new Rectangle(0, 0, popPanel.Width - 1, popPanel.Height - 1), cr2)) {
+                        using (var b = new SolidBrush(Color.FromArgb(18, 18, 18))) g2.FillPath(b, path);
+                        using (var p = new Pen(Color.FromArgb(60, ACC.R, ACC.G, ACC.B), 1f)) g2.DrawPath(p, path);
+                    }
+                    for (int i = 0; i < sndNames.Length; i++) {
+                        int iy = Dpi.S(2) + i * Dpi.S(24);
+                        if (i == hovIdx) using (var b = new SolidBrush(Color.FromArgb(35, ACC.R, ACC.G, ACC.B))) g2.FillRectangle(b, Dpi.S(2), iy, popPanel.Width - Dpi.S(4), Dpi.S(24));
+                        if (i == 6) using (var p = new Pen(Color.FromArgb(40, 40, 40))) g2.DrawLine(p, Dpi.S(6), iy, popPanel.Width - Dpi.S(6), iy);
+                        Color tc = i == sel ? ACC : (i == 6 ? Color.FromArgb(180, 180, 180) : TXT);
+                        using (var f = new Font("Segoe UI", 7.5f, i == sel ? FontStyle.Bold : (i == 6 ? FontStyle.Italic : FontStyle.Regular)))
+                        using (var b = new SolidBrush(tc)) g2.DrawString(sndNames[i], f, b, Dpi.S(6), iy + Dpi.S(4));
+                    }
+                };
+                popPanel.MouseMove += (s3, e3) => { int nh = (e3.Y - Dpi.S(2)) / Dpi.S(24); if (nh < 0 || nh >= sndNames.Length) nh = -1; if (nh != hovIdx) { hovIdx = nh; popPanel.Invalidate(); } };
+                popPanel.MouseLeave += (s3, e3) => { hovIdx = -1; popPanel.Invalidate(); };
+                popPanel.MouseClick += (s3, e3) => {
+                    int ci = (e3.Y - Dpi.S(2)) / Dpi.S(24);
+                    if (ci >= 0 && ci < sndNames.Length) {
+                        popForm.Close(); _activeDropdownPopup = null;
+                        if (ci == 6) {
+                            using (var ofd = new OpenFileDialog()) {
+                                ofd.Title = "Choose Feedback Sound";
+                                ofd.Filter = "Sound Files|*.wav|All Files|*.*";
+                                ofd.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic);
+                                if (ofd.ShowDialog() == DialogResult.OK) { _settings.CustomSoundPath = ofd.FileName; sel = 6; onChange(6); btn.Invalidate(); }
+                            }
+                        } else { sel = ci; onChange(ci); btn.Invalidate(); TrayApp.PreviewFeedbackSound(ci); }
+                    }
+                };
+                popForm.Controls.Add(popPanel);
+                popForm.Deactivate += (s3, e3) => { if (!popForm.IsDisposed) popForm.Close(); _activeDropdownPopup = null; };
+                _activeDropdownPopup = popForm;
+                popForm.Show();
+            };
+            return btn;
+        }
+        void UpdateKey2Visibility() { LayoutPttKeys(); }
+        /// <summary>Lays out all PTT keys horizontally on the hotkey row: [Key1][x] [Key2][x] [Key3][x] [Add Key]</summary>
+        void LayoutPttKeys() {
+            int ki = 64; // base x for hotkey area
+            int hk1Y = 56 + 46; // base y for hotkey row
+            int kbW = 80, rmW = 18, gap = 4;
+            int x = ki + 50; // start after "Hotkey:" label
+            // Key 1 — always visible, positioned by BuildPttPane, just ensure size
+            _lblPttKey.Size = Dpi.Size(kbW, 26);
+            _lblPttKey.Location = Dpi.Pt(x, hk1Y);
+            x += kbW + gap;
+            // Key 2
+            bool hasKey2 = _pttKeyCode2 > 0 || _audio.CurrentTarget == CaptureTarget.PttKey2, hasKey3 = _pttKeyCode3 > 0 || _audio.CurrentTarget == CaptureTarget.PttKey3;
+            if (hasKey2) {
+                _lblPttKey2.Location = Dpi.Pt(x, hk1Y); _lblPttKey2.Visible = true;
+                x += kbW;
+                _btnRemoveKey2.Location = Dpi.Pt(x + 1, hk1Y + 4); _btnRemoveKey2.Visible = true;
+                x += rmW + gap;
+            } else { _lblPttKey2.Visible = false; _btnRemoveKey2.Visible = false; }
+            // Key 3
+            if (hasKey3) {
+                _lblPttKey3.Location = Dpi.Pt(x, hk1Y); _lblPttKey3.Visible = true;
+                x += kbW;
+                _btnRemoveKey3.Location = Dpi.Pt(x + 1, hk1Y + 4); _btnRemoveKey3.Visible = true;
+                x += rmW + gap;
+            } else { _lblPttKey3.Visible = false; _btnRemoveKey3.Visible = false; }
+            // "Add Key" button — show if we have fewer than 3 keys and the previous one is already assigned
+            int keyCount = (_pttKeyCode > 0 ? 1 : 0) + (_pttKeyCode2 > 0 ? 1 : 0) + (_pttKeyCode3 > 0 ? 1 : 0);
+            bool showAdd = _pttKeyCode > 0 && keyCount < 3 && !_audio.IsCapturing;
+            if (showAdd) {
+                // Use _btnAddKey2 if no key2, else _btnAddKey3
+                if (!hasKey2) { _btnAddKey2.Location = Dpi.Pt(x, hk1Y); _btnAddKey2.Visible = true; _btnAddKey3.Visible = false; }
+                else { _btnAddKey3.Location = Dpi.Pt(x, hk1Y); _btnAddKey3.Visible = true; _btnAddKey2.Visible = false; }
+            } else { _btnAddKey2.Visible = false; _btnAddKey3.Visible = false; }
+        }
+
+        void LayoutPtmKeys() {
+            int ki = 64; // base x for hotkey area
+            int hk2Y = 56 + 46 + 34 + 10 + 46; // base y for PTM hotkey row
+            int kbW = 80, rmW = 18, gap = 4;
+            int x = ki + 50; // start after "Hotkey:" label
+            if (_lblPtmKey == null) return;
+            // Key 1
+            _lblPtmKey.Size = Dpi.Size(kbW, 26);
+            _lblPtmKey.Location = Dpi.Pt(x, hk2Y);
+            x += kbW + gap;
+            // Key 2
+            bool hasKey2 = _ptmKeyCode2 > 0 || _audio.CurrentTarget == CaptureTarget.PtmKey2;
+            bool hasKey3 = _ptmKeyCode3 > 0 || _audio.CurrentTarget == CaptureTarget.PtmKey3;
+
+            if (hasKey2) {
+                _lblPtmKey2.Location = Dpi.Pt(x, hk2Y); _lblPtmKey2.Visible = true;
+                x += kbW;
+                if (_btnPtmRemKey2 != null) { _btnPtmRemKey2.Location = Dpi.Pt(x + 1, hk2Y + 4); _btnPtmRemKey2.Visible = true; _btnPtmRemKey2.Size = Dpi.Size(rmW, rmW); }
+                x += rmW + gap;
+            } else { _lblPtmKey2.Visible = false; if (_btnPtmRemKey2 != null) _btnPtmRemKey2.Visible = false; }
+            // Key 3
+            if (hasKey3) {
+                if (_lblPtmKey3 != null) { _lblPtmKey3.Location = Dpi.Pt(x, hk2Y); _lblPtmKey3.Visible = true; }
+                x += kbW;
+                if (_btnPtmRemKey3 != null) { _btnPtmRemKey3.Location = Dpi.Pt(x + 1, hk2Y + 4); _btnPtmRemKey3.Visible = true; _btnPtmRemKey3.Size = Dpi.Size(rmW, rmW); }
+                x += rmW + gap;
+            } else { if (_lblPtmKey3 != null) _lblPtmKey3.Visible = false; if (_btnPtmRemKey3 != null) _btnPtmRemKey3.Visible = false; }
+            // Add Key button
+            int keyCount = ((_ptmKeyCode > 0) ? 1 : 0) + ((_ptmKeyCode2 > 0) ? 1 : 0) + ((_ptmKeyCode3 > 0) ? 1 : 0);
+            bool showAdd = _ptmKeyCode > 0 && keyCount < 3 && !_audio.IsCapturing;
+            if (showAdd) {
+                // Show the appropriate add button
+                if (_ptmKeyCode2 <= 0) { if (_btnPtmAddKey2 != null) { _btnPtmAddKey2.Location = Dpi.Pt(x, hk2Y); _btnPtmAddKey2.Visible = true; } if (_btnPtmAddKey3 != null) _btnPtmAddKey3.Visible = false; }
+                else { if (_btnPtmAddKey2 != null) _btnPtmAddKey2.Visible = false; if (_btnPtmAddKey3 != null) { _btnPtmAddKey3.Location = Dpi.Pt(x, hk2Y); _btnPtmAddKey3.Visible = true; } }
+            } else { if (_btnPtmAddKey2 != null) _btnPtmAddKey2.Visible = false; if (_btnPtmAddKey3 != null) _btnPtmAddKey3.Visible = false; }
+        }
+
+        void LayoutToggleKeys() {
+            int ki = 64; // base x for hotkey area
+            int hk3Y = 56 + 46 + 34 + 10 + 46 + 34 + 10 + 46; // base y for Toggle hotkey row
+            int kbW = 80, rmW = 18, gap = 4;
+            int x = ki + 50; // start after "Hotkey:" label
+            if (_lblPtToggleKey == null) return;
+            // Key 1
+            _lblPtToggleKey.Size = Dpi.Size(kbW, 26);
+            _lblPtToggleKey.Location = Dpi.Pt(x, hk3Y);
+            x += kbW + gap;
+            // Key 2
+            bool hasKey2 = _ptToggleKeyCode2 > 0 || _audio.CurrentTarget == CaptureTarget.ToggleKey2;
+            bool hasKey3 = _ptToggleKeyCode3 > 0 || _audio.CurrentTarget == CaptureTarget.ToggleKey3;
+
+            if (hasKey2) {
+                _lblPtToggleKey2.Location = Dpi.Pt(x, hk3Y); _lblPtToggleKey2.Visible = true;
+                x += kbW;
+                if (_btnToggleRemKey2 != null) { _btnToggleRemKey2.Location = Dpi.Pt(x + 1, hk3Y + 4); _btnToggleRemKey2.Visible = true; _btnToggleRemKey2.Size = Dpi.Size(rmW, rmW); }
+                x += rmW + gap;
+            } else { _lblPtToggleKey2.Visible = false; if (_btnToggleRemKey2 != null) _btnToggleRemKey2.Visible = false; }
+            // Key 3
+            if (hasKey3) {
+                if (_lblPtToggleKey3 != null) { _lblPtToggleKey3.Location = Dpi.Pt(x, hk3Y); _lblPtToggleKey3.Visible = true; }
+                x += kbW;
+                if (_btnToggleRemKey3 != null) { _btnToggleRemKey3.Location = Dpi.Pt(x + 1, hk3Y + 4); _btnToggleRemKey3.Visible = true; _btnToggleRemKey3.Size = Dpi.Size(rmW, rmW); }
+                x += rmW + gap;
+            } else { if (_lblPtToggleKey3 != null) _lblPtToggleKey3.Visible = false; if (_btnToggleRemKey3 != null) _btnToggleRemKey3.Visible = false; }
+            // Add Key button
+            int keyCount = ((_ptToggleKeyCode > 0) ? 1 : 0) + ((_ptToggleKeyCode2 > 0) ? 1 : 0) + ((_ptToggleKeyCode3 > 0) ? 1 : 0);
+            bool showAdd = _ptToggleKeyCode > 0 && keyCount < 3 && !_audio.IsCapturing;
+            if (showAdd) {
+                if (_ptToggleKeyCode2 <= 0) { if (_btnToggleAddKey2 != null) { _btnToggleAddKey2.Location = Dpi.Pt(x, hk3Y); _btnToggleAddKey2.Visible = true; } if (_btnToggleAddKey3 != null) _btnToggleAddKey3.Visible = false; }
+                else { if (_btnToggleAddKey2 != null) _btnToggleAddKey2.Visible = false; if (_btnToggleAddKey3 != null) { _btnToggleAddKey3.Location = Dpi.Pt(x, hk3Y); _btnToggleAddKey3.Visible = true; } }
+            } else { if (_btnToggleAddKey2 != null) _btnToggleAddKey2.Visible = false; if (_btnToggleAddKey3 != null) _btnToggleAddKey3.Visible = false; }
+        }
         [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vKey);
         static bool IsKeyDown(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
+        /// <summary>Checks if a key is held. For toggle keys (CapsLock/ScrollLock/NumLock), uses PushToTalk's LL hook state because GetAsyncKeyState is unreliable for these keys.</summary>
+        static bool IsKeyHeld(int vk) {
+            if (vk == 0x14 || vk == 0x91 || vk == 0x90) // VK_CAPS_LOCK, VK_SCROLL_LOCK, VK_NUM_LOCK
+                return PushToTalk.HookHeldKey == vk;
+            return (GetAsyncKeyState(vk) & 0x8000) != 0;
+        }
         string KeyName(int c){return PushToTalk.GetKeyName(c);}
 
         /// <summary>Shake a label left-right with red flash to indicate rejected input. Premium rejection feel.</summary>
@@ -1399,6 +2299,38 @@ namespace AngryAudio
                 tick++;
             };
             shakeTimer.Start();
+        }
+
+        /// <summary>Brief glow flash on a toggle after it's auto-enabled by hotkey capture.</summary>
+        private DateTime _lastFlashTime = DateTime.MinValue;
+        private Form _activeDropdownPopup; // tracks currently open dropdown — only one at a time
+        private ToggleSwitch _flashTarget;
+        private int _flashAlpha;
+        private Timer _flashFadeTimer;
+
+        void FlashToggleOn(ToggleSwitch tgl) {
+            if (tgl == null || tgl.Parent == null) return;
+            if ((DateTime.Now - _lastFlashTime).TotalMilliseconds < 800) return; // cooldown
+            _lastFlashTime = DateTime.Now;
+            _flashTarget = tgl;
+            _flashAlpha = 40;
+            if (_flashFadeTimer == null) {
+                _flashFadeTimer = new Timer { Interval = 50 };
+                _flashFadeTimer.Tick += (s2, e2) => {
+                    _flashAlpha -= 4;
+                    if (_flashAlpha <= 0) { _flashAlpha = 0; _flashTarget = null; _flashFadeTimer.Stop(); }
+                    if (_pttCard != null) {
+                        _pttCard.Invalidate();
+                        // Invalidate all children in flash region so they repaint with flash tint
+                        foreach (Control c in _pttCard.Controls) c.Invalidate();
+                    }
+                };
+            }
+            _flashFadeTimer.Start();
+            if (_pttCard != null) {
+                _pttCard.Invalidate();
+                foreach (Control c in _pttCard.Controls) c.Invalidate();
+            }
         }
 
         private Timer _enforceTimer;
@@ -1443,11 +2375,7 @@ namespace AngryAudio
                 };
                 highlights[i].Visible = false;
                 card.Controls.Add(highlights[i]);
-                highlights[i].BringToFront();
-                tgl.BringToFront();
-                foreach (Control c in card.Controls)
-                    if (c is Label && c.Top >= tgl.Top - Dpi.S(2) && c.Top <= tgl.Top + Dpi.S(30))
-                        c.BringToFront();
+                // Toggles are hidden — clicks handled by CardToggle through card MouseClick
             }
 
             // Animation: shake + 1-2-3, 1-2-3, then HIDE and stop.
@@ -1475,10 +2403,8 @@ namespace AngryAudio
                 }
                 else if (step == 6)
                 {
-                    // HIDE highlights — don't leave blue rectangles behind
-                    for (int i = 0; i < 3; i++) { highlights[i].Visible = false; }
-                    _enforceTimer.Stop();
-                    step++;
+                    // Animation done — fully clean up (remove panels, detach handlers)
+                    CleanupEnforcement();
                 }
             };
 
@@ -1587,7 +2513,7 @@ namespace AngryAudio
                 if (InvokeRequired) { BeginInvoke((Action)RefreshOverlayToggle); return; }
                 _loading = true;
                 _tglOverlay.Checked = _settings.MicOverlayEnabled;
-                if (_tglSoundFeedback != null) _tglSoundFeedback.Checked = _settings.PttSoundFeedback;
+                
                 _loading = false;
             } catch { _loading = false; }
         }
@@ -1596,7 +2522,7 @@ namespace AngryAudio
         /// <summary>Smoothly animate a slider to a target value, then call onDone.</summary>
         void AnimateSlider(SlickSlider slider, int target, Action onDone)
         {
-            if (slider.Value == target) { onDone?.Invoke(); return; }
+            if (slider.Value == target) { if (onDone != null) onDone(); return; }
             var tmr = new Timer { Interval = 16 };
             tmr.Tick += (s, e) => {
                 int diff = target - slider.Value;
@@ -1604,7 +2530,7 @@ namespace AngryAudio
                 if (Math.Abs(diff) <= step) {
                     slider.Value = target;
                     tmr.Stop(); tmr.Dispose();
-                    onDone?.Invoke();
+                    if (onDone != null) onDone();
                 } else {
                     slider.Value += diff > 0 ? step : -step;
                 }
@@ -1665,36 +2591,91 @@ namespace AngryAudio
         void LoadSettings(){try{ _loading=true;
             _tglAfkMic.Checked=_settings.AfkMicMuteEnabled;_nudAfkMicSec.Value=Clamp(_settings.AfkMicMuteSec,5,3600);
             _tglAfkSpk.Checked=_settings.AfkSpeakerMuteEnabled;_nudAfkSpkSec.Value=Clamp(_settings.AfkSpeakerMuteSec,5,3600);
-            _tglPtt.Checked=_settings.PushToTalkEnabled;_tglPtm.Checked=_settings.PushToMuteEnabled;_tglPtToggle.Checked=_settings.PushToToggleEnabled;_pttKeyCode=_settings.PushToTalkKey;_lblPttKey.Text=KeyName(_pttKeyCode);_pttKeyCode2=_settings.PushToTalkKey2;_pttKeyCode3=_settings.PushToTalkKey3;_key1ShowOverlay=_settings.PttKey1ShowOverlay;_key2ShowOverlay=_settings.PttKey2ShowOverlay;_key3ShowOverlay=_settings.PttKey3ShowOverlay;if(_chkKey1Overlay!=null)_chkKey1Overlay.Checked=_key1ShowOverlay;if(_chkKey2Overlay!=null)_chkKey2Overlay.Checked=_key2ShowOverlay;if(_chkKey3Overlay!=null)_chkKey3Overlay.Checked=_key3ShowOverlay;if(_lblPttKey2!=null){_lblPttKey2.Text=_pttKeyCode2>0?KeyName(_pttKeyCode2):"";UpdateKey2Visibility();}if(_lblPttKey3!=null){_lblPttKey3.Text=_pttKeyCode3>0?KeyName(_pttKeyCode3):"";UpdateKey3Visibility();}
-            if(_lblPtmKey!=null){_ptmKeyCode=_settings.PushToMuteKey;_lblPtmKey.Text=_ptmKeyCode>0?KeyName(_ptmKeyCode):"Add Key";}if(_lblPtToggleKey!=null){_ptToggleKeyCode=_settings.PushToToggleKey;_lblPtToggleKey.Text=_ptToggleKeyCode>0?KeyName(_ptToggleKeyCode):"Add Key";}_tglOverlay.Checked=_settings.MicOverlayEnabled;
+            _tglPtt.Checked=_settings.PushToTalkEnabled;_tglPtm.Checked=_settings.PushToMuteEnabled;_tglPtToggle.Checked=_settings.PushToToggleEnabled;_pttKeyCode=_settings.PushToTalkEnabled?_settings.PushToTalkKey:0;_lblPttKey.Text=_pttKeyCode>0?KeyName(_pttKeyCode):"Add Key";_pttKeyCode2=_settings.PushToTalkEnabled?_settings.PushToTalkKey2:0;_pttKeyCode3=_settings.PushToTalkEnabled?_settings.PushToTalkKey3:0;_key1ShowOverlay=_settings.PttKey1ShowOverlay;_key2ShowOverlay=_settings.PttKey2ShowOverlay;_key3ShowOverlay=_settings.PttKey3ShowOverlay;if(_chkKey1Overlay!=null)_chkKey1Overlay.Checked=_key1ShowOverlay;if(_chkKey2Overlay!=null)_chkKey2Overlay.Checked=_key2ShowOverlay;if(_chkKey3Overlay!=null)_chkKey3Overlay.Checked=_key3ShowOverlay;if(_lblPttKey2!=null){_lblPttKey2.Text=_pttKeyCode2>0?KeyName(_pttKeyCode2):"";UpdateKey2Visibility();}if(_lblPttKey3!=null){_lblPttKey3.Text=_pttKeyCode3>0?KeyName(_pttKeyCode3):"";UpdateKey3Visibility();}
+            if(_lblPtmKey!=null){_ptmKeyCode=_settings.PushToMuteEnabled?_settings.PushToMuteKey:0;_ptmKeyCode2=_settings.PushToMuteEnabled?_settings.PushToMuteKey2:0;_ptmKeyCode3=_settings.PushToMuteEnabled?_settings.PushToMuteKey3:0;_lblPtmKey.Text=_ptmKeyCode>0?KeyName(_ptmKeyCode):"Add Key";if(_lblPtmKey2!=null)_lblPtmKey2.Text=_ptmKeyCode2>0?KeyName(_ptmKeyCode2):"";if(_lblPtmKey3!=null)_lblPtmKey3.Text=_ptmKeyCode3>0?KeyName(_ptmKeyCode3):"";}if(_lblPtToggleKey!=null){_ptToggleKeyCode=_settings.PushToToggleEnabled?_settings.PushToToggleKey:0;_ptToggleKeyCode2=_settings.PushToToggleEnabled?_settings.PushToToggleKey2:0;_ptToggleKeyCode3=_settings.PushToToggleEnabled?_settings.PushToToggleKey3:0;_lblPtToggleKey.Text=_ptToggleKeyCode>0?KeyName(_ptToggleKeyCode):"Add Key";if(_lblPtToggleKey2!=null)_lblPtToggleKey2.Text=_ptToggleKeyCode2>0?KeyName(_ptToggleKeyCode2):"";if(_lblPtToggleKey3!=null)_lblPtToggleKey3.Text=_ptToggleKeyCode3>0?KeyName(_ptToggleKeyCode3):"";}_tglOverlay.Checked=_settings.MicOverlayEnabled;
             _tglMicEnf.Checked=_settings.MicEnforceEnabled;_trkMicVol.Value=Clamp(_settings.MicVolumePercent,0,100);_plMicVol.Text=_trkMicVol.Value+"%";
             _tglSpkEnf.Checked=_settings.SpeakerEnforceEnabled;_trkSpkVol.Value=Clamp(_settings.SpeakerVolumePercent,0,100);_plSpkVol.Text=_trkSpkVol.Value+"%";
+            // Refresh PTT hotkey label on Volume Lock page
+            RefreshPttHotkeyLabel();
+            // Snapshot current system volume so unlock can restore it even if app started with lock on
+            if (_settings.MicEnforceEnabled) { try { _micPreLockVol = (int)Audio.GetMicVolume(); } catch { _micPreLockVol = -1; } }
+            if (_settings.SpeakerEnforceEnabled) { try { _spkPreLockVol = (int)Audio.GetSpeakerVolume(); } catch { _spkPreLockVol = -1; } }
             _tglAppEnf.Checked=_settings.AppVolumeEnforceEnabled;
             if(_settings.AppVolumeRules!=null&&_settings.AppVolumeRules.Count>0){_appRows.Clear();foreach(var kv in _settings.AppVolumeRules){bool locked=kv.Value>=0;int vol=locked?kv.Value:-(kv.Value+1);_appRows.Add(new AppRuleRow{Name=kv.Key,Locked=locked,InitialValue=Math.Max(0,Math.Min(100,vol))});}RebuildAppList();}
             _tglStartup.Checked=_settings.StartWithWindows;_tglNotifyCorr.Checked=_settings.NotifyOnCorrection;_tglNotifyDev.Checked=_settings.NotifyOnDeviceChange;
+            CompactKeys();
+            // Enforce PTT/PTM mutual exclusivity on load (Toggle is the gatekeeper)
+            if (!_tglPtToggle.Checked && _tglPtt.Checked && _tglPtm.Checked) {
+                _tglPtm.Checked = false;
+                _ptmKeyCode=0;_ptmKeyCode2=0;_ptmKeyCode3=0;
+                if(_lblPtmKey!=null){_lblPtmKey.Text="Add Key";_lblPtmKey.BackColor=INPUT_BG;_lblPtmKey.ForeColor=ACC;}
+                LayoutPtmKeys();
+                _audio.DisablePtmMode();
+            }
         }catch(Exception ex){Logger.Error("Options load failed.",ex);}finally{_loading=false;}}
 
-        void DoSave(){try{
-            _settings.AfkMicMuteEnabled=_tglAfkMic.Checked;_settings.AfkMicMuteSec=(int)_nudAfkMicSec.Value;
-            _settings.AfkSpeakerMuteEnabled=_tglAfkSpk.Checked;_settings.AfkSpeakerMuteSec=(int)_nudAfkSpkSec.Value;
-            _settings.PushToTalkEnabled=_tglPtt.Checked;_settings.PushToMuteEnabled=_tglPtm.Checked;_settings.PushToToggleEnabled=_tglPtToggle.Checked;_settings.PushToTalkKey=_pttKeyCode;_settings.PushToTalkKey2=_pttKeyCode2;_settings.PushToTalkKey3=_pttKeyCode3;_settings.PushToTalkConsumeKey=false;_settings.PushToMuteKey=_ptmKeyCode;_settings.PushToToggleKey=_ptToggleKeyCode;
-            _settings.MicOverlayEnabled=_tglOverlay.Checked;
-            if (_tglSoundFeedback != null) _settings.PttSoundFeedback=_tglSoundFeedback.Checked;
-            _settings.MicEnforceEnabled=_tglMicEnf.Checked;_settings.MicVolumePercent=_trkMicVol.Value;
-            _settings.SpeakerEnforceEnabled=_tglSpkEnf.Checked;_settings.SpeakerVolumePercent=_trkSpkVol.Value;
+        void DoSave(){
+            if (IsCapturingKey) { CancelAllCaptures(); }
+            try{
+            // All audio settings are already saved live via _audio property setters.
+            // Only need to persist app volume rules (not yet on _audio) and compact keys.
             _settings.AppVolumeEnforceEnabled=_tglAppEnf.Checked;_settings.AppVolumeRules=CollectAppRules();
-            _settings.StartWithWindows=_tglStartup.Checked;_settings.NotifyOnCorrection=_tglNotifyCorr.Checked;_settings.NotifyOnDeviceChange=_tglNotifyDev.Checked;
+            CompactKeys();
             _settings.Save();DialogResult=DialogResult.OK;Close();
         }catch(Exception ex){Logger.Error("Options save failed.",ex);DarkMessage.Show("Save failed: "+ex.Message,"Error");}}
+
+        void CompactKeys(){
+            // PTT: shift keys left to fill gaps
+            if(_pttKeyCode<=0 && _pttKeyCode2>0){_pttKeyCode=_pttKeyCode2;_pttKeyCode2=0;}
+            if(_pttKeyCode2<=0 && _pttKeyCode3>0){_pttKeyCode2=_pttKeyCode3;_pttKeyCode3=0;}
+            if(_pttKeyCode<=0 && _pttKeyCode2>0){_pttKeyCode=_pttKeyCode2;_pttKeyCode2=0;}
+            // PTM: shift keys left to fill gaps (now supports 3 keys)
+            if(_ptmKeyCode<=0 && _ptmKeyCode2>0){_ptmKeyCode=_ptmKeyCode2;_ptmKeyCode2=0;}
+            if(_ptmKeyCode2<=0 && _ptmKeyCode3>0){_ptmKeyCode2=_ptmKeyCode3;_ptmKeyCode3=0;}
+            if(_ptmKeyCode<=0 && _ptmKeyCode2>0){_ptmKeyCode=_ptmKeyCode2;_ptmKeyCode2=0;}
+            // Toggle: shift keys left to fill gaps (now supports 3 keys)
+            if(_ptToggleKeyCode<=0 && _ptToggleKeyCode2>0){_ptToggleKeyCode=_ptToggleKeyCode2;_ptToggleKeyCode2=0;}
+            if(_ptToggleKeyCode2<=0 && _ptToggleKeyCode3>0){_ptToggleKeyCode2=_ptToggleKeyCode3;_ptToggleKeyCode3=0;}
+            if(_ptToggleKeyCode<=0 && _ptToggleKeyCode2>0){_ptToggleKeyCode=_ptToggleKeyCode2;_ptToggleKeyCode2=0;}
+            
+            if(_lblPttKey!=null) { _lblPttKey.Text=_pttKeyCode>0?KeyName(_pttKeyCode):"Add Key"; _lblPttKey.BackColor=INPUT_BG; _lblPttKey.ForeColor=ACC; }
+            if(_lblPttKey2!=null) { _lblPttKey2.Text=_pttKeyCode2>0?KeyName(_pttKeyCode2):""; _lblPttKey2.BackColor=INPUT_BG; _lblPttKey2.ForeColor=ACC; }
+            if(_lblPttKey3!=null) { _lblPttKey3.Text=_pttKeyCode3>0?KeyName(_pttKeyCode3):""; _lblPttKey3.BackColor=INPUT_BG; _lblPttKey3.ForeColor=ACC; }
+            
+            if(_lblPtmKey!=null) { _lblPtmKey.Text=_ptmKeyCode>0?KeyName(_ptmKeyCode):"Add Key"; _lblPtmKey.BackColor=INPUT_BG; _lblPtmKey.ForeColor=ACC; }
+            if(_lblPtmKey2!=null) { _lblPtmKey2.Text=_ptmKeyCode2>0?KeyName(_ptmKeyCode2):""; _lblPtmKey2.BackColor=INPUT_BG; _lblPtmKey2.ForeColor=ACC; }
+            if(_lblPtmKey3!=null) { _lblPtmKey3.Text=_ptmKeyCode3>0?KeyName(_ptmKeyCode3):""; _lblPtmKey3.BackColor=INPUT_BG; _lblPtmKey3.ForeColor=ACC; }
+            
+            if(_lblPtToggleKey!=null) { _lblPtToggleKey.Text=_ptToggleKeyCode>0?KeyName(_ptToggleKeyCode):"Add Key"; _lblPtToggleKey.BackColor=INPUT_BG; _lblPtToggleKey.ForeColor=ACC; }
+            if(_lblPtToggleKey2!=null) { _lblPtToggleKey2.Text=_ptToggleKeyCode2>0?KeyName(_ptToggleKeyCode2):""; _lblPtToggleKey2.BackColor=INPUT_BG; _lblPtToggleKey2.ForeColor=ACC; }
+            if(_lblPtToggleKey3!=null) { _lblPtToggleKey3.Text=_ptToggleKeyCode3>0?KeyName(_ptToggleKeyCode3):""; _lblPtToggleKey3.BackColor=INPUT_BG; _lblPtToggleKey3.ForeColor=ACC; }
+            
+            _settings.PushToTalkKey = _pttKeyCode;
+            _settings.PushToTalkKey2 = _pttKeyCode2;
+            _settings.PushToTalkKey3 = _pttKeyCode3;
+            _settings.PushToMuteKey = _ptmKeyCode;
+            _settings.PushToMuteKey2 = _ptmKeyCode2;
+            _settings.PushToMuteKey3 = _ptmKeyCode3;
+            _settings.PushToToggleKey = _ptToggleKeyCode;
+            _settings.PushToToggleKey2 = _ptToggleKeyCode2;
+            _settings.PushToToggleKey3 = _ptToggleKeyCode3;
+
+            LayoutPttKeys();
+            LayoutPtmKeys();
+            LayoutToggleKeys();
+        }
 
         Dictionary<string,int> ParseAppRules(){ return CollectAppRules(); }
         static int Clamp(int v,int min,int max){return v<min?min:v>max?max:v;}
         public void OnRunWizard(){DialogResult=DialogResult.Retry;Close();}
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData) {
-            // Space suppression (prevent scroll) — key capture now handled by polling
-            if (_capturingKey || _capturingKey2 || _capturingKey3 || _capturingPtmKey || _capturingToggleKey) return base.ProcessCmdKey(ref msg, keyData);
+            // During key capture, suppress Escape from closing the form — let the polling handler deal with it
+            if (_audio != null && _audio.IsCapturing) {
+                if (keyData == Keys.Escape) return true; // swallow it — polling will handle the cancel
+                return true; // swallow all keys during capture
+            }
             if (keyData == Keys.Space) return true;
-            if (keyData == Keys.Escape) { Close(); return true; }
+            if (keyData == Keys.Escape) { if (_starShowMode) { ToggleStarShow(); return true; } return base.ProcessCmdKey(ref msg, keyData); }
             return base.ProcessCmdKey(ref msg, keyData);
         }
         // WS_EX_COMPOSITED: forces all child controls to paint in a single composited pass.
@@ -1729,7 +2710,7 @@ namespace AngryAudio
                 _updateShimmerTimer = new Timer { Interval = 10 };
                 _updateShimmerTimer.Tick += (s, e) =>
                 {
-                    if (!_updateShimmering) { _updateShimmerTimer.Stop(); _updateBtn?.Invalidate(); return; }
+                    if (!_updateShimmering) { _updateShimmerTimer.Stop(); if (_updateBtn != null) _updateBtn.Invalidate(); return; }
                     _updateShimmerX += 0.02f;
                     if (_updateShimmerX > 1.3f)
                     {
@@ -1743,7 +2724,7 @@ namespace AngryAudio
                         }
                         _updateShimmerX = -0.3f;
                     }
-                    _updateBtn?.Invalidate();
+                    if (_updateBtn != null) _updateBtn.Invalidate();
                 };
             }
             _updateShimmerTimer.Start();
@@ -1758,7 +2739,7 @@ namespace AngryAudio
                     {
                         client.Headers.Add("User-Agent", "AngryAudio/" + AppVersion.Version);
                         string raw = client.DownloadString("https://raw.githubusercontent.com/Gantera2k/Angry-Audio/main/version.txt");
-                        string latest = raw.Trim().Trim('\uFEFF', '\u200B'); // Strip BOM and zero-width spaces
+                        string latest = raw.Trim().Trim(new char[]{'\uFEFF', '\u200B'}); // Strip BOM and zero-width spaces
                         int cmp = CompareVersions(latest, AppVersion.Version);
                         _pendingLatestVer = latest;
                         _pendingUpdateResult = cmp > 0 ? 2 : 1;
@@ -1859,12 +2840,12 @@ namespace AngryAudio
         protected override void OnResizeBegin(EventArgs e) {
             base.OnResizeBegin(e);
             _isResizing = true;
-            _twinkleTimer?.Stop();
+            if (_twinkleTimer != null) _twinkleTimer.Stop();
         }
         protected override void OnResizeEnd(EventArgs e) {
             base.OnResizeEnd(e);
             _isResizing = false;
-            _twinkleTimer?.Start();
+            if (_twinkleTimer != null) _twinkleTimer.Start();
             Invalidate(true);
         }
 

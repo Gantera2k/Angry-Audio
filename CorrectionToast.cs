@@ -21,6 +21,9 @@ namespace AngryAudio
             if (!IsHandleCreated) CreateHandle();
             ShowWindow(Handle, 4);
             SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, 0x0010 | 0x0001 | 0x0002 | 0x0040);
+            var _reTop = new Timer { Interval = 100 };
+            _reTop.Tick += (s, e) => { _reTop.Stop(); _reTop.Dispose(); try { if (!IsDisposed) SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, 0x0010 | 0x0001 | 0x0002 | 0x0040); } catch { } };
+            _reTop.Start();
         }
 
         private string _message;
@@ -281,7 +284,7 @@ namespace AngryAudio
         protected override CreateParams CreateParams { get { var cp = base.CreateParams; cp.ExStyle |= 0x00000008 | 0x08000000 | 0x00000080; return cp; } }
         protected override void Dispose(bool d)
         {
-            if (d) { _fadeInTimer?.Dispose(); _holdTimer?.Dispose(); _fadeOutTimer?.Dispose(); _tickTimer?.Dispose(); }
+            if (d) { if (_fadeInTimer != null) _fadeInTimer.Dispose(); if (_holdTimer != null) _holdTimer.Dispose(); if (_fadeOutTimer != null) _fadeOutTimer.Dispose(); if (_tickTimer != null) _tickTimer.Dispose(); }
             base.Dispose(d);
         }
     }
@@ -408,6 +411,9 @@ namespace AngryAudio
             if (!IsHandleCreated) CreateHandle();
             ShowWindow(Handle, 4);
             SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, 0x0010 | 0x0001 | 0x0002 | 0x0040);
+            var _reTop = new Timer { Interval = 100 };
+            _reTop.Tick += (s, e) => { _reTop.Stop(); _reTop.Dispose(); try { if (!IsDisposed) SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, 0x0010 | 0x0001 | 0x0002 | 0x0040); } catch { } };
+            _reTop.Start();
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -524,7 +530,7 @@ namespace AngryAudio
 
         protected override void Dispose(bool d)
         {
-            if (d) { _fadeInTimer?.Dispose(); _holdTimer?.Dispose(); _fadeOutTimer?.Dispose(); _tickTimer?.Dispose(); }
+            if (d) { if (_fadeInTimer != null) _fadeInTimer.Dispose(); if (_holdTimer != null) _holdTimer.Dispose(); if (_fadeOutTimer != null) _fadeOutTimer.Dispose(); if (_tickTimer != null) _tickTimer.Dispose(); }
             base.Dispose(d);
         }
     }
@@ -603,6 +609,9 @@ namespace AngryAudio
             if (!IsHandleCreated) CreateHandle();
             ShowWindow(Handle, 4);
             SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, 0x0010 | 0x0001 | 0x0002 | 0x0040);
+            var _reTop = new Timer { Interval = 100 };
+            _reTop.Tick += (s, e) => { _reTop.Stop(); _reTop.Dispose(); try { if (!IsDisposed) SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, 0x0010 | 0x0001 | 0x0002 | 0x0040); } catch { } };
+            _reTop.Start();
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -738,7 +747,7 @@ namespace AngryAudio
         protected override CreateParams CreateParams { get { var cp = base.CreateParams; cp.ExStyle |= 0x00000008 | 0x08000000 | 0x00000080; return cp; } }
         protected override void Dispose(bool d)
         {
-            if (d) { _fadeInTimer?.Dispose(); _holdTimer?.Dispose(); _fadeOutTimer?.Dispose(); _tickTimer?.Dispose(); }
+            if (d) { if (_fadeInTimer != null) _fadeInTimer.Dispose(); if (_holdTimer != null) _holdTimer.Dispose(); if (_fadeOutTimer != null) _fadeOutTimer.Dispose(); if (_tickTimer != null) _tickTimer.Dispose(); }
             base.Dispose(d);
         }
     }

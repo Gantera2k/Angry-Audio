@@ -59,6 +59,8 @@ namespace AngryAudio
         private bool _enabled;
         private bool _keyHeld;
         private volatile int _hookKeyDown; // Set by LL hook when consuming toggle keys
+        /// <summary>Exposed for UI highlight — the VK currently held via LL hook (toggle keys only).</summary>
+        public static volatile int HookHeldKey;
         private bool _disposed;
         private System.Collections.Generic.HashSet<int> _hotkeys = new System.Collections.Generic.HashSet<int>();
 
@@ -67,6 +69,7 @@ namespace AngryAudio
         private bool _toggleMicOpen;
         private System.Collections.Generic.Dictionary<int, int> _keyModes = new System.Collections.Generic.Dictionary<int, int>();
         private int _activeMode = -1; // 0=PTT, 1=PTM, 2=Toggle
+        public int ActiveMode { get { return _activeMode; } }
         private bool _hasPttKeys, _hasPtmKeys, _hasToggleKeys;
 
         // Common virtual key codes
@@ -180,7 +183,7 @@ namespace AngryAudio
             }
         }
 
-        public void EnableMultiMode(int pttKey, int ptmKey, int toggleKey, bool consumeKey, int pttKey2 = 0, int pttKey3 = 0)
+        public void EnableMultiMode(int pttKey, int ptmKey, int toggleKey, bool consumeKey, int pttKey2 = 0, int pttKey3 = 0, int ptmKey2 = 0, int ptmKey3 = 0, int toggleKey2 = 0, int toggleKey3 = 0)
         {
             if (_enabled) Disable();
             _hotkeys.Clear();
@@ -189,12 +192,16 @@ namespace AngryAudio
             if (pttKey2 > 0) { _hotkeys.Add(pttKey2); _keyModes[pttKey2] = 0; }
             if (pttKey3 > 0) { _hotkeys.Add(pttKey3); _keyModes[pttKey3] = 0; }
             if (ptmKey > 0) { _hotkeys.Add(ptmKey); _keyModes[ptmKey] = 1; }
+            if (ptmKey2 > 0) { _hotkeys.Add(ptmKey2); _keyModes[ptmKey2] = 1; }
+            if (ptmKey3 > 0) { _hotkeys.Add(ptmKey3); _keyModes[ptmKey3] = 1; }
             if (toggleKey > 0) { _hotkeys.Add(toggleKey); _keyModes[toggleKey] = 2; }
+            if (toggleKey2 > 0) { _hotkeys.Add(toggleKey2); _keyModes[toggleKey2] = 2; }
+            if (toggleKey3 > 0) { _hotkeys.Add(toggleKey3); _keyModes[toggleKey3] = 2; }
             _hasPttKeys = pttKey > 0 || pttKey2 > 0 || pttKey3 > 0;
-            _hasPtmKeys = ptmKey > 0;
-            _hasToggleKeys = toggleKey > 0;
-            _toggleMode = toggleKey > 0 && pttKey <= 0 && ptmKey <= 0;
-            _pushToMuteMode = ptmKey > 0 && pttKey <= 0;
+            _hasPtmKeys = ptmKey > 0 || ptmKey2 > 0 || ptmKey3 > 0;
+            _hasToggleKeys = toggleKey > 0 || toggleKey2 > 0 || toggleKey3 > 0;
+            _toggleMode = _hasToggleKeys && !_hasPttKeys && !_hasPtmKeys;
+            _pushToMuteMode = _hasPtmKeys && !_hasPttKeys;
             _keyHeld = false;
             _toggleMicOpen = false;
             _activeMode = -1;
@@ -207,13 +214,15 @@ namespace AngryAudio
                     using (var module = process.MainModule)
                         _hookId = SetWindowsHookEx(WH_KEYBOARD_LL, _hookProc, GetModuleHandle(module.ModuleName), 0);
                     if (_hookId == IntPtr.Zero)
-                        Logger.Error("Hook install failed. Error: " + Marshal.GetLastWin32Error());
+                        Logger.Error("LL Hook install FAILED. Error: " + Marshal.GetLastWin32Error());
+                    else
+                        Logger.Info("LL Hook installed. Handle: " + _hookId + " Thread: " + System.Threading.Thread.CurrentThread.ManagedThreadId);
                 }
                 catch (Exception ex) { Logger.Error("Hook install failed.", ex); }
             }
             _enabled = true;
             // PTM-only starts unmuted (mic open); all other combos start muted
-            bool ptmOnly = ptmKey > 0 && pttKey <= 0 && toggleKey <= 0;
+            bool ptmOnly = _hasPtmKeys && !_hasPttKeys && !_hasToggleKeys;
             Audio.SetMicMute(!ptmOnly);
             Logger.Info("Multi-mode enabled. Keys: " + string.Join(", ", _hotkeys) + " InitialMute=" + (!ptmOnly));
             ForceCapsLockOff();
@@ -270,11 +279,26 @@ namespace AngryAudio
                 int triggeredKey = 0;
                 foreach (int vk in _hotkeys)
                 {
-                    // For hooked toggle keys, check both GetAsyncKeyState AND the hook's direct signal
+                    // Skip CapsLock if ForceCapsLockOff recently injected synthetic events
+                    if (vk == VK_CAPS_LOCK && Environment.TickCount < _capsLockSuppressUntilTick) continue;
+
                     bool isToggleKey = (vk == VK_CAPS_LOCK || vk == VK_SCROLL_LOCK || vk == VK_NUM_LOCK);
-                    bool keyDown = (GetAsyncKeyState(vk) & 0x8000) != 0;
-                    if (!keyDown && isToggleKey && _hookKeyDown == vk)
-                        keyDown = true; // Hook saw it even if GetAsyncKeyState didn't
+                    bool keyDown;
+
+                    if (isToggleKey)
+                    {
+                        // For toggle keys: prefer the hook's direct signal (most reliable).
+                        // GetAsyncKeyState is unreliable for CapsLock on many keyboards —
+                        // it may only flash briefly or not report held state at all.
+                        keyDown = (_hookKeyDown == vk);
+                        // Fallback: if hook isn't installed or was killed, use GetAsyncKeyState
+                        if (!keyDown && _hookId == IntPtr.Zero)
+                            keyDown = (GetAsyncKeyState(vk) & 0x8000) != 0;
+                    }
+                    else
+                    {
+                        keyDown = (GetAsyncKeyState(vk) & 0x8000) != 0;
+                    }
                     
                     if (keyDown)
                     {
@@ -296,18 +320,18 @@ namespace AngryAudio
                     {
                         _toggleMicOpen = !_toggleMicOpen;
                         Audio.SetMicMute(!_toggleMicOpen);
-                        if (_toggleMicOpen) { try { OnTalkStart?.Invoke(); } catch { } }
-                        else { try { OnTalkStop?.Invoke(); } catch { } }
+                        if (_toggleMicOpen) { if (OnTalkStart != null) { try { OnTalkStart(); } catch { } } }
+                        else { if (OnTalkStop != null) { try { OnTalkStop(); } catch { } } }
                     }
                     else if (mode == 1) // PTM
                     {
                         Audio.SetMicMute(true);
-                        try { OnTalkStop?.Invoke(); } catch { }
+                        if (OnTalkStop != null) { try { OnTalkStop(); } catch { } }
                     }
                     else // PTT (mode 0)
                     {
                         Audio.SetMicMute(false);
-                        try { OnTalkStart?.Invoke(); } catch { }
+                        if (OnTalkStart != null) { try { OnTalkStart(); } catch { } }
                     }
                 }
                 else if (!anyDown && _keyHeld)
@@ -316,12 +340,12 @@ namespace AngryAudio
                     if (_activeMode == 1) // PTM key-up
                     {
                         Audio.SetMicMute(false);
-                        try { OnTalkStart?.Invoke(); } catch { }
+                        if (OnTalkStart != null) { try { OnTalkStart(); } catch { } }
                     }
                     else if (_activeMode == 0) // PTT key-up
                     {
                         Audio.SetMicMute(true);
-                        try { OnTalkStop?.Invoke(); } catch { }
+                        if (OnTalkStop != null) { try { OnTalkStop(); } catch { } }
                         Logger.Debug("PTT: Key up — mic muted.");
                     }
                 }
@@ -398,6 +422,7 @@ namespace AngryAudio
                         {
                             Logger.Info("HOOK: Consuming VK 0x" + vkCode.ToString("X2") + " — setting _hookKeyDown");
                             _hookKeyDown = vkCode;
+                            HookHeldKey = vkCode;
                             return (IntPtr)1;
                         }
                     }
@@ -405,11 +430,16 @@ namespace AngryAudio
                 else if (msg == WM_KEYUP || msg == WM_SYSKEYUP)
                 {
                     int vkCode = Marshal.ReadInt32(lParam);
+                    int flags = Marshal.ReadInt32(lParam, 8);
+                    // Skip injected keyups — ForceCapsLockOff injects these to clear toggle state.
+                    // If we consume them, CapsLock state never clears → infinite ForceCapsLockOff loop.
+                    if ((flags & 0x10) != 0) return CallNextHookEx(_hookId, nCode, wParam, lParam);
                     if (_hotkeys.Contains(vkCode) &&
                         (vkCode == VK_CAPS_LOCK || vkCode == VK_SCROLL_LOCK || vkCode == VK_NUM_LOCK))
                     {
                         Logger.Info("HOOK: Key UP VK 0x" + vkCode.ToString("X2") + " — clearing _hookKeyDown");
                         _hookKeyDown = 0;
+                        HookHeldKey = 0;
                         return (IntPtr)1; // Consume KEYUP too to prevent toggle
                     }
                 }
@@ -439,11 +469,16 @@ namespace AngryAudio
             catch (Exception ex) { Logger.Error("ReinstallHook failed.", ex); }
         }
 
+        /// <summary>Timestamp of last ForceCapsLockOff injection. Poll ignores CapsLock for 100ms after.</summary>
+        private volatile int _capsLockSuppressUntilTick;
+
         public void ForceCapsLockOff()
         {
             if (!_enabled || !_hotkeys.Contains(VK_CAPS_LOCK)) return;
+            if (_keyHeld) return; // Don't fight the user's physical keypress
             if ((GetKeyState(VK_CAPS_LOCK) & 0x0001) != 0)
             {
+                _capsLockSuppressUntilTick = Environment.TickCount + 100; // suppress for 100ms
                 keybd_event(0x14, 0x45, 0x0001, UIntPtr.Zero);
                 keybd_event(0x14, 0x45, 0x0001 | 0x0002, UIntPtr.Zero);
             }
@@ -461,6 +496,11 @@ namespace AngryAudio
             switch (vk)
             {
                 case 0: return "Add Key";
+                case 0x01: return "MB1";
+                case 0x02: return "MB2";
+                case 0x04: return "MB3";
+                case 0x05: return "MB4";
+                case 0x06: return "MB5";
                 case 0x08: return "Backspace";
                 case 0x09: return "Tab";
                 case 0x0D: return "Enter";

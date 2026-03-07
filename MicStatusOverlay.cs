@@ -1,13 +1,15 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace AngryAudio
 {
     public class MicStatusOverlay : Form
     {
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [DllImport("user32.dll")]
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
         private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
         private const uint SWP_NOACTIVATE = 0x0010;
@@ -15,15 +17,40 @@ namespace AngryAudio
         private const uint SWP_NOSIZE = 0x0001;
         private const uint SWP_NOMOVE = 0x0002;
 
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [DllImport("user32.dll")]
         private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
         private const int SW_SHOWNOACTIVATE = 4;
 
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        // --- Per-pixel alpha layered window ---
+        [DllImport("user32.dll")]
+        private static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr hdcDst, ref POINT pptDst, ref SIZE psize,
+            IntPtr hdcSrc, ref POINT pptSrc, int crKey, ref BLENDFUNCTION pblend, int dwFlags);
+        [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr hdc);
+        [DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr hdc, IntPtr obj);
+        [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr obj);
+        [DllImport("gdi32.dll")] private static extern bool DeleteDC(IntPtr hdc);
+        [DllImport("gdi32.dll")] private static extern IntPtr CreateDIBSection(IntPtr hdc, ref BITMAPINFO pbmi, uint usage, out IntPtr ppvBits, IntPtr hSection, uint offset);
+        [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hWnd);
+        [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hWnd, IntPtr hdc);
+
+        [StructLayout(LayoutKind.Sequential)] private struct POINT { public int X, Y; public POINT(int x, int y) { X = x; Y = y; } }
+        [StructLayout(LayoutKind.Sequential)] private struct SIZE { public int W, H; public SIZE(int w, int h) { W = w; H = h; } }
+        [StructLayout(LayoutKind.Sequential, Pack = 1)]
+        private struct BLENDFUNCTION { public byte BlendOp; public byte BlendFlags; public byte SourceConstantAlpha; public byte AlphaFormat; }
+        [StructLayout(LayoutKind.Sequential)]
+        private struct BITMAPINFO {
+            public int biSize; public int biWidth; public int biHeight; public short biPlanes; public short biBitCount;
+            public int biCompression; public int biSizeImage; public int biXPelsPerMeter; public int biYPelsPerMeter;
+            public int biClrUsed; public int biClrImportant;
+        }
+
+        private const int GLOW_PAD = 20; // extra pixels on each side for SDF feather zone
+
+        [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [DllImport("user32.dll")]
         private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int count);
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [DllImport("user32.dll")]
         private static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder lpClassName, int nMaxCount);
 
         // --- State ---
@@ -65,22 +92,24 @@ namespace AngryAudio
         public event Action OnOpenOptions;
 
         /// <summary>When false, all Show methods are no-ops. HideOverlay still works.</summary>
-        public bool OverlayEnabled { get; set; } = true;
+        public bool OverlayEnabled { get; set; }
         /// <summary>When true, ShowMicClosed acts like PTT's ShowMicOpen (held shimmer) and ShowMicOpen fades to dim instead of disappearing.</summary>
-        public bool PushToMuteMode { get; set; } = false;
+        public bool PushToMuteMode { get; set; }
         /// <summary>When true, both open and closed states flash then fade to dim — no held state.</summary>
-        public bool ToggleMode { get; set; } = false;
+        public bool ToggleMode { get; set; }
         public bool IsMicOpen { get { return _micOpen; } }
 
         public MicStatusOverlay()
         {
+            OverlayEnabled = true;
+            PushToMuteMode = false;
+            ToggleMode = false;
+
             FormBorderStyle = FormBorderStyle.None; ShowInTaskbar = false; TopMost = true;
             StartPosition = FormStartPosition.Manual; BackColor = Color.FromArgb(14, 14, 14);
             DoubleBuffered = true; AutoScaleMode = AutoScaleMode.None;
-            ClientSize = Dpi.Size(10, 30); Opacity = 0;
+            ClientSize = Dpi.Size(10, 30);
             Cursor = Cursors.SizeAll;
-            ApplyPillRegion();
-            Resize += (s2, e2) => ApplyPillRegion();
 
             // --- Drag support with real-time clamping ---
             MouseDown += (s2, e2) => {
@@ -88,7 +117,7 @@ namespace AngryAudio
                     _dragging = true; _dragStart = e2.Location;
                     _fadeTimer.Stop(); _dimTimer.Stop(); _settleTimer.Stop();
                     // Ensure full opacity while dragging
-                    if (_opacity < 0.5f) { _opacity = 0.7f; Opacity = _opacity; }
+                    if (_opacity < 0.5f) { _opacity = 0.7f; PushLayered(); }
                 }
             };
             MouseMove += (s2, e2) => {
@@ -122,11 +151,11 @@ namespace AngryAudio
 
             var hideItem = new ToolStripMenuItem("Hide Overlay");
             hideItem.ForeColor = Color.FromArgb(220, 220, 220);
-            hideItem.Click += (s2, e2) => { try { OnGoAway?.Invoke(); } catch { } };
+            hideItem.Click += (s2, e2) => { if (OnGoAway != null) { try { OnGoAway(); } catch { } } };
 
             var optItem = new ToolStripMenuItem("Open Options\u2026");
             optItem.ForeColor = Color.FromArgb(200, 200, 200);
-            optItem.Click += (s2, e2) => { try { OnOpenOptions?.Invoke(); } catch { } };
+            optItem.Click += (s2, e2) => { if (OnOpenOptions != null) { try { OnOpenOptions(); } catch { } } };
 
             ctx.Items.Add(hideItem);
             ctx.Items.Add(new ToolStripSeparator());
@@ -187,7 +216,7 @@ namespace AngryAudio
             // --- Shimmer timer ---
             _shimmerTimer = new Timer { Interval = 10 };
             _shimmerTimer.Tick += (s, e) => {
-                if (!_shimmerActive && !_shimmerFinishing) { _shimmerTimer.Stop(); _shimmerX = -0.3f; Invalidate(); return; }
+                if (!_shimmerActive && !_shimmerFinishing) { _shimmerTimer.Stop(); _shimmerX = -0.3f; PushLayered(); return; }
                 _shimmerX += 0.032f;
                 if (_shimmerX > 1.3f)
                 {
@@ -198,12 +227,12 @@ namespace AngryAudio
                         _shimmerActive = false;
                         _shimmerTimer.Stop();
                         _shimmerX = -0.3f;
-                        Invalidate();
+                        PushLayered();
                         return;
                     }
                     _shimmerX = -0.3f;
                 }
-                Invalidate();
+                PushLayered();
             };
         }
 
@@ -235,14 +264,7 @@ namespace AngryAudio
             Location = new Point(Math.Max(0, scr.WorkingArea.Right - Width - Dpi.S(8)), Math.Max(0, scr.WorkingArea.Top + Dpi.S(48)));
         }
 
-        void ApplyPillRegion() {
-            int w = ClientSize.Width, h = ClientSize.Height;
-            if (w <= 0 || h <= 0) return;
-            try {
-                var path = DarkTheme.RoundedRect(new Rectangle(0, 0, w, h), h / 2);
-                var old = Region; Region = new Region(path); if (old != null) old.Dispose(); path.Dispose();
-            } catch { }
-        }
+        void ApplyPillRegion() { /* layered window — no Region needed */ }
 
         private void ForceShow() {
             if (!IsHandleCreated) CreateHandle();
@@ -264,7 +286,7 @@ namespace AngryAudio
             using (var f = new Font("Segoe UI", 9.2f, FontStyle.Bold))
                 textW = (int)Math.Ceiling(Math.Max(g.MeasureString("Mic Open", f).Width, g.MeasureString("Mic Closed", f).Width));
             int w = padL + dotSz + gap + textW + padR;
-            ClientSize = new Size(w, h);
+            ClientSize = new Size(w + GLOW_PAD * 2, h + GLOW_PAD * 2);
             ApplyPillRegion();
         }
 
@@ -290,11 +312,10 @@ namespace AngryAudio
                 Action a = () => {
                     if (_opacity < 0.01f) { SizeToContentSafe(); Position(); _opacity = 0f; }
                     _targetOpacity = BRIGHT;
-                    Opacity = Math.Max(_opacity, 0.01);
                     ForceShow(); _fadeTimer.Start(); _shimmerTimer.Start();
                     _dimTimer.Interval = IsExtended ? FIRST_SHOW_MS : DIM_DELAY_MS;
                     _dimTimer.Start();
-                    Invalidate();
+                    PushLayered();
                 };
                 if (InvokeRequired) try { BeginInvoke(a); } catch { } else a();
                 return;
@@ -305,9 +326,8 @@ namespace AngryAudio
             Action a2 = () => {
                 if (_opacity < 0.01f) { SizeToContentSafe(); Position(); _opacity = 0f; }
                 _targetOpacity = BRIGHT;
-                Opacity = Math.Max(_opacity, 0.01);
                 ForceShow(); _fadeTimer.Start(); _shimmerTimer.Start();
-                Invalidate();
+                PushLayered();
             };
             if (InvokeRequired) try { BeginInvoke(a2); } catch { } else a2();
         }
@@ -328,9 +348,8 @@ namespace AngryAudio
                 Action a = () => {
                     if (_opacity < 0.01f) { SizeToContentSafe(); Position(); _opacity = 0f; }
                     _targetOpacity = BRIGHT;
-                    Opacity = Math.Max(_opacity, 0.01);
                     ForceShow(); _fadeTimer.Start(); _shimmerTimer.Start();
-                    Invalidate();
+                    PushLayered();
                 };
                 if (InvokeRequired) try { BeginInvoke(a); } catch { } else a();
                 return;
@@ -342,11 +361,10 @@ namespace AngryAudio
                 Action a = () => {
                     if (_opacity < 0.01f) { SizeToContentSafe(); Position(); _opacity = 0f; }
                     _targetOpacity = CLOSED_FLASH;
-                    Opacity = Math.Max(_opacity, 0.01);
                     ForceShow(); _fadeTimer.Start(); _shimmerTimer.Start();
                     _settleTimer.Interval = IsExtended ? FIRST_SHOW_MS : CLOSED_DISPLAY_MS;
                     _settleTimer.Start();
-                    Invalidate();
+                    PushLayered();
                 };
                 if (InvokeRequired) try { BeginInvoke(a); } catch { } else a();
                 return;
@@ -357,11 +375,10 @@ namespace AngryAudio
             Action a2 = () => {
                 if (_opacity < 0.01f) { SizeToContentSafe(); Position(); _opacity = 0f; }
                 _targetOpacity = CLOSED_FLASH;
-                Opacity = Math.Max(_opacity, 0.01);
                 ForceShow(); _fadeTimer.Start(); _shimmerTimer.Start();
                 _settleTimer.Interval = IsExtended ? FIRST_SHOW_MS : CLOSED_DISPLAY_MS;
                 _settleTimer.Start();
-                Invalidate();
+                PushLayered();
             };
             if (InvokeRequired) try { BeginInvoke(a2); } catch { } else a2();
         }
@@ -377,14 +394,13 @@ namespace AngryAudio
             Action a = () => {
                 if (_opacity < 0.01f) { SizeToContentSafe(); Position(); _opacity = 0f; }
                 _targetOpacity = BRIGHT;
-                Opacity = Math.Max(_opacity, 0.01);
                 ForceShow();
                 _fadeTimer.Start();
                 _shimmerTimer.Start();
                 // After settle period, dimTimer will stop shimmer and fade to DIM
                 _dimTimer.Interval = IsExtended ? FIRST_SHOW_MS : DIM_DELAY_MS;
                 _dimTimer.Start();
-                Invalidate();
+                PushLayered();
             };
             if (InvokeRequired) try { BeginInvoke(a); } catch { } else a();
         }
@@ -452,91 +468,202 @@ namespace AngryAudio
             if (Math.Abs(diff) < 0.005f)
             {
                 _opacity = _targetOpacity;
-                Opacity = Math.Max(_opacity, 0);
                 _fadeTimer.Stop();
-                Invalidate();
                 if (_opacity <= 0f) { ShowWindow(Handle, 0); return; }
+                PushLayered();
                 return;
             }
-            // Exponential ease — lerp toward target. Feels buttery smooth.
-            // Higher factor = snappier. Fade-in is fast, fade-out is gentle.
             float factor = diff > 0 ? 0.45f : 0.18f;
             _opacity += diff * factor;
-            // Clamp to prevent overshooting
             if (diff > 0 && _opacity > _targetOpacity) _opacity = _targetOpacity;
             if (diff < 0 && _opacity < _targetOpacity) _opacity = _targetOpacity;
-            Opacity = _opacity;
-            Invalidate();
+            PushLayered();
         }
 
         // ====================
         // Painting
         // ====================
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            base.OnPaint(e);
-            var g = e.Graphics;
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+        protected override void OnPaint(PaintEventArgs e) { /* layered window — rendering via PushLayered */ }
+
+        // ====================
+        // Layered window rendering
+        // ====================
+
+
+        /// <summary>Renders the pill with SDF-based soft feathered edges via UpdateLayeredWindow.</summary>
+        private void PushLayered() {
             int w = ClientSize.Width, h = ClientSize.Height;
-            if (w <= 0 || h <= 0) return;
+            if (w <= 0 || h <= 0 || !IsHandleCreated) return;
+            try {
+                int gp = GLOW_PAD;
+                int pw = w - gp * 2, ph = h - gp * 2;
+                if (pw <= 0 || ph <= 0) return;
+
+                float masterAlpha = Math.Max(0, Math.Min(1, _opacity));
+                if (masterAlpha < 0.005f) return;
+
+                int stride = w * 4;
+                int byteCount = stride * h;
+
+                // === STEP 1: Build signed distance field for the pill (stadium shape) ===
+                float[] distField = new float[w * h];
+                float pillCx = gp + (pw - 1) * 0.5f;
+                float pillCy = gp + (ph - 1) * 0.5f;
+                float pillHalfW = (pw - 1) * 0.5f;
+                float cornerR = (ph - 1) * 0.5f;
+                float rectHalfW = pillHalfW - cornerR;
+                if (rectHalfW < 0) rectHalfW = 0;
+
+                for (int py = 0; py < h; py++)
+                {
+                    for (int px2 = 0; px2 < w; px2++)
+                    {
+                        float dx = Math.Abs(px2 - pillCx) - rectHalfW;
+                        if (dx < 0) dx = 0;
+                        float dy = py - pillCy;
+                        float dist = (float)Math.Sqrt(dx * dx + dy * dy) - cornerR;
+                        distField[py * w + px2] = -dist; // positive = inside
+                    }
+                }
+
+                // === STEP 2: Render the pill content ===
+                byte[] pillPixels;
+                using (var pillBmp = new Bitmap(w, h, PixelFormat.Format32bppArgb))
+                {
+                    using (var g = Graphics.FromImage(pillBmp))
+                    {
+                        g.SmoothingMode = SmoothingMode.AntiAlias;
+                        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                        PaintPill(g, w, h, masterAlpha);
+                    }
+                    var data = pillBmp.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+                    pillPixels = new byte[byteCount];
+                    for (int y = 0; y < h; y++)
+                        Marshal.Copy(data.Scan0 + y * data.Stride, pillPixels, y * stride, stride);
+                    pillBmp.UnlockBits(data);
+                }
+
+                // === STEP 3: Apply SDF-based feathering + premultiply ===
+                float featherWidth = 3.0f; // SDF is the ONLY edge — this controls anti-aliasing width
+                byte[] final_px = new byte[byteCount];
+
+                for (int py = 0; py < h; py++)
+                {
+                    for (int px2 = 0; px2 < w; px2++)
+                    {
+                        int i = (py * w + px2) * 4;
+                        float d = distField[py * w + px2]; // positive = inside pill
+
+                        // Pill content alpha (feathered at edge via smoothstep)
+                        float pillT;
+                        if (d >= featherWidth) pillT = 1.0f;
+                        else if (d <= -featherWidth) pillT = 0.0f;
+                        else { pillT = (d + featherWidth) / (2.0f * featherWidth); pillT = pillT * pillT * (3.0f - 2.0f * pillT); }
+
+                        byte pA = pillPixels[i + 3];
+                        int finalA = (int)(pA * pillT);
+                        if (finalA <= 0) continue;
+                        if (finalA > 255) finalA = 255;
+
+                        // Premultiply
+                        final_px[i]     = (byte)(pillPixels[i]     * finalA / 255);
+                        final_px[i + 1] = (byte)(pillPixels[i + 1] * finalA / 255);
+                        final_px[i + 2] = (byte)(pillPixels[i + 2] * finalA / 255);
+                        final_px[i + 3] = (byte)finalA;
+                    }
+                }
+
+                // === STEP 4: Push via CreateDIBSection ===
+                var bmi = new BITMAPINFO {
+                    biSize = 40, biWidth = w, biHeight = h, biPlanes = 1, biBitCount = 32,
+                    biCompression = 0, biSizeImage = byteCount
+                };
+                IntPtr screenDc = GetDC(IntPtr.Zero);
+                IntPtr memDc = CreateCompatibleDC(screenDc);
+                IntPtr ppvBits;
+                IntPtr hBmp = CreateDIBSection(memDc, ref bmi, 0, out ppvBits, IntPtr.Zero, 0);
+                if (hBmp != IntPtr.Zero && ppvBits != IntPtr.Zero)
+                {
+                    for (int y = 0; y < h; y++)
+                        Marshal.Copy(final_px, y * stride, ppvBits + (h - 1 - y) * stride, stride);
+
+                    IntPtr oldBmp = SelectObject(memDc, hBmp);
+                    var ptSrc = new POINT(0, 0);
+                    var ptDst = new POINT(Left, Top);
+                    var size = new SIZE(w, h);
+                    var blend = new BLENDFUNCTION { BlendOp = 0, BlendFlags = 0, SourceConstantAlpha = 255, AlphaFormat = 1 };
+                    UpdateLayeredWindow(Handle, screenDc, ref ptDst, ref size, memDc, ref ptSrc, 0, ref blend, 0x02);
+                    SelectObject(memDc, oldBmp);
+                    DeleteObject(hBmp);
+                }
+                DeleteDC(memDc);
+                ReleaseDC(IntPtr.Zero, screenDc);
+            } catch { }
+        }
+
+        /// <summary>Paints the pill content into a rectangular area. The SDF in PushLayered defines the actual pill shape.</summary>
+        private void PaintPill(Graphics g, int w, int h, float masterAlpha)
+        {
+            int gp = GLOW_PAD;
+            int pw = w - gp * 2, ph = h - gp * 2;
+            if (pw <= 0 || ph <= 0) return;
 
             Color accent = _micOpen ? DarkTheme.Green : Color.FromArgb(220, 55, 55);
             string text = _micOpen ? "Mic Open" : "Mic Closed";
-
-            // Effect intensity scales with opacity so effects vanish as pill dims
             float fx = Math.Min(1f, _opacity / BRIGHT);
 
-            var rr = DarkTheme.RoundedRect(new Rectangle(0, 0, w - 1, h - 1), h / 2);
+            // Fill the entire pill area as a rectangle — the SDF mask in PushLayered
+            // will carve this into the smooth pill shape. No GraphicsPath clipping here.
+            var fillRect = new Rectangle(gp - 2, gp - 2, pw + 4, ph + 4);
 
-            // Background: lighter, semi-transparent feel
+            // Background — fill as rectangle, SDF defines shape
             using (var grad = new LinearGradientBrush(
-                new Point(0, 0), new Point(0, h),
-                Color.FromArgb(38, 38, 42), Color.FromArgb(24, 24, 28)))
-                g.FillPath(grad, rr);
+                new Point(0, gp), new Point(0, gp + ph),
+                Color.FromArgb((int)(masterAlpha * 255), 38, 38, 42),
+                Color.FromArgb((int)(masterAlpha * 255), 24, 24, 28)))
+                g.FillRectangle(grad, fillRect);
 
-            // Inner accent vignette — scales with fx
+            // Inner accent vignette
             if (fx > 0.1f)
             {
-                try
-                {
+                try {
+                    // Clip vignette to the fill area
                     var oldClip = g.Clip;
-                    g.SetClip(rr, CombineMode.Replace);
+                    g.SetClip(fillRect, CombineMode.Replace);
                     using (var glowPath = new GraphicsPath())
                     {
-                        int glowR = (int)(h * 1.4);
-                        glowPath.AddEllipse(-glowR / 4, -glowR / 4, glowR * 2, (int)(glowR * 1.4));
+                        int glowR = (int)(ph * 1.4);
+                        glowPath.AddEllipse(gp - glowR / 4, gp - glowR / 4, glowR * 2, (int)(glowR * 1.4));
                         using (var pgb = new PathGradientBrush(glowPath))
                         {
-                            int alpha = (int)(((_pttHeld ? 40 : 25) * fx));
+                            int alpha = (int)((_pttHeld ? 40 : 25) * fx * masterAlpha);
                             pgb.CenterColor = Color.FromArgb(alpha, accent.R, accent.G, accent.B);
                             pgb.SurroundColors = new[] { Color.FromArgb(0, accent.R, accent.G, accent.B) };
-                            pgb.CenterPoint = new PointF(Dpi.S(14), h / 2f);
+                            pgb.CenterPoint = new PointF(Dpi.S(14) + gp, ph / 2f + gp);
                             g.FillPath(pgb, glowPath);
                         }
                     }
                     g.Clip = oldClip;
-                }
-                catch { }
+                } catch { }
             }
 
-            // Shimmer sweep — renders during active AND finishing states
+            // Shimmer sweep
             if (_shimmerActive || _shimmerFinishing)
             {
                 var oldClip = g.Clip;
-                g.SetClip(rr, CombineMode.Replace);
-                int bandW = Math.Max(w / 3, 36);
-                int cx = (int)(_shimmerX * (w + bandW)) - bandW / 2;
-                var shimmerRect = new Rectangle(cx - bandW / 2, 0, bandW, h);
-                try
-                {
+                g.SetClip(fillRect, CombineMode.Replace);
+                int bandW = Math.Max(pw / 3, 36);
+                int cx = (int)(_shimmerX * (pw + bandW)) - bandW / 2 + gp;
+                var shimmerRect = new Rectangle(cx - bandW / 2, gp, bandW, ph);
+                try {
                     using (var lgb = new LinearGradientBrush(
                         new Point(shimmerRect.Left, 0), new Point(shimmerRect.Right, 0),
                         Color.Transparent, Color.Transparent))
                     {
                         var cb = new ColorBlend(3);
-                        // Shimmer alpha — brighter during held, still visible during fade
-                        int shimAlpha = _shimmerFinishing ? (int)(50 * Math.Max(0.5f, fx)) : (int)(70 * Math.Max(0.5f, fx));
+                        int shimAlpha = _shimmerFinishing
+                            ? (int)(50 * Math.Max(0.5f, fx) * masterAlpha)
+                            : (int)(70 * Math.Max(0.5f, fx) * masterAlpha);
                         cb.Colors = new[] {
                             Color.FromArgb(0, 255, 255, 255),
                             Color.FromArgb(shimAlpha, 255, 255, 255),
@@ -546,39 +673,18 @@ namespace AngryAudio
                         lgb.InterpolationColors = cb;
                         g.FillRectangle(lgb, shimmerRect);
                     }
-                }
-                catch { }
+                } catch { }
                 g.Clip = oldClip;
             }
 
-            // Border: clean accent line
-            float outerWidth = _pttHeld ? 1.8f : 1.0f;
-            int bdrAlpha = (int)((_pttHeld ? 180 : 120) * Math.Max(0.4f, fx));
-            using (var p = new Pen(Color.FromArgb(bdrAlpha, accent.R, accent.G, accent.B), outerWidth))
-                g.DrawPath(p, rr);
+            // No border drawn — the SDF edge IS the border
 
-            // Top-half glass highlight — scales with fx
-            if (fx > 0.2f)
-            {
-                try
-                {
-                    var oldClip = g.Clip;
-                    g.SetClip(new Rectangle(0, 0, w, h / 2), CombineMode.Replace);
-                    using (var p = new Pen(Color.FromArgb((int)(16 * fx), 255, 255, 255), 1f))
-                        g.DrawPath(p, rr);
-                    g.Clip = oldClip;
-                }
-                catch { }
-            }
-            rr.Dispose();
-
-            // LED dot with glow — glow scales with fx
+            // LED dot
             int dotSz = Dpi.S(10);
             int padL = Dpi.S(12);
-            int dotX = padL;
-            int dotY = (h - dotSz) / 2;
+            int dotX = padL + gp;
+            int dotY = (ph - dotSz) / 2 + gp;
 
-            // Glow halo
             if (fx > 0.15f)
             {
                 int glowSz = dotSz + Dpi.S(10);
@@ -589,7 +695,7 @@ namespace AngryAudio
                     glowPath.AddEllipse(glowX, glowY, glowSz, glowSz);
                     using (var pgb = new PathGradientBrush(glowPath))
                     {
-                        int glowA = (int)((_pttHeld ? 80 : 50) * fx);
+                        int glowA = (int)((_pttHeld ? 80 : 50) * fx * masterAlpha);
                         pgb.CenterColor = Color.FromArgb(glowA, accent.R, accent.G, accent.B);
                         pgb.SurroundColors = new[] { Color.FromArgb(0, accent.R, accent.G, accent.B) };
                         g.FillPath(pgb, glowPath);
@@ -597,32 +703,28 @@ namespace AngryAudio
                 }
             }
 
-            // Main dot
-            using (var b = new SolidBrush(accent))
+            using (var b = new SolidBrush(Color.FromArgb((int)(255 * masterAlpha), accent.R, accent.G, accent.B)))
                 g.FillEllipse(b, dotX, dotY, dotSz, dotSz);
 
-            // Dot specular
             if (fx > 0.3f)
             {
                 int hlSz = Math.Max(3, dotSz / 3);
                 int hlOff = Math.Max(1, dotSz / 5);
-                using (var b = new SolidBrush(Color.FromArgb((int)(80 * fx), 255, 255, 255)))
+                using (var b = new SolidBrush(Color.FromArgb((int)(80 * fx * masterAlpha), 255, 255, 255)))
                     g.FillEllipse(b, dotX + hlOff, dotY + hlOff, hlSz, hlSz);
             }
 
-            // Text with subtle shadow and state-tinted color
+            // Text
             int gapSz = Dpi.S(7);
-            float textXPos = padL + dotSz + gapSz;
+            float textXPos = padL + dotSz + gapSz + gp;
             using (var f = new Font("Segoe UI", 9.2f, FontStyle.Bold))
             {
-                float textY = (h - f.Height) / 2f;
-                // Shadow
-                using (var sb = new SolidBrush(Color.FromArgb((int)(30 * fx), 0, 0, 0)))
+                float textY = (ph - f.Height) / 2f + gp;
+                using (var sb = new SolidBrush(Color.FromArgb((int)(30 * fx * masterAlpha), 0, 0, 0)))
                     g.DrawString(text, f, sb, textXPos + 1, textY + 1);
-                // Main text — tinted toward accent color for cohesion
                 Color textCol = _micOpen
-                    ? Color.FromArgb(230, 255, 245)   // cool green-white
-                    : Color.FromArgb(255, 235, 230);   // warm red-white
+                    ? Color.FromArgb((int)(230 * masterAlpha), 230, 255, 245)
+                    : Color.FromArgb((int)(255 * masterAlpha), 255, 235, 230);
                 using (var b = new SolidBrush(textCol))
                     g.DrawString(text, f, b, textXPos, textY);
             }
@@ -708,9 +810,9 @@ namespace AngryAudio
         }
 
         protected override bool ShowWithoutActivation { get { return true; } }
-        protected override CreateParams CreateParams { get { var cp = base.CreateParams; cp.ExStyle |= 0x00000008 | 0x00000080 | 0x08000000; return cp; } }
+        protected override CreateParams CreateParams { get { var cp = base.CreateParams; cp.ExStyle |= 0x00000008 | 0x00000080 | 0x08000000 | 0x00080000; return cp; } }
         protected override void Dispose(bool d) {
-            if (d) { _topTimer?.Dispose(); _fadeTimer?.Dispose(); _shimmerTimer?.Dispose(); _settleTimer?.Dispose(); _dimTimer?.Dispose(); }
+            if (d) { if (_topTimer != null) _topTimer.Dispose(); if (_fadeTimer != null) _fadeTimer.Dispose(); if (_shimmerTimer != null) _shimmerTimer.Dispose(); if (_settleTimer != null) _settleTimer.Dispose(); if (_dimTimer != null) _dimTimer.Dispose(); }
             base.Dispose(d);
         }
     }

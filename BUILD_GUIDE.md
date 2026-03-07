@@ -24,6 +24,7 @@ Every `.cs` file below MUST be included. If you add a new `.cs` file, add it her
 ```
 AppVersion.cs          — Version string, copyright, legal notice
 Audio.cs               — Windows Core Audio API wrapper (mic/speaker control)
+AudioSettings.cs       — Per-app volume settings and audio device configuration
 Controls.cs            — Custom UI controls (ToggleSwitch, PaddedNumericUpDown, etc.)
 CorrectionToast.cs     — Toast notifications when volume is corrected
 DarkMessage.cs         — Dark-themed message box replacement
@@ -33,13 +34,14 @@ FadeOverlay.cs         — AFK fade-in/fade-out overlay
 InstanceDialog.cs      — "Already running" dialog
 Logger.cs              — File logger (%APPDATA%\Angry Audio\log.txt)
 Mascot.cs              — Base64-embedded angry kitten mascot image
-MicStatusOverlay.cs    — On-screen mic muted/open overlay with shimmer
+MicStatusOverlay.cs    — On-screen mic muted/open overlay with SDF-feathered edges
 OptionsForm.cs         — Main settings form (all panes)
 Program.cs             — Entry point, mutex, DPI init
 PushToTalk.cs          — Hotkey engine (polling + optional LL hook)
 Settings.cs            — JSON settings load/save
 StarBackground.cs      — Animated star background (shared across forms)
 StarRenderer.cs        — Star field rendering + celestial events
+Toast.cs               — Legacy toast base class (unused, kept for reference)
 ToastStack.cs          — Toast notification manager
 TrayApp.cs             — System tray icon, main coordinator
 UpdateDialog.cs        — Auto-update from GitHub releases
@@ -101,7 +103,7 @@ Microsoft.CSharp.dll
 C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe /target:winexe /out:"Angry Audio.exe" ^
   /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:Microsoft.CSharp.dll ^
   /win32icon:"Angry Audio.ico" ^
-  AppVersion.cs Audio.cs Controls.cs CorrectionToast.cs ^
+  Toast.cs AudioSettings.cs AppVersion.cs Audio.cs Controls.cs CorrectionToast.cs ^
   DarkTheme.cs DarkMessage.cs StarRenderer.cs StarBackground.cs ^
   Dpi.cs FadeOverlay.cs InstanceDialog.cs Logger.cs Mascot.cs MicStatusOverlay.cs ^
   OptionsForm.cs Program.cs PushToTalk.cs Settings.cs ToastStack.cs TrayApp.cs ^
@@ -112,7 +114,7 @@ C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe /target:winexe /out:"Angry
 ```bash
 mcs -out:"Angry Audio.exe" -target:winexe \
   -r:System.dll -r:System.Drawing.dll -r:System.Windows.Forms.dll -r:Microsoft.CSharp.dll \
-  AppVersion.cs Audio.cs Controls.cs CorrectionToast.cs \
+  Toast.cs AudioSettings.cs AppVersion.cs Audio.cs Controls.cs CorrectionToast.cs \
   DarkTheme.cs DarkMessage.cs StarRenderer.cs StarBackground.cs \
   Dpi.cs FadeOverlay.cs InstanceDialog.cs Logger.cs Mascot.cs MicStatusOverlay.cs \
   OptionsForm.cs Program.cs PushToTalk.cs Settings.cs ToastStack.cs TrayApp.cs \
@@ -235,7 +237,7 @@ All pixel coordinates in the UI are specified at **96 DPI base** and scaled thro
 
 ```
 # Full build (Linux/CI):
-mcs -out:"Angry Audio.exe" -target:winexe -r:System.dll -r:System.Drawing.dll -r:System.Windows.Forms.dll -r:Microsoft.CSharp.dll AppVersion.cs Audio.cs Controls.cs CorrectionToast.cs DarkTheme.cs DarkMessage.cs StarRenderer.cs StarBackground.cs Dpi.cs FadeOverlay.cs InstanceDialog.cs Logger.cs Mascot.cs MicStatusOverlay.cs OptionsForm.cs Program.cs PushToTalk.cs Settings.cs ToastStack.cs TrayApp.cs UpdateDialog.cs WelcomeForm.cs
+mcs -out:"Angry Audio.exe" -target:winexe -r:System.dll -r:System.Drawing.dll -r:System.Windows.Forms.dll -r:Microsoft.CSharp.dll Toast.cs AudioSettings.cs AppVersion.cs Audio.cs Controls.cs CorrectionToast.cs DarkTheme.cs DarkMessage.cs StarRenderer.cs StarBackground.cs Dpi.cs FadeOverlay.cs InstanceDialog.cs Logger.cs Mascot.cs MicStatusOverlay.cs OptionsForm.cs Program.cs PushToTalk.cs Settings.cs ToastStack.cs TrayApp.cs UpdateDialog.cs WelcomeForm.cs
 
 # Full installer (Linux/CI):
 mcs -target:winexe -out:"Angry_Audio_Setup.exe" -r:System.dll -r:System.Drawing.dll -r:System.Windows.Forms.dll -r:Microsoft.CSharp.dll -win32icon:"Angry Audio.ico" -resource:"Angry Audio.exe",app.exe -resource:"Angry Audio.ico",app.ico -resource:version.txt,version.txt Installer.cs Mascot.cs AppVersion.cs DarkTheme.cs DarkMessage.cs StarRenderer.cs StarBackground.cs Dpi.cs Logger.cs

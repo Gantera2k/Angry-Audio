@@ -46,10 +46,10 @@ namespace AngryAudio
             }
         }
 
-        public static void Debug(string message) => Write(LogLevel.DEBUG, message);
-        public static void Info(string message) => Write(LogLevel.INFO, message);
-        public static void Warn(string message) => Write(LogLevel.WARN, message);
-        public static void Error(string message) => Write(LogLevel.ERROR, message);
+        public static void Debug(string message) { Write(LogLevel.DEBUG, message); }
+        public static void Info(string message) { Write(LogLevel.INFO, message); }
+        public static void Warn(string message) { Write(LogLevel.WARN, message); }
+        public static void Error(string message) { Write(LogLevel.ERROR, message); }
 
         public static void Error(string message, Exception ex)
         {
