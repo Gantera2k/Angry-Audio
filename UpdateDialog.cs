@@ -45,6 +45,7 @@ namespace AngryAudio
             ClientSize = Dpi.Size(420, 240);
             ShowInTaskbar = true;
             try { using (var bmp = new Bitmap(32, 32)) using (var g = Graphics.FromImage(bmp)) { Mascot.DrawMascot(g, 0, 0, 32); Icon = Icon.FromHandle(bmp.GetHicon()); } } catch { }
+            DarkTheme.DarkTitleBar(Handle);
 
             // Mascot
             _mascotPanel = new Panel { Size = Dpi.Size(50, 50), Location = Dpi.Pt(185, 12), BackColor = Color.Transparent };

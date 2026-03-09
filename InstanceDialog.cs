@@ -31,6 +31,7 @@ namespace AngryAudio
             Font = new Font("Segoe UI", 9f);
             ClientSize = Dpi.Size(380, 200);
             try { using (var bmp = new Bitmap(32, 32)) using (var g = Graphics.FromImage(bmp)) { Mascot.DrawMascot(g, 0, 0, 32); Icon = Icon.FromHandle(bmp.GetHicon()); } } catch { }
+            DarkTheme.DarkTitleBar(Handle);
 
             // Mascot
             var mascotPanel = new Panel { Size = Dpi.Size(60, 60), Location = Dpi.Pt(160, 16), BackColor = Color.Transparent };

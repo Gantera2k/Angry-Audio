@@ -211,6 +211,7 @@ namespace AngryAudioInstaller
             _version = GetEmbeddedVersion();
 
             try { Icon = ExtractEmbeddedIcon(); } catch { }
+            AngryAudio.DarkTheme.DarkTitleBar(Handle);
 
             // Stars now use DarkTheme.PaintCardStars for consistency
             _stars = new StarBackground(() => { try { if (!IsDisposed) Invalidate(); } catch { } });
@@ -1106,6 +1107,7 @@ namespace AngryAudioInstaller
                     if (stream != null) Icon = new Icon(stream);
             }
             catch { }
+            AngryAudio.DarkTheme.DarkTitleBar(Handle);
 
             // Mascot — bigger so it's crisp
             var mascotPanel = new Panel { Size = new Size(S(64), S(64)), Location = new Point(S(158), S(10)), BackColor = Color.Transparent };

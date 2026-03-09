@@ -172,6 +172,7 @@ namespace AngryAudio
             ClientSize = Dpi.Size(480, 720);
             DoubleBuffered = true;
             try { Icon = Mascot.CreateIcon(); } catch { }
+            DarkTheme.DarkTitleBar(Handle);
 
             // Footer
             var footer = new BufferedPanel { Dock = DockStyle.Bottom, Height = Dpi.S(48), BackColor = BG };

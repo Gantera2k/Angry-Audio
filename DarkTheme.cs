@@ -73,6 +73,23 @@ namespace AngryAudio
             }
         }
 
+        // === Dark title bar — tells Windows to use immersive dark chrome ===
+        [DllImport("dwmapi.dll", PreserveSig = true)]
+        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+
+        /// <summary>Applies dark title bar chrome to a form. Call from constructor after controls are set up.</summary>
+        public static void DarkTitleBar(IntPtr handle)
+        {
+            try
+            {
+                int val = 1;
+                // DWMWA_USE_IMMERSIVE_DARK_MODE = 20 (Win10 20H1+), fallback 19 (older builds)
+                if (DwmSetWindowAttribute(handle, 20, ref val, sizeof(int)) != 0)
+                    DwmSetWindowAttribute(handle, 19, ref val, sizeof(int));
+            }
+            catch { } // Pre-Win10 or missing DWM — silently ignore
+        }
+
         // === Shared utilities ===
         /// <summary>Creates a rounded rectangle GraphicsPath. Caller must dispose.</summary>
         public static GraphicsPath RoundedRect(Rectangle r, int radius) {

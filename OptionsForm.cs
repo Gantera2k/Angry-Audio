@@ -94,6 +94,7 @@ namespace AngryAudio
             _defaultSize = Size;
             DoubleBuffered = true;
             try { Icon = Mascot.CreateIcon(); } catch { }
+            DarkTheme.DarkTitleBar(Handle);
             // Restore window position
             if (_settings.LastWindowX >= 0 && _settings.LastWindowY >= 0) {
                 StartPosition = FormStartPosition.Manual;
