@@ -1,0 +1,6 @@
+*.exe
+*.zip
+*.pdb
+*.cache
+bin/
+obj/
