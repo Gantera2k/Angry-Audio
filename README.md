@@ -1,122 +1,109 @@
+<div align="center">
+
 # Angry Audio
 
-**Take back control of your microphone and speakers.**
+### Mic protection · Volume control · Dictation · Display management
 
-Angry Audio is a lightweight Windows desktop utility that gives you real, system-wide control over your audio. Push-to-talk across every app, volume lock so nothing changes without your permission, and AFK protection that mutes you when you step away.
+One app. System tray. Set it and forget it.
 
-No subscriptions. No telemetry. No ads. Just privacy.
+<br>
 
----
+[![Download](https://img.shields.io/badge/Download-Angry__Audio__Setup.exe-blue?style=for-the-badge&logo=windows)](https://github.com/Gantera2k/Angry-Audio/releases/download/Angry/Angry_Audio_Setup.exe)
 
-## What It Does
+<br>
 
-### Push-to-Talk / Push-to-Mute / Push-to-Toggle
-Set a single hotkey that controls **every microphone** on your system — not just one app. Your headset, webcam mic, USB mic — all of them, muted at the OS level until you say otherwise.
+`Windows 10+` · `.NET 4.7.2+` · `~5 MB` · `Signed via Microsoft Trusted Signing`
 
-- **Push-to-Talk** — Silent until you hold the key. Just like Discord and most games.
-- **Push-to-Mute** — Mic stays open. Hold the key to mute for coughs and sneezes.
-- **Push-to-Toggle** — Tap once to unmute, tap again to mute. No holding needed.
+</div>
 
-### Volume Lock
-Apps love to silently change your mic and speaker volume. Zoom turns you down. Discord resets to 50%. Some game blasts your speakers. Angry Audio locks your levels and snaps them back the instant anything changes.
-
-### AFK Protection
-Walk away from your desk? Your mic and speakers automatically mute after a timeout you set. When you come back, volume fades in smoothly — no jarring blast of sound.
-
-### Mic Status Overlay
-A small on-screen indicator shows whether your mic is hot or muted. Supports shimmer effects for push-to-talk, push-to-mute, and toggle modes so you always know your mic state at a glance.
+<br>
 
 ---
 
-## Installation
+<br>
 
-1. Download `Angry_Audio_Setup.exe` from the [latest release](https://github.com/Gantera2k/Angry-Audio/releases).
-2. Run the installer. It will ask for administrator privileges to install to Program Files.
-3. Follow the setup wizard — pick your mode, set your hotkey, and you're done.
+### 🎤 Mic Control
 
-Angry Audio is code-signed by **Andrew Ganter** through Microsoft Azure Trusted Signing. No "Unknown Publisher" warnings.
+System-wide **Push-to-Talk**, **Push-to-Mute**, and **Push-to-Toggle** with up to 3 hotkeys per mode. Works across Discord, Zoom, Teams, games — everything. Controls every mic at the OS level, not just one app.
 
----
+Don't want a hotkey? **Voice Activity** auto-unmutes when you speak and mutes when you stop. Adjustable threshold with a live level meter.
 
-## System Requirements
+<br>
 
-- Windows 10 or later
-- .NET Framework 4.7.2+ (included with Windows 10)
-- ~5 MB disk space
+### 🔒 Volume Protection
 
----
+**Volume Lock** keeps your mic and speaker volume exactly where you set it. When an app tries to change it, Angry Audio snaps it back silently.
 
-## Features at a Glance
+**Per-App Volume Control** lets you set and enforce levels for individual apps — and lock them there.
 
-| Feature | Description |
-|---|---|
-| System-wide PTT | Controls ALL microphones, not just one app |
-| 3 hotkey modes | Push-to-Talk, Push-to-Mute, Push-to-Toggle |
-| Up to 3 hotkeys | Bind multiple keys for different setups |
-| Volume Lock | Mic and speaker volume enforcement |
-| AFK Protection | Auto-mute mic and speakers when idle |
-| Mic Overlay | On-screen mic status indicator |
-| Startup Launch | Runs silently on Windows boot |
-| Correction Toasts | Get notified when an app tries to change your volume |
-| Dark Theme | Modern dark UI with animated starfield background |
-| Auto-Update | Checks for updates from GitHub releases |
-| Code Signed | Verified publisher, no security warnings |
+<br>
 
----
+### 💤 AFK Protection
 
-## How It Works
+**AFK Mic Mute** kills your mic when you step away. **AFK Speaker Mute** fades your speakers out smoothly and fades them back when you return.
 
-Angry Audio runs in your system tray as a small kitty icon. Double-click the kitty to open settings anytime.
+<br>
 
-**Push-to-Talk** uses a low-level keyboard hook to detect your hotkey globally — it works in any app, any game, even on the desktop. When PTT is active, all microphones are set to 0% volume at the Windows mixer level. Holding your hotkey restores them to your configured level.
+### 🎙️ Dictation
 
-**Volume Lock** polls the Windows audio endpoint at regular intervals. If any application changes your mic or speaker volume, Angry Audio immediately corrects it back to your locked level and optionally shows a toast notification telling you which app tried to change it.
+Hold a hotkey. Speak. Release. Your words are typed into whatever app has focus.
+
+Choose your engine — **Windows Built-in**, **Whisper AI (CPU)**, or **Whisper AI (NVIDIA GPU)**. Pick your model size for the accuracy you need. Everything runs offline. Your voice never leaves your machine. Engine files download automatically on first use — the app stays tiny.
+
+<br>
+
+### 🌡️ Display
+
+**Color temperature** from 6500K daylight to 2700K candlelight with six presets — Normal, Focus, Relax, Night, Cinema, Bedtime.
+
+**Brightness dimming** beyond what your monitor allows. **Color filters** for grayscale, inverted, and color blindness correction. **Blue light filter** for late-night use. Per-monitor support.
+
+<br>
 
 ---
 
-## Building from Source
+<br>
 
-Angry Audio is written in C# using WinForms. It can be compiled with either Mono's `mcs` compiler or Microsoft's `csc.exe`.
+<details>
+<summary><b>More features</b></summary>
 
-### Build the Application
-```bash
-mcs -target:winexe -out:"Angry Audio.exe" \
-  -r:System.dll -r:System.Drawing.dll -r:System.Windows.Forms.dll -r:Microsoft.CSharp.dll \
-  -win32icon:"Angry Audio.ico" \
-  Toast.cs AudioSettings.cs AppVersion.cs Audio.cs Controls.cs CorrectionToast.cs \
-  DarkTheme.cs DarkMessage.cs StarRenderer.cs StarBackground.cs \
-  Dpi.cs FadeOverlay.cs InstanceDialog.cs Logger.cs Mascot.cs \
-  MicStatusOverlay.cs OptionsForm.cs Program.cs PushToTalk.cs \
-  Settings.cs ToastStack.cs TrayApp.cs UpdateDialog.cs WelcomeForm.cs
-```
+<br>
 
-### Build the Installer
-Build the main exe first — the installer embeds it as a resource.
-```bash
-mcs -target:winexe -out:"Angry_Audio_Setup.exe" \
-  -r:System.dll -r:System.Drawing.dll -r:System.Windows.Forms.dll -r:Microsoft.CSharp.dll \
-  -win32icon:"Angry Audio.ico" \
-  -resource:"Angry Audio.exe",app.exe \
-  -resource:"Angry Audio.ico",app.ico \
-  -resource:version.txt,version.txt \
-  Installer.cs Mascot.cs AppVersion.cs DarkTheme.cs DarkMessage.cs \
-  StarRenderer.cs StarBackground.cs Dpi.cs Logger.cs
-```
+- **Mic Status Overlay** — floating indicator with real-time mic state, smooth SDF rendering, and per-mode shimmer effects
+- **Sound Feedback** — audio cues on mic toggle. Built-in sounds or load your own
+- **Mic Unprotected Warning** — toast notification if no mic protection is active, with one-click fix
+- **First-Run Wizard** — guided setup with animated cards and a very angry mascot
+- **Auto-Update** — checks GitHub and installs new versions in-app
+- **Smart Instance Management** — launching a second copy cleanly replaces the first
+- **Device Change Detection** — notifies you when your mic or speakers change
+- **100+ Celestial Events** — the starfield background has over 100 hand-painted creatures, ships, and cosmic phenomena. Space whales. A DeLorean. A rubber ducky.
+
+</details>
+
+<br>
 
 ---
 
-## Privacy
+<br>
 
-Angry Audio does not collect, transmit, or store any personal data. There is no telemetry, no analytics, no network calls except checking for updates from this GitHub repository. Your audio settings stay on your machine.
+### Privacy
 
----
+Zero telemetry. Zero analytics. Zero data collection. Zero ads.
 
-## License
+All dictation is processed locally. The only network call is checking for updates from this repo.
 
-© 2026 Andrew Ganter. All Rights Reserved.
-
-This software and its source code are the exclusive intellectual property of Andrew Ganter. Unauthorized copying, modification, distribution, or reverse engineering is strictly prohibited without prior written consent.
+<br>
 
 ---
 
-*Your privacy, your rules.*
+<div align="center">
+
+<br>
+
+Built by one developer who got tired of apps messing with his audio.
+
+Then he added dictation. Then display controls. Then space whales. It escalated.
+
+<br>
+
+</div>
