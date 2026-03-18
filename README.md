@@ -65,16 +65,14 @@ Choose your engine — **Windows Built-in**, **Whisper AI (CPU)**, or **Whisper 
 <br>
 
 <details>
-<summary><b>More features</b></summary>
+<summary><b>More</b></summary>
 
 <br>
 
-- **Mic Status Overlay** — floating indicator with real-time mic state, smooth SDF rendering, and per-mode shimmer effects
-- **Sound Feedback** — audio cues on mic toggle. Built-in sounds or load your own
-- **Mic Unprotected Warning** — toast notification if no mic protection is active, with one-click fix
-- **First-Run Wizard** — guided setup with animated cards and a very angry mascot
-- **Auto-Update** — checks GitHub and installs new versions in-app
-- **Smart Instance Management** — launching a second copy cleanly replaces the first
+- **Mic Status Overlay** — floating on-screen indicator shows your mic state in real-time
+- **Sound Feedback** — audio cues when toggling mic states. Built-in sounds or load your own
+- **Mic Unprotected Warning** — lets you know if no mic protection is active, with a one-click fix
+- **Auto-Update** — checks for new versions and updates in-app
 - **Device Change Detection** — notifies you when your mic or speakers change
 - **100+ Celestial Events** — the starfield background has over 100 hand-painted creatures, ships, and cosmic phenomena. Space whales. A DeLorean. A rubber ducky.
 
