@@ -3726,7 +3726,7 @@ namespace AngryAudio
                 if (_dictPthDrop != null) _dictPthDrop.Enabled = _tglDictPushToDict.Checked && pthSndOn;
                 if (_dictPthVol != null) _dictPthVol.Source.Enabled = _tglDictPushToDict.Checked && pthSndOn;
                 // Also dim killed PTT section if mutual exclusion fired
-                if (!_tglDictToggle.Checked) {
+                if (_tglDictToggle != null && !_tglDictToggle.Checked) {
                     if (_dictPttOvr != null) _dictPttOvr.Dimmed = true; if (_dictPttSnd != null) _dictPttSnd.Dimmed = true;
                     if (_dictPttDrop != null) _dictPttDrop.Enabled = false;
                     if (_dictPttVol != null) _dictPttVol.Source.Enabled = false;
@@ -3928,7 +3928,7 @@ namespace AngryAudio
                 if (_dictPttVol != null) _dictPttVol.Source.Enabled = _tglDictToggle.Checked && pttSndOn;
                 
                 // Also dim killed PTH section if mutual exclusion fired
-                if (!_tglDictPushToDict.Checked) {
+                if (_tglDictPushToDict != null && !_tglDictPushToDict.Checked) {
                     if (_dictPthOvr != null) _dictPthOvr.Dimmed = true; if (_dictPthSnd != null) _dictPthSnd.Dimmed = true;
                     if (_dictPthDrop != null) _dictPthDrop.Enabled = false;
                     if (_dictPthVol != null) _dictPthVol.Source.Enabled = false;
@@ -3982,7 +3982,7 @@ namespace AngryAudio
             var btnRmPttKey2 = new Button { Text="", FlatStyle=FlatStyle.Flat, Size=Dpi.Size(trmW,trmW), BackColor=Color.Transparent, TabStop=false, Visible=false };
             btnRmPttKey2.FlatAppearance.BorderSize=0; btnRmPttKey2.FlatAppearance.MouseOverBackColor=Color.Transparent; btnRmPttKey2.FlatAppearance.MouseDownBackColor=Color.Transparent;
             btnRmPttKey2.MouseEnter+=(s2,e2)=>{ hoverRmPtt2=true; btnRmPttKey2.Invalidate(); }; btnRmPttKey2.MouseLeave+=(s2,e2)=>{ hoverRmPtt2=false; btnRmPttKey2.Invalidate(); };
-            btnRmPttKey2.Paint+=(s2,e2)=>PaintRemoveIcon(e2.Graphics,btnRmPthKey2.ClientRectangle,hoverRmPtt2);
+            btnRmPttKey2.Paint+=(s2,e2)=>PaintRemoveIcon(e2.Graphics,btnRmPttKey2.ClientRectangle,hoverRmPtt2);
             btnRmPttKey2.Click+=(s2,e2)=>{ _dictToggleKeyCode2=0; _audio.DictationToggleKey2=_dictToggleKeyCode2; CompactKeys(); if (_dictCard != null) _dictCard.Invalidate(); };
             card.Controls.Add(btnRmPttKey2);
             
@@ -4126,9 +4126,7 @@ namespace AngryAudio
             _pttDuckLockIcon.SetPos(396, y);
             _cardIconMap[card].Add(_pttDuckLockIcon);
 
-            // Force default slider values to 20% on form load
-            if (_trkDuckVol != null && _trkDuckVol.Value != 20) { _loading=true; _trkDuckVol.Value = 20; _audio.DictDuckingVolume = 20; _loading=false; }
-            if (_trkPttDuckVol != null && _trkPttDuckVol.Value != 20) { _loading=true; _trkPttDuckVol.Value = 20; _audio.PttDuckingVolume = 20; _loading=false; }
+            // Sync sliders with saved settings (no longer force 20% — respects user preference)
             // Initial grey-out: ducking section dims when no duck icons are active
             RefreshDuckingSection();
 
@@ -4239,7 +4237,7 @@ namespace AngryAudio
             var _dictMeterTimer = new Timer { Interval = 16 }; // 60fps
             _dictMeterTimer.Tick += (s, e) => {
                 try {
-                    if (card.Visible && _pushToTalk != null) {
+                    if (card.Visible && (_pushToTalk != null || DictationManager.Current != null)) {
                         card.Invalidate(new Rectangle(Dpi.S(10), savedMeterY - Dpi.S(4), card.Width - Dpi.S(20), savedMeterH + Dpi.S(8)));
                     }
                 } catch { }
@@ -5228,10 +5226,10 @@ namespace AngryAudio
 
         void LayoutDictKeys() {
             bool pthEnabled = (_cmbDictEngine == null) || _cmbDictEngine.SelectedIndex > 0;
-            LayoutHotkeyRow(_baseDictHldY, 114, _lblDictKey, _btnRmDictPth1, null, null, null,
-                            _dictKeyCode, 0, CaptureTarget.DictationKey1, CaptureTarget.DictationKey2, pthEnabled);
-            LayoutHotkeyRow(_baseDictTogY, 114, _lblDictToggleKey, _btnRmDictPtt1, null, null, null,
-                            _dictToggleKeyCode, 0, CaptureTarget.DictationToggleKey, CaptureTarget.DictationToggleKey2, true);
+            LayoutHotkeyRow(_baseDictHldY, 114, _lblDictKey, _btnRmDictPth1, _lblDictKey2, _btnRmDictPth2, _btnAddDictPth2,
+                            _dictKeyCode, _dictKeyCode2, CaptureTarget.DictationKey1, CaptureTarget.DictationKey2, pthEnabled);
+            LayoutHotkeyRow(_baseDictTogY, 114, _lblDictToggleKey, _btnRmDictPtt1, _lblDictToggleKey2, _btnRmDictPtt2, _btnAddDictPtt2,
+                            _dictToggleKeyCode, _dictToggleKeyCode2, CaptureTarget.DictationToggleKey, CaptureTarget.DictationToggleKey2, true);
         }
 
         [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vKey);
