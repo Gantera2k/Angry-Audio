@@ -49,7 +49,7 @@ namespace AngryAudio
         bool _twinkleDirty = true;
         public ShootingStar Shooting;
         public CelestialEvents Celestial;
-        const int SEED = 42;
+        static readonly int SEED = new Random().Next(100000);
         static readonly Color TINT = DarkTheme.GlassTint;
 
         // --- Render thread compositing ---
@@ -170,13 +170,13 @@ namespace AngryAudio
             // Moon — larger, slow drift, warm glow
             _bodies[0].X = w * (0.15f + (float)rng.NextDouble() * 0.7f);
             _bodies[0].Y = h * (0.1f + (float)rng.NextDouble() * 0.3f); // upper portion
-            _bodies[0].Radius = 12f + (float)rng.NextDouble() * 8f;     // 12-20px
-            _bodies[0].GlowRadius = _bodies[0].Radius * 3.5f;
-            _bodies[0].Vx = (float)(rng.NextDouble() - 0.5) * 0.08f;   // very slow
-            _bodies[0].Vy = (float)(rng.NextDouble() - 0.5) * 0.04f;
-            _bodies[0].R = 220; _bodies[0].G = 215; _bodies[0].B = 200; // warm white
-            _bodies[0].BodyAlpha = 35 + rng.Next(15);
-            _bodies[0].GlowAlpha = 8 + rng.Next(5);
+            _bodies[0].Radius = 14f + (float)rng.NextDouble() * 10f;    // 14-24px
+            _bodies[0].GlowRadius = _bodies[0].Radius * 4.0f;
+            _bodies[0].Vx = (float)(rng.NextDouble() - 0.5) * 0.06f;   // very slow
+            _bodies[0].Vy = (float)(rng.NextDouble() - 0.5) * 0.03f;
+            _bodies[0].R = 225; _bodies[0].G = 220; _bodies[0].B = 210; // warm white
+            _bodies[0].BodyAlpha = 45 + rng.Next(20);
+            _bodies[0].GlowAlpha = 12 + rng.Next(6);
             _bodies[0].IsMoon = true;
 
             // Tiny planets — small colored dots with glow
@@ -429,9 +429,11 @@ namespace AngryAudio
                     int w = _cacheW, h = _cacheH;
                     if (w <= 0 || h <= 0) continue;
 
-                    // Advance twinkle
+                    // Advance twinkle + drifting clouds
                     _twinkleTick++;
                     _twinkleDirty = true;
+                    if (_twinkleTick % CLOUD_UPDATE_INTERVAL == 0)
+                        AdvanceCloudsAndBodies();
 
                     // Ensure twinkle overlays are current
                     if (_twinkleDirty && _twinkleOverlay != null && _starsNorm != null)
@@ -481,6 +483,9 @@ namespace AngryAudio
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 g.CompositingMode = CompositingMode.SourceOver;
 
+                // Drifting nebula clouds (animated layer)
+                RenderCloudLayer(g, w, h, dim ? 0.35f : 1.0f);
+
                 // Twinkle stars
                 if (twinkleLayer != null)
                     g.DrawImage(twinkleLayer, 0, 0);
@@ -498,53 +503,76 @@ namespace AngryAudio
         StarData[] ComputeStars(int w, int h, float alphaMul)
         {
             var rng = new Random(SEED);
-            // Denser starfield — more stars for a richer sky
-            int count = Math.Max(20, Math.Min(280, (w * h) / 1200));
+            // Dense starfield — rich galaxy sky
+            int count = Math.Max(60, Math.Min(600, (w * h) / 600));
             var arr = new StarData[count];
             Color accent = DarkTheme.Accent;
             Color secondary = Color.FromArgb(180, 210, 255);
+            // Spectral class colors (B-V color index inspired)
+            Color[] spectralColors = new Color[] {
+                Color.FromArgb(155, 175, 255), // O/B — hot blue
+                Color.FromArgb(200, 215, 255), // A — blue-white
+                Color.FromArgb(255, 245, 238), // F — warm white
+                Color.FromArgb(255, 225, 180), // G — sun yellow
+                Color.FromArgb(255, 190, 130), // K — orange
+                Color.FromArgb(255, 155, 110), // M — cool red
+            };
             for (int i = 0; i < count; i++) {
                 arr[i].X = rng.Next(w);
                 arr[i].Y = rng.Next(h);
                 int tier = rng.Next(100);
-                if (tier < 35) {
-                    arr[i].Radius = 0.4f + (float)(rng.NextDouble() * 0.3);
-                    arr[i].BaseAlpha = (int)((30 + rng.Next(25)) * alphaMul);
+                if (tier < 30) {
+                    // Faint dust — barely visible pinpricks
+                    arr[i].Radius = 0.25f + (float)(rng.NextDouble() * 0.25);
+                    arr[i].BaseAlpha = (int)((18 + rng.Next(20)) * alphaMul);
                     arr[i].R = arr[i].G = arr[i].B = 255;
-                } else if (tier < 58) {
-                    arr[i].Radius = 0.6f + (float)(rng.NextDouble() * 0.5);
-                    arr[i].BaseAlpha = (int)((55 + rng.Next(35)) * alphaMul);
+                } else if (tier < 52) {
+                    // Small white stars
+                    arr[i].Radius = 0.45f + (float)(rng.NextDouble() * 0.4);
+                    arr[i].BaseAlpha = (int)((40 + rng.Next(30)) * alphaMul);
                     arr[i].R = arr[i].G = arr[i].B = 255;
-                } else if (tier < 73) {
-                    arr[i].Radius = 0.8f + (float)(rng.NextDouble() * 0.7);
-                    arr[i].BaseAlpha = (int)((70 + rng.Next(50)) * alphaMul);
+                } else if (tier < 68) {
+                    // Medium white
+                    arr[i].Radius = 0.7f + (float)(rng.NextDouble() * 0.5);
+                    arr[i].BaseAlpha = (int)((60 + rng.Next(40)) * alphaMul);
                     arr[i].R = arr[i].G = arr[i].B = 255;
-                } else if (tier < 79) {
-                    // Secondary colored stars (was blue-white, now theme-driven)
-                    arr[i].Radius = 0.7f + (float)(rng.NextDouble() * 0.6);
-                    arr[i].BaseAlpha = (int)((60 + rng.Next(45)) * alphaMul);
+                } else if (tier < 76) {
+                    // Spectral colored — realistic star temperatures
+                    var sc = spectralColors[rng.Next(spectralColors.Length)];
+                    arr[i].Radius = 0.6f + (float)(rng.NextDouble() * 0.6);
+                    arr[i].BaseAlpha = (int)((55 + rng.Next(40)) * alphaMul);
+                    arr[i].R = sc.R; arr[i].G = sc.G; arr[i].B = sc.B;
+                } else if (tier < 82) {
+                    // Blue-white — cool secondary
+                    arr[i].Radius = 0.7f + (float)(rng.NextDouble() * 0.5);
+                    arr[i].BaseAlpha = (int)((55 + rng.Next(40)) * alphaMul);
                     arr[i].R = secondary.R; arr[i].G = secondary.G; arr[i].B = secondary.B;
-                } else if (tier < 84) {
-                    arr[i].Radius = 0.8f + (float)(rng.NextDouble() * 0.6);
+                } else if (tier < 87) {
+                    // Warm yellow-white
+                    arr[i].Radius = 0.8f + (float)(rng.NextDouble() * 0.5);
                     arr[i].BaseAlpha = (int)((55 + rng.Next(40)) * alphaMul);
                     arr[i].R = 255; arr[i].G = 240; arr[i].B = 200;
-                } else if (tier < 88) {
+                } else if (tier < 91) {
+                    // Warm orange
                     arr[i].Radius = 0.9f + (float)(rng.NextDouble() * 0.5);
                     arr[i].BaseAlpha = (int)((50 + rng.Next(35)) * alphaMul);
                     arr[i].R = 255; arr[i].G = 200; arr[i].B = 150;
-                } else if (tier < 91) {
-                    arr[i].Radius = 1.1f + (float)(rng.NextDouble() * 0.7);
-                    arr[i].BaseAlpha = (int)((45 + rng.Next(30)) * alphaMul);
-                    arr[i].R = 255; arr[i].G = 160; arr[i].B = 130;
                 } else if (tier < 94) {
-                    arr[i].Radius = 1.3f + (float)(rng.NextDouble() * 0.8);
-                    arr[i].BaseAlpha = (int)((90 + rng.Next(50)) * alphaMul);
+                    // Bright prominent star — stands out
+                    arr[i].Radius = 1.4f + (float)(rng.NextDouble() * 0.8);
+                    arr[i].BaseAlpha = (int)((100 + rng.Next(50)) * alphaMul);
                     arr[i].R = arr[i].G = arr[i].B = 255;
-                } else {
-                    // Accent-colored stars — theme-driven
-                    arr[i].Radius = 1.0f + (float)(rng.NextDouble() * 0.8);
-                    arr[i].BaseAlpha = (int)((65 + rng.Next(55)) * alphaMul);
+                } else if (tier < 97) {
+                    // Accent-colored — theme-driven
+                    arr[i].Radius = 1.0f + (float)(rng.NextDouble() * 0.7);
+                    arr[i].BaseAlpha = (int)((65 + rng.Next(50)) * alphaMul);
                     arr[i].R = accent.R; arr[i].G = accent.G; arr[i].B = accent.B;
+                } else {
+                    // Landmark stars — very bright, large, with spikes
+                    arr[i].Radius = 1.8f + (float)(rng.NextDouble() * 1.0);
+                    arr[i].BaseAlpha = (int)((130 + rng.Next(60)) * alphaMul);
+                    var sc2 = spectralColors[rng.Next(3)]; // bias toward hot stars
+                    arr[i].R = sc2.R; arr[i].G = sc2.G; arr[i].B = sc2.B;
                 }
                 arr[i].Twinkles = rng.Next(100) < 55;
                 arr[i].Phase = rng.NextDouble() * Math.PI * 2;
@@ -578,19 +606,41 @@ namespace AngryAudio
                     }
                     if (alpha <= 0) continue;
 
-                    using (var b = new SolidBrush(Color.FromArgb(alpha, s.R, s.G, s.B))) {
-                        if (s.Radius <= 0.7f)
-                            g.FillRectangle(b, s.X, s.Y, 1, 1);
-                        else if (s.Radius <= 1.2f)
+                    if (s.Radius <= 0.5f) {
+                        // Sub-pixel stars: soft anti-aliased dot via alpha blending
+                        int subA = (int)(alpha * (s.Radius / 0.5f) * 0.8f);
+                        if (subA > 2) {
+                            using (var b = new SolidBrush(Color.FromArgb(subA, s.R, s.G, s.B)))
+                                g.FillEllipse(b, s.X - 0.5f, s.Y - 0.5f, 1f, 1f);
+                        }
+                    } else if (s.Radius <= 1.0f) {
+                        using (var b = new SolidBrush(Color.FromArgb(alpha, s.R, s.G, s.B)))
                             g.FillEllipse(b, s.X - s.Radius, s.Y - s.Radius, s.Radius * 2, s.Radius * 2);
-                        else {
-                            // Larger stars get a subtle glow halo
+                    } else {
+                        // Bright stars: core + soft glow halo + cross spikes for the brightest
+                        using (var b = new SolidBrush(Color.FromArgb(alpha, s.R, s.G, s.B)))
                             g.FillEllipse(b, s.X - s.Radius, s.Y - s.Radius, s.Radius * 2, s.Radius * 2);
-                            int glowAlpha = alpha / 5;
-                            if (glowAlpha > 3) {
-                                float gr = s.Radius * 2.2f;
-                                using (var gb = new SolidBrush(Color.FromArgb(glowAlpha, s.R, s.G, s.B)))
-                                    g.FillEllipse(gb, s.X - gr, s.Y - gr, gr * 2, gr * 2);
+                        // Soft glow
+                        int glowAlpha = alpha / 4;
+                        if (glowAlpha > 2) {
+                            float gr = s.Radius * 2.5f;
+                            using (var path = new GraphicsPath()) {
+                                path.AddEllipse(s.X - gr, s.Y - gr, gr * 2, gr * 2);
+                                using (var pgb = new PathGradientBrush(path)) {
+                                    pgb.CenterColor = Color.FromArgb(glowAlpha, s.R, s.G, s.B);
+                                    pgb.SurroundColors = new Color[] { Color.FromArgb(0, s.R, s.G, s.B) };
+                                    g.FillPath(pgb, path);
+                                }
+                            }
+                        }
+                        // Cross spikes for very bright stars (radius > 1.5)
+                        if (s.Radius > 1.5f && alpha > 100) {
+                            int spikeA = alpha / 6;
+                            float spikeLen = s.Radius * 3.5f;
+                            using (var pen = new Pen(Color.FromArgb(spikeA, s.R, s.G, s.B), 0.6f)) {
+                                pen.StartCap = LineCap.Round; pen.EndCap = LineCap.Round;
+                                g.DrawLine(pen, s.X - spikeLen, s.Y, s.X + spikeLen, s.Y);
+                                g.DrawLine(pen, s.X, s.Y - spikeLen, s.X, s.Y + spikeLen);
                             }
                         }
                     }
@@ -605,7 +655,7 @@ namespace AngryAudio
             {
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 var rng = new Random(SEED + 7777);
-                int patchCount = 5 + rng.Next(4); // 5-8 patches
+                int patchCount = 8 + rng.Next(5); // 8-12 patches for rich nebula
                 Color[] nebulaColors = new Color[] {
                     Color.FromArgb(60, 40, 120),   // Deep purple
                     Color.FromArgb(40, 50, 130),   // Royal blue
@@ -614,12 +664,15 @@ namespace AngryAudio
                     Color.FromArgb(70, 35, 95),    // Dark magenta
                     Color.FromArgb(45, 60, 115),   // Midnight blue
                     Color.FromArgb(55, 50, 100),   // Lavender
+                    Color.FromArgb(50, 35, 85),    // Dusty purple
+                    Color.FromArgb(35, 55, 80),    // Steel blue
                 };
 
-                // Center glow — subtle warm radial vignette
-                float cxG = w * 0.5f, cyG = h * 0.45f;
-                float radiusG = Math.Max(w, h) * 0.65f;
-                int glowAlpha = (int)(8 * alphaMul);
+                // Large center glow — gives the sky depth
+                float cxG = w * (0.35f + (float)rng.NextDouble() * 0.3f);
+                float cyG = h * (0.3f + (float)rng.NextDouble() * 0.3f);
+                float radiusG = Math.Max(w, h) * 0.7f;
+                int glowAlpha = (int)(12 * alphaMul);
                 if (glowAlpha > 0)
                 {
                     using (var path = new GraphicsPath())
@@ -627,7 +680,7 @@ namespace AngryAudio
                         path.AddEllipse(cxG - radiusG, cyG - radiusG, radiusG * 2, radiusG * 2);
                         using (var pgb = new PathGradientBrush(path))
                         {
-                            pgb.CenterColor = Color.FromArgb(glowAlpha, 25, 20, 55);
+                            pgb.CenterColor = Color.FromArgb(glowAlpha, 30, 22, 60);
                             pgb.SurroundColors = new Color[] { Color.FromArgb(0, 15, 12, 35) };
                             pgb.FocusScales = new PointF(0.0f, 0.0f);
                             g.FillPath(pgb, path);
@@ -635,22 +688,42 @@ namespace AngryAudio
                     }
                 }
 
-                // Nebula cloud patches
+                // Secondary off-center glow for asymmetry
+                float cx2 = w * (0.6f + (float)rng.NextDouble() * 0.3f);
+                float cy2 = h * (0.5f + (float)rng.NextDouble() * 0.3f);
+                float r2 = Math.Max(w, h) * 0.5f;
+                int ga2 = (int)(8 * alphaMul);
+                if (ga2 > 0)
+                {
+                    using (var path = new GraphicsPath())
+                    {
+                        path.AddEllipse(cx2 - r2, cy2 - r2, r2 * 2, r2 * 2);
+                        using (var pgb = new PathGradientBrush(path))
+                        {
+                            pgb.CenterColor = Color.FromArgb(ga2, 20, 35, 65);
+                            pgb.SurroundColors = new Color[] { Color.FromArgb(0, 10, 18, 35) };
+                            pgb.FocusScales = new PointF(0.0f, 0.0f);
+                            g.FillPath(pgb, path);
+                        }
+                    }
+                }
+
+                // Nebula cloud patches — multi-layered for depth
                 for (int p = 0; p < patchCount; p++)
                 {
                     float cx = (float)(rng.NextDouble() * w);
                     float cy = (float)(rng.NextDouble() * h);
                     Color nc = nebulaColors[rng.Next(nebulaColors.Length)];
-                    int layers = 4 + rng.Next(3); // 4-6 layers per patch
+                    int layers = 5 + rng.Next(4); // 5-8 layers per patch for smoother falloff
                     for (int layer = 0; layer < layers; layer++)
                     {
-                        float ox = cx + (float)(rng.NextDouble() - 0.5) * w * 0.15f;
-                        float oy = cy + (float)(rng.NextDouble() - 0.5) * h * 0.15f;
-                        float rw = w * (0.10f + (float)rng.NextDouble() * 0.22f);
-                        float rh = h * (0.08f + (float)rng.NextDouble() * 0.18f);
-                        int baseA = (int)((6 + rng.Next(10)) * alphaMul);
+                        float ox = cx + (float)(rng.NextDouble() - 0.5) * w * 0.18f;
+                        float oy = cy + (float)(rng.NextDouble() - 0.5) * h * 0.18f;
+                        float rw = w * (0.12f + (float)rng.NextDouble() * 0.25f);
+                        float rh = h * (0.10f + (float)rng.NextDouble() * 0.20f);
+                        int baseA = (int)((8 + rng.Next(12)) * alphaMul);
                         if (baseA < 1) continue;
-                        baseA = Math.Min(baseA, 25);
+                        baseA = Math.Min(baseA, 30);
                         using (var path = new GraphicsPath())
                         {
                             path.AddEllipse(ox - rw / 2, oy - rh / 2, rw, rh);
@@ -658,12 +731,37 @@ namespace AngryAudio
                             {
                                 pgb.CenterColor = Color.FromArgb(baseA, nc.R, nc.G, nc.B);
                                 pgb.SurroundColors = new Color[] { Color.FromArgb(0, nc.R, nc.G, nc.B) };
-                                pgb.FocusScales = new PointF(0.2f, 0.2f);
+                                pgb.FocusScales = new PointF(0.15f, 0.15f);
                                 g.FillPath(pgb, path);
                             }
                         }
                     }
                 }
+
+                // Subtle star dust lane — a faint milky way-like band
+                float bandY = h * (0.3f + (float)rng.NextDouble() * 0.4f);
+                float bandH = h * 0.35f;
+                float bandAngle = -15f + (float)rng.NextDouble() * 30f; // slight tilt
+                var gs = g.Save();
+                g.TranslateTransform(w / 2f, bandY);
+                g.RotateTransform(bandAngle);
+                g.TranslateTransform(-w / 2f, -bandY);
+                int bandAlpha = (int)(6 * alphaMul);
+                if (bandAlpha > 0)
+                {
+                    using (var path = new GraphicsPath())
+                    {
+                        path.AddEllipse(-w * 0.1f, bandY - bandH / 2, w * 1.2f, bandH);
+                        using (var pgb = new PathGradientBrush(path))
+                        {
+                            pgb.CenterColor = Color.FromArgb(bandAlpha, 40, 35, 70);
+                            pgb.SurroundColors = new Color[] { Color.FromArgb(0, 20, 18, 35) };
+                            pgb.FocusScales = new PointF(0.3f, 0.1f);
+                            g.FillPath(pgb, path);
+                        }
+                    }
+                }
+                g.Restore(gs);
             }
         }
 
@@ -684,6 +782,10 @@ namespace AngryAudio
             _baseDim = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
             _twinkleOverlay = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
             _twinkleOverlayDim = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+
+            // Nebula backdrop (painted first, stars go on top)
+            RenderStaticNebula(_base, w, h, 1.0f);
+            RenderStaticNebula(_baseDim, w, h, 0.35f);
 
             // Stars
             InitCloudsAndBodies(w, h);

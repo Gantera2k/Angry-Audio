@@ -2950,7 +2950,10 @@ namespace AngryAudio
             // Run Setup Wizard button — same row as Start with Windows, right-aligned
             int bwY = y;
             var bw = new Button{Text="Run Splash!",FlatStyle=FlatStyle.Flat,Size=Dpi.Size(120,24),ForeColor=TXT2,BackColor=Color.FromArgb(20,20,20),Font=new Font("Segoe UI",8f),TabStop=false};
-            bw.FlatAppearance.BorderColor=INPUT_BDR; bw.Click+=(s,e)=>{DialogResult=DialogResult.Retry;Close();};
+            bw.FlatAppearance.BorderColor=INPUT_BDR; bw.Click+=(s,e)=>{
+                var tray = TrayApp.Instance;
+                if (tray != null) tray.RunSplashFromOptions();
+            };
             bw.MouseEnter+=(s,e)=>bw.BackColor=Color.FromArgb(36,36,36);
             bw.MouseLeave+=(s,e)=>bw.BackColor=Color.FromArgb(20,20,20);
             card.Controls.Add(bw);
@@ -5823,7 +5826,7 @@ namespace AngryAudio
 
         Dictionary<string,int> ParseAppRules(){ return CollectAppRules(); }
         static int Clamp(int v,int min,int max){return v<min?min:v>max?max:v;}
-        public void OnRunWizard(){DialogResult=DialogResult.Retry;Close();}
+        public void OnRunWizard(){var tray=TrayApp.Instance;if(tray!=null)tray.RunSplashFromOptions();}
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData) {
             // During key capture, suppress Escape from closing the form — let the polling handler deal with it
             if (_audio != null && _audio.IsCapturing) {

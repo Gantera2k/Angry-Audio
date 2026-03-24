@@ -1119,15 +1119,28 @@ namespace AngryAudio
 
             UpdateTrayState();
 
-            // Register global hotkeys
+            // Register global hotkeys — log failures so we know when another app holds the key
             _hotkeyWnd = new HotkeyWindow(this);
-            RegisterHotKey(_hotkeyWnd.Handle, HOTKEY_DISPLAY,    MOD_ALT | MOD_NOREPEAT, 0x50); // Alt+P
-            RegisterHotKey(_hotkeyWnd.Handle, HOTKEY_CYCLE_NEXT, MOD_ALT | MOD_NOREPEAT, 0x45); // Alt+E
-            RegisterHotKey(_hotkeyWnd.Handle, HOTKEY_CYCLE_PREV, MOD_ALT | MOD_NOREPEAT, 0x51); // Alt+Q
-            RegisterHotKey(_hotkeyWnd.Handle, HOTKEY_INPUT,      MOD_ALT | MOD_NOREPEAT, 0x49); // Alt+I
-            RegisterHotKey(_hotkeyWnd.Handle, HOTKEY_OUTPUT,     MOD_ALT | MOD_NOREPEAT, 0x4F); // Alt+O
-            RegisterHotKey(_hotkeyWnd.Handle, HOTKEY_DICT,       MOD_ALT | MOD_NOREPEAT, 0xDB); // Alt+[
-            RegisterHotKey(_hotkeyWnd.Handle, HOTKEY_AFK,        MOD_ALT | MOD_NOREPEAT, 0xDD); // Alt+]
+            RegisterAndLog(HOTKEY_DISPLAY,    MOD_ALT | MOD_NOREPEAT, 0x50, "Alt+P (Display)");
+            RegisterAndLog(HOTKEY_CYCLE_NEXT, MOD_ALT | MOD_NOREPEAT, 0x45, "Alt+E (Cycle Next)");
+            RegisterAndLog(HOTKEY_CYCLE_PREV, MOD_ALT | MOD_NOREPEAT, 0x51, "Alt+Q (Cycle Prev)");
+            RegisterAndLog(HOTKEY_INPUT,      MOD_ALT | MOD_NOREPEAT, 0x49, "Alt+I (Input)");
+            RegisterAndLog(HOTKEY_OUTPUT,     MOD_ALT | MOD_NOREPEAT, 0x4F, "Alt+O (Output)");
+            RegisterAndLog(HOTKEY_DICT,       MOD_ALT | MOD_NOREPEAT, 0xDB, "Alt+[ (Dictation)");
+            RegisterAndLog(HOTKEY_AFK,        MOD_ALT | MOD_NOREPEAT, 0xDD, "Alt+] (AFK)");
+        }
+
+        private void RegisterAndLog(int id, uint mods, uint vk, string name)
+        {
+            if (!RegisterHotKey(_hotkeyWnd.Handle, id, mods, vk))
+            {
+                int err = Marshal.GetLastWin32Error();
+                Logger.Warn("Failed to register hotkey " + name + " (error " + err + "). Another app may hold this key.");
+            }
+            else
+            {
+                Logger.Info("Registered hotkey " + name);
+            }
         }
 
         private void UpdateTrayState()
@@ -1867,6 +1880,28 @@ namespace AngryAudio
                 PopupThread.Invoke(() => { try { s.Close(); } catch { } });
         }
 
+        /// <summary>Called by OptionsForm "Run Splash!" button — hides options, shows splash, then restores options.</summary>
+        internal void RunSplashFromOptions()
+        {
+            if (_openOptionsForm != null && !_openOptionsForm.IsDisposed)
+                _openOptionsForm.Hide();
+            ShowSplash(() =>
+            {
+                // Re-show options after splash closes
+                if (_openOptionsForm != null && !_openOptionsForm.IsDisposed)
+                {
+                    try
+                    {
+                        if (_openOptionsForm.InvokeRequired)
+                            _openOptionsForm.BeginInvoke((MethodInvoker)(() => { _openOptionsForm.Show(); _openOptionsForm.BringToFront(); }));
+                        else
+                            { _openOptionsForm.Show(); _openOptionsForm.BringToFront(); }
+                    }
+                    catch { }
+                }
+            });
+        }
+
         // --- Menu Actions ---
 
         private bool _optionsPreCreated;
@@ -1916,6 +1951,7 @@ namespace AngryAudio
             _openOptionsForm.Hide();
 
             var result = _openOptionsForm.DialogResult;
+            _openOptionsForm.DialogResult = DialogResult.None; // always reset to prevent stale state
             if (result == DialogResult.OK)
             {
                 _settings.Save();
